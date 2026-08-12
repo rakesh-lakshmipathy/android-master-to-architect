@@ -2,11 +2,15 @@ import React, {useMemo} from 'react';
 
 type Props = {code: string; children?: React.ReactNode};
 
-export default function PlaygroundLink({code, children = 'Run in Kotlin Playground'}: Props) {
+export default function PlaygroundLink({code, children = 'Run on Playground'}: Props) {
   const href = useMemo(() => {
     const state = {version: '2.4.10', platform: 'java', args: '', noneMarkers: true, theme: 'idea', code: `${code.trim()}\n`, compilerArguments: {}};
     const utf8 = unescape(encodeURIComponent(JSON.stringify(state)));
     return `https://play.kotlinlang.org/#${btoa(utf8)}`;
   }, [code]);
-  return <a className="playground-link" href={href} target="_blank" rel="noreferrer">▶ {children}</a>;
+
+  return <a className="playground-link" href={href} target="_blank" rel="noreferrer">
+    <span className="playground-link__icon" aria-hidden="true" />
+    <span>{children}</span>
+  </a>;
 }
