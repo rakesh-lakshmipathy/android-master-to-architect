@@ -15,7 +15,7 @@ const sidebars: SidebarsConfig = {
           label: 'Types and control flow',
           collapsed: false,
           items: [
-            'kotlin/types-and-control-flow',
+            {type: 'doc', id: 'kotlin/types-and-control-flow', label: 'Chapter overview'},
             'kotlin/types-and-variables',
             'kotlin/expressions-and-control-flow',
             'kotlin/equality',
