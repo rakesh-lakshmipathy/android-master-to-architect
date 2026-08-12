@@ -40,24 +40,127 @@ names += "Grace"                  // object changes
 | `Long` | `42L` | 64-bit; suffix matters |
 | `Float` | `3.5F` | 32-bit floating point |
 | `Double` | `3.5` | Default decimal type |
-| `Boolean` | `true` | Numbers are not booleans |
+| `Boolean` | `true` | Conditions must be explicitly `true` or `false`; `0` and `1` are not Boolean values |
 | `Char` | `'A'` | Not a `String` |
 | `String` | `"Android"` | Immutable character sequence |
 
 Kotlin presents these as a unified type system. On the JVM, the compiler commonly emits primitives where nullability, generics, and boundaries do not require boxing.
 
-## Explicit numeric conversion
+### Why numbers are not booleans
+
+Kotlin requires every condition to produce a `Boolean`:
+
+```kotlin
+val count = 1
+
+// if (count) { } // Compilation error
+if (count > 0) {
+    println("At least one item")
+}
+```
+
+Kotlin does not assume that `0` means false or that every nonzero number means true. An explicit comparison communicates whether the domain rule is “positive,” “nonzero,” “exactly one,” or something else.
+
+When a database or legacy API encodes booleans as numbers, convert using the actual contract:
+
+```kotlin
+val databaseValue = 1
+val isEnabled: Boolean = databaseValue == 1
+```
+
+## Kotlin requires explicit numeric conversion
+
+An `Int` and a `Long` are different types. Although every `Int` value fits inside a `Long`, Kotlin does not silently widen an `Int` during assignment.
 
 ```kotlin
 val count: Int = 10
+
+// val total: Long = count // Compilation error
 val total: Long = count.toLong()
 ```
 
-Kotlin does not silently assign an `Int` to a `Long`. Explicit conversion prevents ambiguity around overloads and generics.
+`count.toLong()` creates the `Long` value `10L`. The conversion is visible, so a reader and the compiler know exactly which numeric type crosses the assignment, overload, or generic boundary.
 
-<Admonition type="warning" title="Overflow still exists">
-JVM integer arithmetic can overflow and wrap. Kotlin's types do not automatically make arithmetic checked. Validate untrusted sizes and use checked operations where correctness or security requires them.
+### Mixed arithmetic is different
+
+Kotlin can select an arithmetic operation based on both operands:
+
+```kotlin
+val count: Int = 10
+val price: Long = 100L
+val total = count + price
+
+println(total) // 110
+```
+
+Here `total` is a `Long`. This does not mean that direct `Int`-to-`Long` assignment is allowed; the `plus` operation produces a new result from two operands.
+
+<PlaygroundLink code={`fun main() {
+    val count: Int = 10
+    val converted: Long = count.toLong()
+    val price: Long = 100L
+    val mixedTotal = count + price
+
+    println("converted = $converted")
+    println("mixedTotal = $mixedTotal")
+    println("mixedTotal type = " + mixedTotal::class.simpleName)
+}`} />
+
+## Arithmetic overflow is a separate problem
+
+Conversion answers **which numeric type should hold a value**. Overflow happens when a calculation produces a value outside the range of its result type.
+
+The largest `Int` is `2,147,483,647`. Adding one exceeds the `Int` range:
+
+```kotlin
+val maximum = Int.MAX_VALUE
+val overflowed = maximum + 1
+
+println(maximum)    // 2147483647
+println(overflowed) // -2147483648
+```
+
+On the JVM, ordinary `Int` arithmetic wraps around instead of throwing automatically.
+
+### Convert before the calculation
+
+```kotlin
+val safe: Long = Int.MAX_VALUE.toLong() + 1
+println(safe) // 2147483648
+```
+
+The conversion happens first, so addition uses `Long` arithmetic and this result fits.
+
+Converting afterward is too late:
+
+```kotlin
+val wrong: Long = (Int.MAX_VALUE + 1).toLong()
+println(wrong) // -2147483648
+```
+
+The expression inside the parentheses is calculated as an `Int`. It overflows before `.toLong()` receives the result. The conversion preserves the already incorrect value.
+
+<Admonition type="warning" title="Android and backend scenario">
+Counts, file sizes, time durations, prices in minor units, and pagination offsets may originate outside your code. Validate their permitted ranges and perform calculations in a sufficiently wide type. For calculations where overflow must fail rather than wrap, use checked operations such as Java's `Math.addExact` and handle `ArithmeticException`.
 </Admonition>
+
+<PlaygroundLink code={`fun main() {
+    val maximum = Int.MAX_VALUE
+    val overflowed = maximum + 1
+    val convertedBefore: Long = maximum.toLong() + 1
+    val convertedAfter: Long = (maximum + 1).toLong()
+
+    println("Int.MAX_VALUE = $maximum")
+    println("Int overflow = $overflowed")
+    println("converted before calculation = $convertedBefore")
+    println("converted after calculation = $convertedAfter")
+
+    try {
+        println(Math.addExact(maximum, 1))
+    } catch (error: ArithmeticException) {
+        println("checked addition detected overflow")
+    }
+}`} />
 
 ## Public API guidance
 
@@ -75,4 +178,3 @@ Inference is excellent for local implementation details. Explicit types are usef
 ## Quick check
 
 <details><summary>Can the contents referenced by a `val` change?</summary><p>Yes, if the referenced object exposes mutation. Only reassignment of the variable is prohibited.</p></details>
-
