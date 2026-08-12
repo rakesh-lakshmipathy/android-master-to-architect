@@ -1,0 +1,377 @@
+---
+id: types-and-control-flow
+title: Types, variables, expressions, control flow, equality, and smart casts
+sidebar_label: Types and control flow
+sidebar_position: 2
+---
+
+import Admonition from '@theme/Admonition';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Types, variables, expressions, control flow, equality, and smart casts
+
+These features form one connected idea: **Kotlin uses types and expressions to make valid program states explicit**. This chapter starts with values, then shows how control flow narrows what the compiler knows about those values.
+
+<Admonition type="tip" title="Mental model">
+A type describes the values an expression may produce. A variable gives one of those values a name. Control flow chooses which expression runs. Smart casts use proven facts from that flow to expose a more specific type safely.
+</Admonition>
+
+## 1. Values, variables, and type inference
+
+Use `val` for a read-only reference and `var` for a reference that may be reassigned.
+
+```kotlin
+val userId: Long = 42L
+val displayName = "Rakesh" // inferred as String
+var retryCount = 0         // inferred as Int
+retryCount += 1
+```
+
+`val` does **not** make the referenced object immutable. It only prevents that variable from pointing to a different object.
+
+```kotlin
+val names = mutableListOf("Ada")
+names += "Grace"                 // object changed
+// names = mutableListOf("Linus") // compile error: reference cannot change
+```
+
+Prefer `val` because fewer changing references make code easier to reason about. Use `var` when mutation describes a real state transition, not merely for convenience.
+
+### Primitive-looking types on the JVM
+
+Kotlin presents a unified type system: `Int`, `Long`, `Double`, `Boolean`, and `Char` are classes from the programmer's perspective. On the JVM, the compiler commonly emits efficient primitive representations when nullability, generics, or another boundary does not require boxing.
+
+| Type | Example | Important detail |
+|---|---:|---|
+| `Int` | `42` | 32-bit signed integer |
+| `Long` | `42L` | 64-bit signed integer; suffix matters |
+| `Float` | `3.5F` | 32-bit floating point |
+| `Double` | `3.5` | Default floating-point literal type |
+| `Boolean` | `true` | Numbers are not booleans |
+| `Char` | `'A'` | Not a one-character `String` |
+| `String` | `"Android"` | Immutable sequence of characters |
+
+### Numeric conversions are explicit
+
+Kotlin does not silently widen an `Int` into a `Long` variable.
+
+```kotlin
+val itemCount: Int = 10
+val total: Long = itemCount.toLong()
+```
+
+This avoids hidden conversions at overload and generic boundaries. Arithmetic can still infer a wider result when operands require it, so check the resulting type rather than guessing.
+
+<Admonition type="warning" title="Overflow is still possible">
+An `Int` that exceeds its range wraps around on the JVM. The type system distinguishes integer kinds; it does not automatically detect every arithmetic overflow. Validate untrusted sizes and use checked operations where correctness demands them.
+</Admonition>
+
+<PlaygroundLink code={`fun main() {
+    val immutableReference = mutableListOf("Ada")
+    immutableReference += "Grace"
+    val itemCount: Int = 10
+    val total: Long = itemCount.toLong()
+    println("names = $immutableReference")
+    println("itemCount type = " + itemCount::class.simpleName)
+    println("total type = " + total::class.simpleName)
+}`} />
+
+## 2. Expressions versus statements
+
+An **expression** produces a value. Kotlin makes `if`, `when`, `try`, blocks, and function calls usable as expressions. Assignment and loops do not produce a useful value.
+
+<Tabs>
+<TabItem value="kotlin" label="Expression-oriented Kotlin" default>
+
+```kotlin
+val label = if (isOnline) "Connected" else "Offline"
+```
+
+</TabItem>
+<TabItem value="mutable" label="More mutable style">
+
+```kotlin
+var label: String
+if (isOnline) label = "Connected" else label = "Offline"
+```
+
+</TabItem>
+</Tabs>
+
+The expression form makes initialization atomic: `label` receives exactly one value and never exists uninitialized.
+
+### Blocks return their last expression
+
+```kotlin
+val message = if (items.isEmpty()) {
+    logEmptyState()
+    "Nothing to display" // value of this branch
+} else {
+    "${items.size} items"
+}
+```
+
+Both branches must produce compatible types when the result is used. If one returns `String` and another `Int`, Kotlin finds a common supertype that may be broader than intended. Precise function return types catch accidental mixing early.
+
+## 3. Control flow
+
+### `if` for binary decisions
+
+Use `if` when a decision is naturally yes/no or involves ranges and compound predicates.
+
+```kotlin
+val access = if (user.isSignedIn && user.age >= 18) {
+    Access.Granted
+} else {
+    Access.Denied
+}
+```
+
+### `when` for multiple cases
+
+`when` can match constants, types, ranges, and arbitrary conditions.
+
+```kotlin
+fun httpMessage(code: Int): String = when (code) {
+    in 200..299 -> "Success"
+    401 -> "Sign in again"
+    404 -> "Not found"
+    in 500..599 -> "Server problem"
+    else -> "Unexpected response"
+}
+```
+
+With an enum or sealed hierarchy, `when` can be exhaustive. Omitting `else` then lets the compiler identify consumers that need a decision when a new state is added.
+
+```kotlin
+sealed interface LoadState {
+    data object Loading : LoadState
+    data class Content(val count: Int) : LoadState
+    data class Failed(val message: String) : LoadState
+}
+
+fun title(state: LoadState): String = when (state) {
+    LoadState.Loading -> "Loading"
+    is LoadState.Content -> "${state.count} results"
+    is LoadState.Failed -> state.message
+}
+```
+
+### Loops and ranges
+
+```kotlin
+for (index in 0 until items.size) { /* excludes size */ }
+for (index in items.indices) { /* valid indices */ }
+for ((index, item) in items.withIndex()) { /* index and value */ }
+for (value in 10 downTo 0 step 2) { /* 10, 8, ... 0 */ }
+```
+
+Prefer direct iteration (`for (item in items)`) unless the index is genuinely needed. Use `while` when repetition depends on a changing condition, such as fetching pages until no continuation token remains.
+
+<Admonition type="danger" title="Range boundary mistake">
+`0..items.size` includes `items.size`, which is not a valid list index. Use `items.indices` or `0 until items.size`.
+</Admonition>
+
+<PlaygroundLink code={`sealed interface LoadState {
+    data object Loading : LoadState
+    data class Content(val count: Int) : LoadState
+    data class Failed(val message: String) : LoadState
+}
+
+fun title(state: LoadState): String = when (state) {
+    LoadState.Loading -> "Loading"
+    is LoadState.Content -> "\${state.count} results"
+    is LoadState.Failed -> state.message
+}
+
+fun main() {
+    val states = listOf(LoadState.Loading, LoadState.Content(3), LoadState.Failed("Try again"))
+    states.forEach { println(title(it)) }
+}`} />
+
+## 4. Equality: `==` is not `===`
+
+Kotlin separates **structural equality** from **referential identity**.
+
+| Operator | Question | Meaning |
+|---|---|---|
+| `a == b` | Equal content? | Null-safe call to `equals` |
+| `a != b` | Different content? | Negated structural equality |
+| `a === b` | Exact same object? | Reference identity |
+| `a !== b` | Different objects? | Negated identity |
+
+```kotlin
+data class User(val id: Long, val name: String)
+val first = User(1, "Ada")
+val second = User(1, "Ada")
+println(first == second)  // true
+println(first === second) // false
+```
+
+`a == b` behaves conceptually like `a?.equals(b) ?: (b === null)`.
+
+### Equality contract
+
+If you implement `equals`, it must be reflexive, symmetric, transitive, consistent, and false for `null`. Equal objects must have equal hash codes. Mutable fields used by `equals` or `hashCode` are dangerous when an object is stored in a `HashSet` or used as a `HashMap` key.
+
+<Admonition type="warning" title="Android UI consequence">
+Compose state policies, RecyclerView diffing, `StateFlow` conflation, caches, and tests may rely on equality. A poorly designed model can suppress a needed update or trigger unnecessary work. Prefer immutable UI models with deliberate equality semantics.
+</Admonition>
+
+<PlaygroundLink code={`data class User(val id: Long, val name: String)
+
+fun main() {
+    val first = User(1, "Ada")
+    val second = User(1, "Ada")
+    val alias = first
+    println("same content = " + (first == second))
+    println("same reference = " + (first === second))
+    println("alias reference = " + (first === alias))
+    println("null-safe equality = " + (null == null))
+}`} />
+
+## 5. Type checks and smart casts
+
+`is` checks whether a value has a type. After a successful check, Kotlin can often treat it as that more specific type without an explicit cast.
+
+```kotlin
+fun render(value: Any): String = when (value) {
+    is String -> "Text length: ${value.length}"
+    is Int -> "Number doubled: ${value * 2}"
+    else -> "Unsupported"
+}
+```
+
+The compiler knows `value` is a `String` in the first branch and an `Int` in the second. This is a **smart cast** justified by control-flow analysis.
+
+### Negated checks and guard clauses
+
+```kotlin
+fun normalizedName(value: Any?): String {
+    if (value !is String) return "Unknown"
+    return value.trim() // smart-cast to String
+}
+```
+
+### Why smart casts sometimes fail
+
+The compiler must prove the value cannot change between the check and its use.
+
+```kotlin
+class Profile(var nickname: String?)
+
+fun length(profile: Profile): Int {
+    val nickname = profile.nickname // one stable read
+    return if (nickname != null) nickname.length else 0
+}
+```
+
+Smart casts are commonly unavailable for mutable properties, properties with custom/open getters, or values another path could change. Capture one read in a local `val`, or use `?.let` when that communicates the intent better.
+
+### Explicit casts
+
+- `value as Type` throws `ClassCastException` if the type is wrong.
+- `value as? Type` returns `null` if the type is wrong.
+
+```kotlin
+val routeId: String? = arguments["id"] as? String
+```
+
+Use safe casts for dynamic or weakly typed boundaries. Then validate and convert into a strong domain type immediately.
+
+<PlaygroundLink code={`fun describe(value: Any?): String = when (value) {
+    null -> "No value"
+    is String -> "String(length=\${value.length})"
+    is Int -> "Int(doubled=\${value * 2})"
+    else -> "Other(\${value::class.simpleName})"
+}
+
+fun main() {
+    listOf(null, "Android", 21, true).forEach { println(describe(it)) }
+}`} />
+
+## 6. Android scenario: API result to UI state
+
+```kotlin
+sealed interface UserResult {
+    data object Loading : UserResult
+    data class Success(val name: String, val unread: Int) : UserResult
+    data class Error(val cause: Throwable) : UserResult
+}
+
+data class UserUiState(
+    val title: String,
+    val showProgress: Boolean,
+    val errorMessage: String? = null,
+)
+
+fun UserResult.toUiState(): UserUiState = when (this) {
+    UserResult.Loading -> UserUiState("Loading", true)
+    is UserResult.Success -> UserUiState(
+        title = if (unread > 0) "$name ($unread)" else name,
+        showProgress = false,
+    )
+    is UserResult.Error -> UserUiState(
+        title = "Could not load user",
+        showProgress = false,
+        errorMessage = cause.message ?: "Unknown error",
+    )
+}
+```
+
+This design uses an exhaustive `when`, branch-specific smart casts, expression-based initialization, immutable structural equality, and deliberate nullability.
+
+## 7. Common mistakes
+
+| Mistake | Why it fails | Better choice |
+|---|---|---|
+| Using `var` everywhere | Expands possible states | Start with `val` |
+| Assuming `val` means immutable | Referenced object may mutate | Expose immutable models |
+| Comparing content with `===` | Tests identity | Usually use `==` |
+| Using `0..list.size` | Includes invalid last index | Use `list.indices` |
+| Adding `else` to every sealed `when` | Hides new variants | List every case |
+| Forcing `as` on external input | Wrong input crashes | Use `as?`, validate, model |
+| Re-reading a mutable property after a check | Value may change | Capture a local `val` |
+| Vague inferred public types | API meaning may drift | Declare public types |
+
+## 8. Architect perspective
+
+- Use sealed hierarchies for meaningful states instead of combinations of booleans that can contradict one another.
+- Prefer immutable values at module and concurrency boundaries. Small, contained local mutation can still be clear.
+- Convert network, database, Bundle, Intent, and Java values into strong domain types at the boundary.
+- Design equality intentionally for state, caching, diffing, and identity.
+- Treat exhaustive `when` as a change detector: adding a state should reveal every consumer needing a decision.
+
+## Interview questions
+
+<details><summary>What is the difference between `val` and immutability?</summary><p>`val` prevents reassignment of a reference. It does not prevent the referenced object's observable state from changing.</p></details>
+
+<details><summary>Why is `if` an expression?</summary><p>It can produce a value. When that result is used, both branches produce values with a compatible resulting type.</p></details>
+
+<details><summary>What is the difference between `==` and `===`?</summary><p>`==` performs null-safe structural equality through `equals`; `===` checks whether both operands are the same object reference.</p></details>
+
+<details><summary>When does a smart cast fail?</summary><p>When the compiler cannot prove the value remains unchanged between check and use, such as with a mutable property or open/custom getter.</p></details>
+
+<details><summary>Why omit `else` for a sealed hierarchy?</summary><p>A newly added variant then causes compilation errors at consumers requiring a decision. A broad `else` hides that signal.</p></details>
+
+<details><summary>Does Kotlin prevent integer overflow?</summary><p>No. Standard JVM integer arithmetic may overflow and wrap. Validate or use checked arithmetic where required.</p></details>
+
+## Exercises
+
+1. Model `Idle`, `Loading`, `Content`, `Empty`, and `Failure` as a sealed hierarchy and map every state to a title.
+2. Create two data-class instances with equal fields and predict `==` and `===` before running them.
+3. Rewrite three temporary `var` values using `if`, `when`, and block expressions.
+4. Accept an `Any?` route argument, safely cast it, trim it, reject blank input, and return without throwing.
+5. Explain why changing a field involved in `hashCode` can make a `HashMap` key impossible to find.
+
+## Chapter checklist
+
+- [ ] I distinguish a read-only reference from an immutable object.
+- [ ] I understand inference and when explicit types improve an API.
+- [ ] I use `if`, `when`, and blocks as expressions.
+- [ ] I choose safe loop boundaries.
+- [ ] I know when to use `==`, `===`, `as`, and `as?`.
+- [ ] I can explain how control flow enables smart casts.
+- [ ] I can model Android UI state with exhaustive immutable types.

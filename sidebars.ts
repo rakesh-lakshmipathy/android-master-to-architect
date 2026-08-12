@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'kotlin/why-kotlin',
+        'kotlin/types-and-control-flow',
         'kotlin/null-safety',
         {type: 'category', label: 'Classes and type modeling', items: ['kotlin/value-classes']},
       ],
