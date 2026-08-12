@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Android Master to Architect</title>
+  <desc id="desc">Android head combined with layered software architecture</desc>
+  <defs>
+    <linearGradient id="layers" x1="14" y1="22" x2="50" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#50E89B"/><stop offset="1" stop-color="#20B7DE"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="15" fill="#071D33"/>
+  <path d="M18 24h28a4 4 0 0 1 4 4v5H14v-5a4 4 0 0 1 4-4Z" fill="url(#layers)"/>
+  <path d="m21 21-4-6m26 6 4-6" stroke="#50E89B" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="24" cy="28" r="1.7" fill="#071D33"/><circle cx="40" cy="28" r="1.7" fill="#071D33"/>
+  <rect x="12" y="36" width="40" height="6" rx="2" fill="#50E89B"/>
+  <rect x="17" y="45" width="30" height="6" rx="2" fill="#2CC7B2"/>
+  <path d="M23 55h18" stroke="#20B7DE" stroke-width="4" stroke-linecap="round"/>
+</svg>

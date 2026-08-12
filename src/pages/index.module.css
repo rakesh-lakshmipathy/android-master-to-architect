@@ -4,22 +4,27 @@
  */
 
 .heroBanner {
-  padding: 3.25rem 0;
+  padding: 2.75rem 0;
   position: relative;
   overflow: hidden;
 }
 
 .heroLayout {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
+  grid-template-columns: 155px minmax(0, 1fr);
   align-items: center;
-  gap: 2.75rem;
+  gap: 2.4rem;
   max-width: 1040px;
 }
 
 .heroContent {
   min-width: 0;
   text-align: left;
+}
+
+.heroContent :global(.hero__title) {
+  font-size: clamp(2.75rem, 4.5vw, 4rem);
+  line-height: 1.08;
 }
 
 .buttons {
@@ -41,8 +46,8 @@
 }
 
 .authorPhoto {
-  width: 150px;
-  height: 150px;
+  width: 138px;
+  height: 138px;
   border: 4px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
   object-fit: cover;

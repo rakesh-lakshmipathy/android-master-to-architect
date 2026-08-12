@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Android Master to Architect',
-  tagline: 'A living Android engineering bible by Rakesh Lakshmipathy',
+  tagline: 'A living Android engineering handbook by Rakesh Lakshmipathy',
   favicon: 'img/favicon.ico',
   future: {v4: true},
   url: 'https://rakesh-lakshmipathy.github.io',
@@ -25,8 +25,8 @@ const config: Config = {
   themeConfig: {
     colorMode: {respectPrefersColorScheme: true},
     navbar: {
-      title: 'Android Bible',
-      logo: {alt: 'Android Master to Architect', src: 'img/logo.svg'},
+      title: 'Android Architect Guide',
+      logo: {alt: 'Android Master to Architect architecture mark', src: 'img/architect-mark.svg'},
       items: [
         {type: 'docSidebar', sidebarId: 'androidBibleSidebar', position: 'left', label: 'Start learning'},
         {to: '/docs/roadmap', label: 'Master roadmap', position: 'left'},
