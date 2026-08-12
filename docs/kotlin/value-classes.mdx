@@ -5,6 +5,7 @@ sidebar_position: 9
 ---
 
 import PlaygroundLink from '@site/src/components/PlaygroundLink';
+import Admonition from '@theme/Admonition';
 
 # Kotlin value classes
 
@@ -94,9 +95,9 @@ Throwing may be correct for an internal programmer invariant. For external deep-
 | Used through an interface | Boxed |
 | Java/reflection boundary | May be boxed and have name-mangled signatures |
 
-:::danger Performance truth
+<Admonition type="danger" title="Performance truth">
 Value classes can reduce allocations, but “zero allocation” is not guaranteed. Benchmark measured hot paths instead of inferring performance from source syntax.
-:::
+</Admonition>
 
 ## Value class versus alternatives
 

@@ -6,13 +6,14 @@ sidebar_position: 1
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+import Admonition from '@theme/Admonition';
 import PlaygroundLink from '@site/src/components/PlaygroundLink';
 
 # Why Kotlin instead of Java?
 
-:::tip Short answer
+<Admonition type="tip" title="Short answer">
 Kotlin is usually the better default for modern Android because Android is Kotlin-first, the type system prevents common mistakes, the language expresses intent with less ceremony, coroutines support structured asynchronous work, and existing Java can be retained during incremental adoption.
-:::
+</Admonition>
 
 Java still works and remains supported. The engineering question is which language gives a particular team the best balance of safety, maintainability, ecosystem alignment, build cost, and migration risk.
 
@@ -42,7 +43,7 @@ val displayLength: Int = length ?: 0
 data class UserUi(val id: Long, val name: String)
 ```
 
-This can generate equality, hashing, `toString`, component functions and `copy`. The advantage is clearer intent—not merely fewer characters.
+This can generate equality, hashing, `toString`, component functions and `copy`. The advantage is clearer intent, not merely fewer characters.
 
 <PlaygroundLink code={`data class UserUi(val id: Long, val name: String)
 
@@ -67,9 +68,9 @@ fun refresh() = viewModelScope.launch {
 }
 ```
 
-:::warning
+<Admonition type="warning" title="Important limitation">
 Coroutines do not make blocking work non-blocking automatically. A blocking call still occupies its thread.
-:::
+</Admonition>
 
 ## 4. Incremental interoperability
 

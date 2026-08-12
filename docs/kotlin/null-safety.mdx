@@ -5,6 +5,7 @@ sidebar_position: 2
 ---
 
 import PlaygroundLink from '@site/src/components/PlaygroundLink';
+import Admonition from '@theme/Admonition';
 
 # Null safety and the safe-call operator
 
@@ -43,9 +44,9 @@ fun main() {
 
 `!!` is the **not-null assertion operator**. It tells Kotlin to treat a nullable value as non-null. If the value is actually null, the expression throws `NullPointerException`.
 
-:::danger Avoid false confidence
+<Admonition type="danger" title="Avoid false confidence">
 `!!` does not validate a value. It disables the compiler’s nullable-type protection at that location.
-:::
+</Admonition>
 
 ## Android scenario
 
