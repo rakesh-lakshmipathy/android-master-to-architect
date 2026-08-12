@@ -10,6 +10,16 @@ function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   return <header className={clsx('hero hero--primary', styles.heroBanner)}>
     <div className="container">
+      <div className={styles.author}>
+        <img
+          className={styles.authorPhoto}
+          src="https://rakesh-lakshmipathy.github.io/assets/images/my-avatar.jpg"
+          alt="Rakesh Lakshmipathy"
+          width="112"
+          height="112"
+        />
+        <span>Rakesh Lakshmipathy</span>
+      </div>
       <div className="hero-kicker">FROM FIRST PRINCIPLES TO ARCHITECTURE</div>
       <Heading as="h1" className="hero__title">{siteConfig.title}</Heading>
       <p className="hero__subtitle">{siteConfig.tagline}</p>
