@@ -10,7 +10,9 @@ export default function PlaygroundLink({code, children = 'Run on Playground'}: P
   }, [code]);
 
   return <a className="playground-link" href={href} target="_blank" rel="noreferrer">
-    <span className="playground-link__icon" aria-hidden="true" />
+    <svg className="playground-link__icon" viewBox="0 0 12 14" aria-hidden="true">
+      <path d="M1 1.2v11.6L11 7 1 1.2Z" fill="currentColor" />
+    </svg>
     <span>{children}</span>
   </a>;
 }
