@@ -1,0 +1,59 @@
+---
+id: null-safety
+title: Null safety and safe calls
+sidebar_position: 2
+---
+
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Null safety and the safe-call operator
+
+Kotlin distinguishes a value that must exist (`String`) from one that may be absent (`String?`). This moves many failures from runtime into compiler feedback.
+
+```kotlin
+val nickname: String? = null
+val length: Int? = nickname?.length
+```
+
+When `nickname` is `null`, `nickname?.length` returns **`null`**. It does not return zero. An empty string exists and therefore has length zero; absence and emptiness are different states.
+
+<PlaygroundLink code={`fun describe(nickname: String?) {
+    val length: Int? = nickname?.length
+    val lengthOrZero: Int = nickname?.length ?: 0
+    println("nickname = " + (nickname ?: "<null>"))
+    println("safe-call result = $length")
+    println("with default = $lengthOrZero")
+    println("---")
+}
+
+fun main() {
+    describe(null)
+    describe("")
+    describe("Rakesh")
+    // Uncomment to see the danger:
+    // val missing: String? = null
+    // println(missing!!.length)
+}`}>
+  Run the safe-call experiment
+</PlaygroundLink>
+
+<div className="expected-output"><strong>Expected:</strong> missing nickname → `null`; empty nickname → `0`; `Rakesh` → `6`. The Elvis operator converts only the missing result to the chosen default.</div>
+
+## What is `!!`?
+
+`!!` is the **not-null assertion operator**. It tells Kotlin to treat a nullable value as non-null. If the value is actually null, the expression throws `NullPointerException`.
+
+:::danger Avoid false confidence
+`!!` does not validate a value. It disables the compiler’s nullable-type protection at that location.
+:::
+
+## Android scenario
+
+A navigation query can be omitted, deliberately empty, or meaningful. Converting both omitted and empty to `""` may send incorrect analytics or call the wrong repository path. Model the states according to the domain instead of defaulting automatically.
+
+## Interview check
+
+<details>
+  <summary>What happens when nickname is null?</summary>
+  <p>The result is null, and the inferred type is Int?. The safe call conditionally accesses length and propagates absence.</p>
+</details>

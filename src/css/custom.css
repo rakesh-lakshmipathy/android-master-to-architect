@@ -1,0 +1,45 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #087f5b;
+  --ifm-color-primary-dark: #067452;
+  --ifm-color-primary-darker: #056d4d;
+  --ifm-color-primary-darkest: #045a40;
+  --ifm-color-primary-light: #099269;
+  --ifm-color-primary-lighter: #0a9b70;
+  --ifm-color-primary-lightest: #0cb782;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+.hero--primary { background: linear-gradient(135deg, #071d33 0%, #0b3654 55%, #087f5b 135%); }
+.hero__title { font-size: clamp(2.4rem, 5vw, 4.5rem); letter-spacing: -.04em; }
+.hero__subtitle { max-width: 760px; margin-inline: auto; font-size: 1.25rem; }
+.hero-kicker { margin-bottom: 1rem; color: #6ff2c1; font-weight: 800; letter-spacing: .14em; }
+.hero-roadmap-button { color: white !important; border-color: rgba(255,255,255,.8) !important; }
+.hero-roadmap-button:hover { color: #071d33 !important; background: white !important; }
+.learning-card { height: 100%; padding: 1.5rem; border: 1px solid var(--ifm-color-emphasis-200); border-radius: 18px; background: var(--ifm-background-surface-color); box-shadow: 0 12px 35px rgba(8,41,64,.08); }
+.learning-card span { color: var(--ifm-color-primary); font-weight: 800; letter-spacing: .12em; }
+.learning-card h2 { margin-top: .6rem; }
+.playground-link { display: inline-flex; padding: .75rem 1rem; margin: .5rem 0 1.25rem; border-radius: 10px; background: #087f5b; color: white !important; font-weight: 700; text-decoration: none !important; }
+.expected-output { border-left: 4px solid #087f5b; background: rgba(8,127,91,.08); padding: .9rem 1rem; border-radius: 0 10px 10px 0; margin-bottom: 1rem; }
+.decision-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 1rem; }
+.decision-card { border: 1px solid var(--ifm-color-emphasis-200); border-radius: 12px; padding: 1rem; }
+.badge-complete { color: #087f5b; font-weight: 700; }
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #25c2a0;
+  --ifm-color-primary-dark: #21af90;
+  --ifm-color-primary-darker: #1fa588;
+  --ifm-color-primary-darkest: #1a8870;
+  --ifm-color-primary-light: #29d5b0;
+  --ifm-color-primary-lighter: #32d8b4;
+  --ifm-color-primary-lightest: #4fddbf;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}

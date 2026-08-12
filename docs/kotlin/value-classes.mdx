@@ -1,0 +1,114 @@
+---
+id: value-classes
+title: Kotlin value classes
+sidebar_position: 9
+---
+
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Kotlin value classes
+
+A value class wraps one value to create a distinct domain type. The compiler gains type information while the runtime can often represent the instance using the underlying value.
+
+```kotlin
+@JvmInline
+value class UserId(val value: String)
+```
+
+## Mental model
+
+Think of it as a label that matters to the compiler. `UserId` and `OrderId` may both contain a `String`, but they are different types and cannot be mixed accidentally.
+
+<PlaygroundLink code={`@JvmInline
+value class UserId(val value: String)
+
+@JvmInline
+value class OrderId(val value: String)
+
+fun loadUser(id: UserId) = "Loaded user " + id.value
+
+fun main() {
+    println(loadUser(UserId("U-101")))
+    println("UserId and OrderId are distinct types")
+    // Uncomment either line to see a compile error:
+    // loadUser("U-101")
+    // loadUser(OrderId("O-101"))
+}`}>
+  Run the type-safety lab
+</PlaygroundLink>
+
+## Controlled construction and invariants
+
+```kotlin
+@JvmInline
+value class UserId private constructor(val value: String) {
+    companion object {
+        fun parse(raw: String?): UserId? = raw
+            ?.trim()
+            ?.takeIf { it.matches(Regex("U-[0-9]+")) }
+            ?.let(::UserId)
+    }
+}
+```
+
+The private constructor prevents arbitrary outside construction. The factory normalizes and validates before creating the domain value.
+
+<PlaygroundLink code={`@JvmInline
+value class UserId private constructor(val value: String) {
+    companion object {
+        fun parse(raw: String?): UserId? = raw
+            ?.trim()
+            ?.takeIf { it.matches(Regex("U-[0-9]+")) }
+            ?.let(::UserId)
+    }
+}
+
+fun main() {
+    val inputs = listOf(null, "", "abc", " U-42 ", "U-007")
+    for (input in inputs) {
+        println("input=$input -> " + (UserId.parse(input)?.value ?: "invalid"))
+    }
+}`}>
+  Run validation and normalization
+</PlaygroundLink>
+
+## Android boundary
+
+Routes, `SavedStateHandle`, bundles, databases and network DTOs usually transport primitives. Read the primitive, validate it, and create the domain value at the boundary.
+
+```kotlin
+private val userId: UserId =
+    UserId.parse(savedStateHandle.get<String>("userId"))
+        ?: error("Missing or invalid userId")
+```
+
+Throwing may be correct for an internal programmer invariant. For external deep-link input, model a recoverable invalid-input UI state instead of crashing.
+
+## Runtime and boxing
+
+| Situation | Typical behavior |
+|---|---|
+| Concrete non-null `UserId` | Often represented by the underlying `String` |
+| `UserId?` | May be boxed |
+| Generic `List<UserId>` | Often boxed on the JVM |
+| Used through an interface | Boxed |
+| Java/reflection boundary | May be boxed and have name-mangled signatures |
+
+:::danger Performance truth
+Value classes can reduce allocations, but “zero allocation” is not guaranteed. Benchmark measured hot paths instead of inferring performance from source syntax.
+:::
+
+## Value class versus alternatives
+
+- **Type alias:** another name, but no distinct type safety.
+- **Data class:** structural model that can store multiple values.
+- **Enum:** fixed set of constant instances.
+- **Sealed type:** closed family of variants with different states or data.
+- **Value class:** meaningful single-value type, often with lightweight representation.
+
+## Interview check
+
+<details>
+  <summary>Does a value class automatically guarantee valid values?</summary>
+  <p>No. Validation is guaranteed only when construction is controlled and every creation path enforces the invariant.</p>
+</details>
