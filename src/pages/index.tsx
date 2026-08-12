@@ -9,7 +9,7 @@ import styles from './index.module.css';
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   return <header className={clsx('hero hero--primary', styles.heroBanner)}>
-    <div className="container">
+    <div className={clsx('container', styles.heroLayout)}>
       <div className={styles.author}>
         <img
           className={styles.authorPhoto}
@@ -18,14 +18,16 @@ function HomepageHeader() {
           width="112"
           height="112"
         />
-        <span>Rakesh Lakshmipathy</span>
+        <span className={styles.authorName}>Rakesh Lakshmipathy</span>
       </div>
-      <div className="hero-kicker">FROM FIRST PRINCIPLES TO ARCHITECTURE</div>
-      <Heading as="h1" className="hero__title">{siteConfig.title}</Heading>
-      <p className="hero__subtitle">{siteConfig.tagline}</p>
-      <div className={styles.buttons}>
-        <Link className="button button--secondary button--lg" to="/docs/intro">Start learning</Link>
-        <Link className="button button--outline button--secondary button--lg margin-left--md hero-roadmap-button" to="/docs/roadmap">Explore the roadmap</Link>
+      <div className={styles.heroContent}>
+        <div className="hero-kicker">FROM FIRST PRINCIPLES TO ARCHITECTURE</div>
+        <Heading as="h1" className="hero__title">{siteConfig.title}</Heading>
+        <p className="hero__subtitle">{siteConfig.tagline}</p>
+        <div className={styles.buttons}>
+          <Link className="button button--secondary button--lg" to="/docs/intro">Start learning</Link>
+          <Link className="button button--outline button--secondary button--lg margin-left--md hero-roadmap-button" to="/docs/roadmap">Explore the roadmap</Link>
+        </div>
       </div>
     </div>
   </header>;
