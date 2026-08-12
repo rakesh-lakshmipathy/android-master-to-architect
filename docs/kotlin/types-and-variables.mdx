@@ -1,0 +1,78 @@
+---
+id: types-and-variables
+title: Types and variables
+sidebar_position: 2
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Types and variables
+
+## `val`, `var`, and inference
+
+Use `val` for a read-only reference and `var` when the reference must be reassigned.
+
+```kotlin
+val userId: Long = 42L
+val displayName = "Rakesh" // inferred String
+var retryCount = 0         // inferred Int
+retryCount += 1
+```
+
+Prefer `val`: fewer changing references mean fewer possible program states. Use `var` only when reassignment represents a real transition.
+
+## `val` does not mean immutable
+
+```kotlin
+val names = mutableListOf("Ada")
+names += "Grace"                  // object changes
+// names = mutableListOf("Linus") // reference cannot change
+```
+
+`val` protects the reference, not the referenced object's internal state. For true immutability, the object's API must prevent observable mutation.
+
+## Common Kotlin types
+
+| Type | Example | Detail |
+|---|---:|---|
+| `Int` | `42` | 32-bit signed integer |
+| `Long` | `42L` | 64-bit; suffix matters |
+| `Float` | `3.5F` | 32-bit floating point |
+| `Double` | `3.5` | Default decimal type |
+| `Boolean` | `true` | Numbers are not booleans |
+| `Char` | `'A'` | Not a `String` |
+| `String` | `"Android"` | Immutable character sequence |
+
+Kotlin presents these as a unified type system. On the JVM, the compiler commonly emits primitives where nullability, generics, and boundaries do not require boxing.
+
+## Explicit numeric conversion
+
+```kotlin
+val count: Int = 10
+val total: Long = count.toLong()
+```
+
+Kotlin does not silently assign an `Int` to a `Long`. Explicit conversion prevents ambiguity around overloads and generics.
+
+<Admonition type="warning" title="Overflow still exists">
+JVM integer arithmetic can overflow and wrap. Kotlin's types do not automatically make arithmetic checked. Validate untrusted sizes and use checked operations where correctness or security requires them.
+</Admonition>
+
+## Public API guidance
+
+Inference is excellent for local implementation details. Explicit types are useful for public properties and functions because they document the contract and prevent an implementation edit from silently changing the exposed type.
+
+<PlaygroundLink code={`fun main() {
+    val names = mutableListOf("Ada")
+    names += "Grace"
+    val count: Int = 10
+    val total: Long = count.toLong()
+    println("names = $names")
+    println("count = $count, total = $total")
+}`} />
+
+## Quick check
+
+<details><summary>Can the contents referenced by a `val` change?</summary><p>Yes, if the referenced object exposes mutation. Only reassignment of the variable is prohibited.</p></details>
+

@@ -1,0 +1,106 @@
+---
+id: expressions-and-control-flow
+title: Expressions and control flow
+sidebar_position: 3
+---
+
+import Admonition from '@theme/Admonition';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Expressions and control flow
+
+An expression produces a value. Kotlin makes `if`, `when`, `try`, blocks, and calls expressions. Assignment and loops do not produce a useful value.
+
+<Tabs>
+<TabItem value="expression" label="Expression style" default>
+
+```kotlin
+val label = if (isOnline) "Connected" else "Offline"
+```
+
+</TabItem>
+<TabItem value="mutable" label="Mutable style">
+
+```kotlin
+var label: String
+if (isOnline) label = "Connected" else label = "Offline"
+```
+
+</TabItem>
+</Tabs>
+
+The expression style initializes the value exactly once. A block's last expression becomes the branch value.
+
+```kotlin
+val message = if (items.isEmpty()) {
+    logEmptyState()
+    "Nothing to display"
+} else {
+    "${items.size} items"
+}
+```
+
+## Choosing `if` or `when`
+
+Use `if` for binary or compound predicates. Use `when` when multiple meaningful cases exist.
+
+```kotlin
+fun httpMessage(code: Int): String = when (code) {
+    in 200..299 -> "Success"
+    401 -> "Sign in again"
+    404 -> "Not found"
+    in 500..599 -> "Server problem"
+    else -> "Unexpected response"
+}
+```
+
+## Exhaustive state handling
+
+```kotlin
+sealed interface LoadState {
+    data object Loading : LoadState
+    data class Content(val count: Int) : LoadState
+    data class Failed(val message: String) : LoadState
+}
+
+fun title(state: LoadState): String = when (state) {
+    LoadState.Loading -> "Loading"
+    is LoadState.Content -> "${state.count} results"
+    is LoadState.Failed -> state.message
+}
+```
+
+Do not add a broad `else` to a closed hierarchy without a reason. When a new state is introduced, exhaustive compilation errors identify every consumer needing a decision.
+
+## Loops and safe ranges
+
+```kotlin
+for (item in items) { /* value */ }
+for (index in items.indices) { /* valid index */ }
+for ((index, item) in items.withIndex()) { /* both */ }
+for (value in 10 downTo 0 step 2) { /* 10, 8 ... 0 */ }
+```
+
+<Admonition type="danger" title="Off-by-one trap">
+`0..items.size` includes `items.size`, which is invalid. Use `items.indices` or `0 until items.size`.
+</Admonition>
+
+Use `while` when repetition depends on a changing condition, such as fetching until a continuation token is absent.
+
+<PlaygroundLink code={`sealed interface LoadState {
+    data object Loading : LoadState
+    data class Content(val count: Int) : LoadState
+    data class Failed(val message: String) : LoadState
+}
+fun title(state: LoadState): String = when (state) {
+    LoadState.Loading -> "Loading"
+    is LoadState.Content -> "\${state.count} results"
+    is LoadState.Failed -> state.message
+}
+fun main() {
+    listOf(LoadState.Loading, LoadState.Content(3), LoadState.Failed("Try again"))
+        .forEach { println(title(it)) }
+}`} />
+

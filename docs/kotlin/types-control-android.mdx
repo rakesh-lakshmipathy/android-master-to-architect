@@ -1,0 +1,89 @@
+---
+id: types-control-android
+title: Android application and interview preparation
+sidebar_position: 6
+---
+
+# Android application: result to UI state
+
+```kotlin
+sealed interface UserResult {
+    data object Loading : UserResult
+    data class Success(val name: String, val unread: Int) : UserResult
+    data class Error(val cause: Throwable) : UserResult
+}
+
+data class UserUiState(
+    val title: String,
+    val showProgress: Boolean,
+    val errorMessage: String? = null,
+)
+
+fun UserResult.toUiState(): UserUiState = when (this) {
+    UserResult.Loading -> UserUiState("Loading", true)
+    is UserResult.Success -> UserUiState(
+        title = if (unread > 0) "$name ($unread)" else name,
+        showProgress = false,
+    )
+    is UserResult.Error -> UserUiState(
+        title = "Could not load user",
+        showProgress = false,
+        errorMessage = cause.message ?: "Unknown error",
+    )
+}
+```
+
+This design uses an exhaustive `when`, branch-specific smart casts, expression-based initialization, immutable structural equality, and deliberate nullability.
+
+## Common mistakes
+
+| Mistake | Problem | Better choice |
+|---|---|---|
+| `var` everywhere | Too many possible states | Start with `val` |
+| Treating `val` as immutable | Object may still mutate | Immutable models/APIs |
+| Comparing content using `===` | Tests identity | Usually use `==` |
+| `0..list.size` | Invalid final index | `list.indices` |
+| `else` on every sealed `when` | Hides new variants | Exhaust every case |
+| Forced `as` on input | Wrong input crashes | `as?`, validate, model |
+| Re-reading mutable properties | Check may become stale | Capture local `val` |
+
+## Architect perspective
+
+- Use sealed state instead of combinations of booleans that can contradict one another.
+- Prefer immutable values at module and concurrency boundaries.
+- Convert weak external values into domain types at the boundary.
+- Design equality intentionally for state, caching, diffing, and identity.
+- Treat an exhaustive `when` as a compile-time change detector.
+
+## Interview questions
+
+<details><summary>What is the difference between `val` and immutability?</summary><p>`val` prevents reference reassignment; it does not prevent mutation of the referenced object.</p></details>
+
+<details><summary>Why is `if` an expression?</summary><p>It can produce a value. When used as a value, its branches must produce compatible result types.</p></details>
+
+<details><summary>What is the difference between `==` and `===`?</summary><p>`==` performs null-safe structural equality; `===` checks reference identity.</p></details>
+
+<details><summary>When does a smart cast fail?</summary><p>When the compiler cannot prove the value remains stable between the check and use.</p></details>
+
+<details><summary>Why omit `else` for sealed state?</summary><p>A new variant then exposes every consumer requiring a decision through compilation errors.</p></details>
+
+<details><summary>Does Kotlin prevent integer overflow?</summary><p>No. Standard JVM integer arithmetic can overflow and wrap.</p></details>
+
+## Exercises
+
+1. Model `Idle`, `Loading`, `Content`, `Empty`, and `Failure`, then map every state to a title.
+2. Predict `==` and `===` for two equal data-class instances.
+3. Replace temporary mutable variables with expression-based initialization.
+4. Safely cast, trim, and validate an `Any?` route argument without throwing.
+5. Explain why mutating a field involved in `hashCode` can lose a map key.
+
+## Chapter checklist
+
+- [ ] I distinguish a read-only reference from an immutable object.
+- [ ] I know when explicit types improve an API.
+- [ ] I use `if`, `when`, and blocks as expressions.
+- [ ] I choose safe loop boundaries.
+- [ ] I distinguish equality, identity, unsafe casts, and safe casts.
+- [ ] I can explain smart-cast stability.
+- [ ] I can model exhaustive immutable Android UI state.
+

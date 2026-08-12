@@ -10,7 +10,19 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'kotlin/why-kotlin',
-        'kotlin/types-and-control-flow',
+        {
+          type: 'category',
+          label: 'Types and control flow',
+          collapsed: false,
+          items: [
+            'kotlin/types-and-control-flow',
+            'kotlin/types-and-variables',
+            'kotlin/expressions-and-control-flow',
+            'kotlin/equality',
+            'kotlin/smart-casts',
+            'kotlin/types-control-android',
+          ],
+        },
         'kotlin/null-safety',
         {type: 'category', label: 'Classes and type modeling', items: ['kotlin/value-classes']},
       ],

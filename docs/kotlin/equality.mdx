@@ -1,0 +1,72 @@
+---
+id: equality
+title: Equality
+sidebar_position: 4
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Equality: `==` is not `===`
+
+Kotlin separates value equality from object identity.
+
+| Operator | Question | Meaning |
+|---|---|---|
+| `a == b` | Equal content? | Null-safe `equals` |
+| `a != b` | Different content? | Negated equality |
+| `a === b` | Exact same object? | Reference identity |
+| `a !== b` | Different objects? | Negated identity |
+
+```kotlin
+data class User(val id: Long, val name: String)
+
+val first = User(1, "Ada")
+val second = User(1, "Ada")
+println(first == second)  // true
+println(first === second) // false
+```
+
+`a == b` behaves conceptually like `a?.equals(b) ?: (b === null)`.
+
+## Equality contract
+
+A correct `equals` implementation is reflexive, symmetric, transitive, and consistent, and returns false for `null`. Equal objects must produce equal hash codes.
+
+Never mutate fields involved in equality while an object is a `HashSet` member or `HashMap` key. Its hash bucket may change, making the entry effectively unreachable.
+
+## Data classes
+
+Data classes generate equality from properties declared in the primary constructor. Properties stored only in the class body are not automatically included.
+
+```kotlin
+data class User(val id: Long, val name: String) {
+    var selected: Boolean = false // excluded from generated equality
+}
+```
+
+That can be intentional, but it must match the domain meaning of equality.
+
+<Admonition type="warning" title="Android UI consequence">
+Compose state policies, RecyclerView diffing, `StateFlow` conflation, caches, and assertions may rely on equality. Poor semantics can suppress a necessary update or cause unnecessary rendering.
+</Admonition>
+
+## Architect decision
+
+Database identity, business identity, and visible-content equality are different questions. Decide which one a model represents. Prefer immutable UI models, and give diffing APIs separate identity and content comparisons where needed.
+
+<PlaygroundLink code={`data class User(val id: Long, val name: String)
+fun main() {
+    val first = User(1, "Ada")
+    val second = User(1, "Ada")
+    val alias = first
+    println("same content = " + (first == second))
+    println("same reference = " + (first === second))
+    println("alias reference = " + (first === alias))
+    println("null safe = " + (null == null))
+}`} />
+
+## Interview check
+
+<details><summary>When should `===` be used?</summary><p>Only when object identity itself matters, such as checking a specific singleton or diagnosing reference sharing. Business value comparison normally uses `==`.</p></details>
+

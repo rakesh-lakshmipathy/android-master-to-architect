@@ -1,0 +1,76 @@
+---
+id: smart-casts
+title: Type checks and smart casts
+sidebar_position: 5
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Type checks and smart casts
+
+`is` tests a type. When control flow proves the test, Kotlin often exposes the narrower type without an explicit cast.
+
+```kotlin
+fun render(value: Any): String = when (value) {
+    is String -> "Text length: ${value.length}"
+    is Int -> "Number doubled: ${value * 2}"
+    else -> "Unsupported"
+}
+```
+
+Inside the first branch, `value` is known to be `String`; inside the second, it is `Int`.
+
+## Guard clauses
+
+```kotlin
+fun normalizedName(value: Any?): String {
+    if (value !is String) return "Unknown"
+    return value.trim()
+}
+```
+
+After the early return, every remaining path proves that `value` is a `String`. Guard clauses also keep the happy path less indented.
+
+## Why a smart cast can fail
+
+The compiler must prove the value cannot change between check and use. Mutable properties, open/custom getters, and values changeable through another path may be unstable.
+
+```kotlin
+class Profile(var nickname: String?)
+
+fun length(profile: Profile): Int {
+    val nickname = profile.nickname // stable snapshot
+    return if (nickname != null) nickname.length else 0
+}
+```
+
+Capturing one read in a local `val` avoids both a compiler problem and a potential check-then-use race in the logic.
+
+## Explicit and safe casts
+
+- `value as Type` throws `ClassCastException` if wrong.
+- `value as? Type` returns `null` if wrong.
+
+```kotlin
+val routeId: String? = arguments["id"] as? String
+```
+
+<Admonition type="warning" title="Boundary rule">
+At Bundle, Intent, network, database, reflection, and Java boundaries, safely cast and validate once, then convert the result into a strong domain type. Do not spread `Any?` through the application.
+</Admonition>
+
+<PlaygroundLink code={`fun describe(value: Any?): String = when (value) {
+    null -> "No value"
+    is String -> "String(length=\${value.length})"
+    is Int -> "Int(doubled=\${value * 2})"
+    else -> "Other(\${value::class.simpleName})"
+}
+fun main() {
+    listOf(null, "Android", 21, true).forEach { println(describe(it)) }
+}`} />
+
+## Interview check
+
+<details><summary>Why does checking a mutable property not always smart-cast it?</summary><p>Because another read may produce a different value. The compiler cannot prove the checked fact still holds. Capture the property in a local `val` when snapshot semantics are correct.</p></details>
+
