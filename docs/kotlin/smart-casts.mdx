@@ -76,4 +76,4 @@ fun main() {
 
 ## Interview check
 
-<details><summary>Why does checking a mutable property not always smart-cast it?</summary><p>Because another read may produce a different value. The compiler cannot prove the checked fact still holds. Capture the property in a local `val` when snapshot semantics are correct.</p></details>
+<details><summary>Why does checking a mutable property not always smart-cast it?</summary><p>Because reading the property again may return a different value. Copy it to a local `val` when you want to check and use the same captured value.</p></details>

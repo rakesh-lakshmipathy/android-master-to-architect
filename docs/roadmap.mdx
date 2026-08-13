@@ -8,44 +8,46 @@ import Admonition from '@theme/Admonition';
 
 # Android Master to Architect roadmap
 
-<span className="badge-complete">● Completed deep dive</span> &nbsp; ○ Planned
+<span className="badge-complete">● Completed lesson</span> &nbsp; ○ Planned lesson
+
+This roadmap shows the complete learning path. A completed lesson is clickable. Planned lessons will become clickable after their full content is written.
 
 ## Part I — Kotlin and Java foundations
 
 - <span className="badge-complete">●</span> [Why Kotlin instead of Java?](./kotlin/why-kotlin)
 - <span className="badge-complete">●</span> [Types, variables, expressions, control flow, equality, and smart casts](./kotlin/types-and-control-flow)
 - <span className="badge-complete">●</span> [Null safety](./kotlin/null-safety)
-- ○ Functions, lambdas, higher-order functions, inline and reified types
-- ○ Constructors, `init`, properties, inheritance, interfaces, objects, data, enum and sealed types
+- ○ Functions, lambdas, higher-order functions, inline functions, and reified types
+- ○ Constructors, `init`, properties, inheritance, interfaces, objects, data classes, enums, and sealed types
 - <span className="badge-complete">●</span> [Value classes](./kotlin/value-classes)
-- ○ Collections, sequences, generics, variance, extensions, delegates and DSLs
-- ○ Coroutines, structured concurrency, Flow, StateFlow, SharedFlow and channels
-- ○ Java interoperability and migration
+- ○ Collections, sequences, generics, variance, extensions, delegates, and DSLs
+- ○ Coroutines, structured concurrency, Flow, StateFlow, SharedFlow, and channels
+- ○ Java interoperability and gradual migration
 
-## Part II — Android platform and builds
+## Part II — Android platform and build system
 
-Android system architecture, processes, ART, Binder, components, activities, tasks, fragments, resources, Gradle, AGP, variants, R8, and build performance.
+How Android runs apps: processes, ART, Binder, application components, activities, tasks, fragments, resources, Gradle, Android Gradle Plugin, build variants, R8, and build performance.
 
-## Part III — UI engineering
+## Part III — User-interface engineering
 
-Views/XML, rendering, RecyclerView, Compose foundations and internals, state management, accessibility, localization, tablets, foldables and adaptive UI.
+Views and XML, rendering, RecyclerView, Compose from fundamentals to internals, state management, accessibility, localization, tablets, foldables, and adaptive layouts.
 
-## Part IV — Architecture and scale
+## Part IV — Architecture and large applications
 
-MVC, MVP, MVVM, MVI, Clean Architecture, SOLID, design patterns, ViewModel, SavedStateHandle, Hilt/Dagger, navigation, modularization and enterprise architecture.
+MVC, MVP, MVVM, MVI, Clean Architecture, SOLID, design patterns, ViewModel, SavedStateHandle, Hilt, Dagger, navigation, modularization, and enterprise-scale decisions.
 
-## Part V — Data and offline-first
+## Part V — Data, networking, and offline-first design
 
-SQLite, Room, DataStore, storage, repositories, use cases, Retrofit, OkHttp, serialization, offline-first sync, conflicts and Paging 3.
+SQLite, Room, DataStore, storage, repositories, use cases, Retrofit, OkHttp, serialization, offline synchronization, conflict resolution, and Paging 3.
 
-## Part VI — Background work and device capabilities
+## Part VI — Background work and device features
 
-WorkManager, services, alarms, notifications, permissions, location, maps, BLE, NFC, sensors, camera, media, files and Firebase.
+WorkManager, services, alarms, notifications, permissions, location, maps, BLE, NFC, sensors, camera, media, files, and relevant Firebase services.
 
-## Parts VII–X — Production and architect practice
+## Parts VII–X — Production engineering and architect practice
 
-Security, authentication, Keystore, performance, testing, observability, CI/CD, publishing, compatibility, migration, code review, Automotive, NDK/JNI, KMP, ADRs, system-design case studies and architect interviews.
+Security, authentication, Keystore, performance, testing, observability, CI/CD, publishing, Android-version compatibility, migration, code review, Automotive, NDK/JNI, KMP, architecture decision records, system-design case studies, and architect interviews.
 
-<Admonition type="note" title="Living structure">
-Planned headings are navigation promises, not claims of completed content. Topics become marked complete only after explanations, scenarios, runnable examples, corner cases, tests, decisions, exercises, and interview preparation are written.
+<Admonition type="note" title="When a lesson is marked complete">
+A lesson is complete only when it contains a plain-English explanation, runnable examples, expected results, important mistakes and edge cases, Android usage, deeper engineering details, interview answers, and exercises. A topic name by itself does not count as completed content.
 </Admonition>

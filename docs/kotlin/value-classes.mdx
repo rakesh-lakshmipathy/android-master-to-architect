@@ -38,7 +38,7 @@ fun main() {
   Run on Playground
 </PlaygroundLink>
 
-## Controlled construction and invariants
+## Allow only valid values
 
 ```kotlin
 @JvmInline
@@ -73,7 +73,7 @@ fun main() {
   Run on Playground
 </PlaygroundLink>
 
-## Android boundary
+## Android example
 
 Routes, `SavedStateHandle`, Bundles, databases, and network models usually carry plain strings or numbers. When that value enters your feature, validate it and convert it to `UserId`. The rest of the feature can then use a meaningful type instead of repeatedly checking a raw string.
 
@@ -83,9 +83,11 @@ private val userId: UserId =
         ?: error("Missing or invalid userId")
 ```
 
-Throwing may be correct for an internal programmer invariant. For external deep-link input, model a recoverable invalid-input UI state instead of crashing.
+If this value is missing because of a developer mistake in an internal route, failing immediately may reveal the bug. A public deep link is different: users and other apps can send invalid input, so show an error or safe fallback instead of crashing.
 
-## Runtime and boxing
+## What happens at runtime
+
+Kotlin can sometimes use the wrapped `String` directly without creating a separate `UserId` object. In other situations it must create a wrapper object; this is called **boxing**.
 
 | Situation | Typical behavior |
 |---|---|
@@ -115,5 +117,5 @@ A value class wraps one value to create a distinct type, such as `UserId` around
 
 <details>
   <summary>Does a value class automatically guarantee valid values?</summary>
-  <p>No. Validation is guaranteed only when construction is controlled and every creation path enforces the invariant.</p>
+  <p>No. The value is guaranteed to be valid only when all creation goes through validation, such as a private constructor plus a checked factory function.</p>
 </details>
