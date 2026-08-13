@@ -1,0 +1,114 @@
+---
+id: functional-kotlin-android
+title: Android use cases
+sidebar_position: 7
+---
+
+import Admonition from '@theme/Admonition';
+
+# Android use cases
+
+## Compose event handlers
+
+```kotlin
+@Composable
+fun ProfileScreen(
+    state: ProfileUiState,
+    onRetry: () -> Unit,
+    onUserClick: (UserId) -> Unit,
+) {
+    if (state.error != null) {
+        ErrorContent(onRetry = onRetry)
+    } else {
+        UserList(users = state.users, onUserClick = onUserClick)
+    }
+}
+```
+
+The composable displays state and reports events through function parameters. It does not need to know whether retrying calls a ViewModel, navigator, fake, or preview action.
+
+### Why this is testable
+
+A test or preview can pass a small lambda and record the event:
+
+```kotlin
+var clickedId: UserId? = null
+ProfileScreen(
+    state = sampleState,
+    onRetry = {},
+    onUserClick = { id -> clickedId = id },
+)
+```
+
+Do not pass every ViewModel function through many UI layers without thinking. When the list becomes difficult to understand, group events into one clear event lambda or interface.
+
+## ViewModel state transformation
+
+```kotlin
+val uiState: StateFlow<SearchUiState> = repository.results
+    .map { result -> result.toUiState() }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = SearchUiState.Loading,
+    )
+```
+
+`map` is a higher-order function. It receives a conversion lambda and applies it to every repository result. Flow behavior, cancellation, and lifecycle belong to their own chapter; the important point here is that the transformation is passed as a value.
+
+## RecyclerView click callback
+
+```kotlin
+class UserAdapter(
+    private val onUserClick: (UserId) -> Unit,
+) : ListAdapter<UserUi, UserViewHolder>(UserDiff) {
+    override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
+        val item = getItem(position)
+        holder.bind(item)
+        holder.itemView.setOnClickListener {
+            onUserClick(item.id)
+        }
+    }
+}
+```
+
+Passing only `UserId` keeps navigation outside the adapter. The screen decides what clicking means. Also ensure listeners and captured Views do not outlive the ViewHolder or screen.
+
+## Inline and reified Activity helper
+
+```kotlin
+inline fun <reified T : Activity> Context.openActivity(
+    configure: Intent.() -> Unit = {},
+) {
+    startActivity(Intent(this, T::class.java).apply(configure))
+}
+```
+
+```kotlin
+context.openActivity<DetailsActivity> {
+    putExtra("userId", userId.value)
+}
+```
+
+- `reified T` provides `DetailsActivity::class.java`.
+- The receiver lambda configures the `Intent`.
+- The default empty lambda makes configuration optional.
+
+This improves syntax, but string extras are still not type-safe. A typed route model or destination-owned factory may be safer in a large application.
+
+## Choosing the right tool
+
+| Situation | Good first choice | Why |
+|---|---|---|
+| Small synchronous transformation | Ordinary function | Clear and easy to test |
+| UI click or event | Lambda parameter | Caller chooses the action |
+| Repeated iteration with a changing rule | Higher-order function | Reuses the control flow |
+| One asynchronous result | `suspend` function | Clear cancellation and error handling |
+| Stream of values | `Flow` | Represents several asynchronous values |
+| Runtime generic check in a small helper | `inline reified` | Actual type is available at the call site |
+| Java-facing generic API | Explicit `Class<T>` or type token | Easier Java use and a clear API |
+
+<Admonition type="tip" title="Architect-level takeaway">
+Function parameters reduce direct dependencies, but they do not automatically create good architecture. Keep ownership clear: UI reports events, ViewModels coordinate screen behavior, repositories handle data, and lifecycle-aware scopes own asynchronous work.
+</Admonition>
+

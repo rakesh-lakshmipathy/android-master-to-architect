@@ -1,0 +1,27 @@
+---
+id: functions-overview
+title: Functions and functional Kotlin
+sidebar_position: 1
+---
+
+import Admonition from '@theme/Admonition';
+
+# Functions, lambdas, higher-order functions, inline functions, and reified types
+
+This chapter is split into short pages. Read them in order the first time. Later, open only the page you need for revision.
+
+<Admonition type="tip" title="Simple way to think about the chapter">
+A function names reusable behavior. A lambda is behavior stored as a value. A higher-order function accepts or returns behavior. `inline` can remove some function-object and call overhead. `reified` lets an inline function use a generic type at runtime.
+</Admonition>
+
+## Chapter pages
+
+1. [Functions](./functions) — parameters, return types, expression bodies, defaults, named arguments, `Unit`, `Nothing`, local functions, extension functions, and overloads.
+2. [Lambdas](./lambdas) — function types, lambda syntax, `it`, trailing lambdas, captures, receivers, and callable references.
+3. [Higher-order functions](./higher-order-functions) — accepting and returning functions, collection operations, callbacks, composition, and API design.
+4. [Inline functions](./inline-functions) — what is copied at the call site, when it helps, `noinline`, `crossinline`, non-local returns, and code-size trade-offs.
+5. [Reified type parameters](./reified-types) — type erasure, runtime checks, `T::class`, safe parsing, and why `inline` is required.
+6. [Android use cases](./functional-kotlin-android) — Compose, ViewModel mapping, RecyclerView callbacks, and typed helpers.
+7. [Interview preparation and exercises](./functional-kotlin-interview) — traps, questions, runnable practice, exercises, and checklist.
+
+Use **Next** at the bottom of each page to continue.

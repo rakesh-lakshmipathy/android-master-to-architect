@@ -1,0 +1,122 @@
+---
+id: reified-types
+title: Reified type parameters
+sidebar_position: 6
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Reified type parameters
+
+Most generic type information is erased on the JVM. Inside an ordinary generic function, Kotlin usually cannot ask whether a value is `T` or access `T::class`.
+
+```kotlin
+// Does not compile:
+// fun <T> isType(value: Any): Boolean = value is T
+```
+
+An inline function can mark a type parameter `reified`:
+
+```kotlin
+inline fun <reified T> isType(value: Any): Boolean = value is T
+
+println(isType<String>("Android")) // true
+println(isType<Int>("Android"))    // false
+```
+
+## Why `inline` is required
+
+At each call site, the compiler knows the actual type:
+
+```kotlin
+isType<String>(value)
+```
+
+Because the function is inlined, the compiler can place a real `String` check into the generated code. Without inlining, the runtime would see only an erased `T`.
+
+## Accessing the class
+
+```kotlin
+inline fun <reified T> typeName(): String =
+    T::class.simpleName ?: "Unknown"
+```
+
+For Java reflection APIs, use `T::class.java`:
+
+```kotlin
+inline fun <reified T : Any> javaClassOf(): Class<T> = T::class.java
+```
+
+## Filtering by runtime type
+
+```kotlin
+inline fun <reified T> List<*>.valuesOfType(): List<T> =
+    filterIsInstance<T>()
+```
+
+```kotlin
+val numbers = listOf(1, "two", 3L, 4).valuesOfType<Int>()
+println(numbers) // [1, 4]
+```
+
+## Reified does not preserve every nested generic detail
+
+```kotlin
+inline fun <reified T> check(value: Any) = value is T
+```
+
+A check such as `check<List<String>>(value)` can verify that the value is a `List`, but JVM type erasure prevents checking every element's generic type through a simple runtime `is` check. Reified is powerful, not magical.
+
+## Alternative: pass type information explicitly
+
+Without reified types, accept a class or type token:
+
+```kotlin
+fun <T : Any> isType(value: Any, type: Class<T>): Boolean =
+    type.isInstance(value)
+
+isType("Android", String::class.java)
+```
+
+This is useful when the function cannot be inline, when Java callers need a straightforward API, or when a serialization library requires richer type information.
+
+## Android examples
+
+Reified helpers are often used for:
+
+- Typed navigation or Intent helpers
+- Looking up services by class
+- Dependency containers
+- Serialization wrappers
+- Filtering heterogeneous values
+
+Keep public framework helpers honest: a concise reified API should still validate missing or malformed data and should not hide lifecycle or serialization failures.
+
+<PlaygroundLink code={`inline fun <reified T> isType(value: Any): Boolean = value is T
+
+inline fun <reified T> List<*>.valuesOfType(): List<T> =
+    filterIsInstance<T>()
+
+inline fun <reified T> typeName(): String =
+    T::class.simpleName ?: "Unknown"
+
+fun main() {
+    println(isType<String>("Android"))
+    println(isType<Int>("Android"))
+    println(listOf(1, "two", 3L, 4).valuesOfType<Int>())
+    println(typeName<Double>())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `true`, `false`, `[1, 4]`, and `Double`.</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+JVM type erasure normally prevents an ordinary generic function from checking `value is T` or using `T::class`. An `inline` function with a `reified` type parameter receives the actual type at each call site, enabling those operations. It still cannot fully recover nested generic element types erased by the JVM.
+</Admonition>
+
+## Quick questions
+
+<details><summary>Can a non-inline function use a reified type parameter?</summary><p>No. Reification works because the compiler substitutes the actual type while inlining the function at the call site.</p></details>
+
+<details><summary>Is reified always better than passing `Class&lt;T&gt;`?</summary><p>No. An explicit class or type token can work from Java, avoids forcing an inline API, and may represent richer generic information depending on the library.</p></details>
+

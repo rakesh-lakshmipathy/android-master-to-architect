@@ -1,0 +1,81 @@
+---
+id: functional-kotlin-interview
+title: Interview preparation and exercises
+sidebar_position: 8
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Interview preparation and exercises
+
+## Common interview traps
+
+- A lambda is not automatically asynchronous. It runs wherever and whenever the caller invokes it.
+- `inline` does not mean “run on another thread” or “always faster.”
+- An extension function does not modify or inherit from the receiver class.
+- `reified` requires `inline` and does not defeat all JVM type erasure.
+- `Unit` and `Nothing` are different: `Unit` returns normally; `Nothing` never does.
+- A higher-order function can allocate function objects unless inlining or compiler optimization removes them.
+- Captured Android objects can contribute to memory leaks when ownership is wrong.
+
+## Interview questions
+
+<details><summary>What is a higher-order function?</summary><p>A function that accepts another function, returns one, or both. `map`, `filter`, and callback-based APIs are common examples.</p></details>
+
+<details><summary>What does a lambda capture?</summary><p>It keeps access to values declared outside its body. Captures are useful, but mutable state, threading, and Android lifecycle ownership must be considered.</p></details>
+
+<details><summary>Why use `inline`?</summary><p>For small higher-order functions it can remove lambda objects and indirect calls. It also enables non-local returns and reified type parameters. Large or widely called inline functions can increase generated code size.</p></details>
+
+<details><summary>What are `noinline` and `crossinline`?</summary><p>`noinline` keeps a lambda as a normal value so it can be stored or passed. `crossinline` still allows inlining but forbids a non-local return when the lambda is invoked from another context.</p></details>
+
+<details><summary>Why is `reified` useful?</summary><p>It exposes the actual generic type inside an inline function, enabling checks such as `value is T` and access to `T::class` despite normal JVM type erasure.</p></details>
+
+<details><summary>Lambda versus anonymous function?</summary><p>Both create function values. Anonymous functions use `fun(...)` syntax, can declare a return type directly, and an unlabelled `return` exits the anonymous function rather than an enclosing function.</p></details>
+
+## Runnable interview exercise
+
+```kotlin
+inline fun <reified T> Any?.safeAs(): T? = this as? T
+```
+
+Before running it, predict all four results:
+
+<PlaygroundLink code={`inline fun <reified T> Any?.safeAs(): T? = this as? T
+
+fun main() {
+    val value: Any? = "Android"
+    println(value.safeAs<String>())
+    println(value.safeAs<Int>())
+    println(null.safeAs<String>())
+    println(42.safeAs<Int>())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Android`, `null`, `null`, and `42`.</div>
+
+## Exercises
+
+1. Write `fun String?.orUnknown(): String` and explain why it is an extension on a nullable receiver.
+2. Create a lambda of type `(Double, Int) -> Double` that calculates price times quantity.
+3. Write a higher-order `retry` function that accepts an attempt count and synchronous operation. Decide how failure should be represented.
+4. Rewrite a nested collection chain as a loop, then compare readability and allocations.
+5. Create an inline function with one `noinline` callback and explain why that callback must remain an object.
+6. Expand `safeAs` above and explain why the safe cast returns `null` instead of throwing.
+7. Design a Compose screen API with state and event lambdas. Explain when several lambdas should become one event type.
+
+## Chapter checklist
+
+- [ ] I can explain block-body and expression-body functions.
+- [ ] I understand default arguments, named arguments, `Unit`, and `Nothing`.
+- [ ] I can read and write function types and lambdas with receivers.
+- [ ] I know that lambdas are not automatically asynchronous.
+- [ ] I can design and test a higher-order function.
+- [ ] I understand captures and Android lifecycle risks.
+- [ ] I can explain what inline copies and why code size may increase.
+- [ ] I know the purpose of `noinline` and `crossinline`.
+- [ ] I can explain type erasure and the limit of reified types.
+
+<Admonition type="tip" title="One-minute interview summary">
+Kotlin functions support defaults, named arguments, extensions, expression bodies, and function types. Lambdas are function values and may capture outside state. Higher-order functions accept or return functions, which powers collection operators and UI callbacks. `inline` can remove some lambda overhead and enables non-local returns; `noinline` preserves a lambda as an object, while `crossinline` forbids non-local returns. A reified type parameter uses inlining to make the actual generic type available at the call site, although nested generic types are still limited by JVM erasure.
+</Admonition>
+

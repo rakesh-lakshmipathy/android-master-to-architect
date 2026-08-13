@@ -1,0 +1,139 @@
+---
+id: lambdas
+title: Lambdas
+sidebar_position: 3
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Lambdas
+
+A lambda is an unnamed function that can be stored in a variable, passed to another function, or returned as a result.
+
+```kotlin
+val double: (Int) -> Int = { value -> value * 2 }
+println(double(4)) // 8
+```
+
+`(Int) -> Int` is the function type: it receives one `Int` and returns one `Int`.
+
+## Reading lambda syntax
+
+```kotlin
+val label: (Int, String) -> String = { id, name ->
+    "$id: $name"
+}
+```
+
+- Parameters appear before `->`.
+- The body appears after `->`.
+- The final expression becomes the returned value.
+- The expected function type helps Kotlin infer parameter types.
+
+## The implicit `it` parameter
+
+For a one-parameter lambda, Kotlin can name the parameter `it` automatically:
+
+```kotlin
+val lengths = listOf("Kotlin", "Java").map { it.length }
+```
+
+Use `it` only when the meaning is obvious. In nested or longer lambdas, an explicit name is easier to read:
+
+```kotlin
+users.filter { user -> user.isActive }
+```
+
+## Trailing lambda syntax
+
+If the last argument is a function, the lambda can move outside the parentheses:
+
+```kotlin
+repeat(3) { index ->
+    println(index)
+}
+```
+
+If it is the only argument, the parentheses can disappear. This syntax is common in Compose:
+
+```kotlin
+Button(onClick = { viewModel.save() }) {
+    Text("Save")
+}
+```
+
+## Capturing outside values
+
+```kotlin
+var total = 0
+val add: (Int) -> Unit = { value -> total += value }
+
+add(5)
+println(total) // 5
+```
+
+The lambda **captures** `total`, meaning it keeps access to a value declared outside its body.
+
+<Admonition type="warning" title="Capture carefully">
+A lambda that outlives an Activity, Fragment, View, or large object can keep that object reachable longer than expected. Lifecycle ownership matters more than the lambda syntax itself.
+</Admonition>
+
+## Callable references
+
+When an existing function already has the required shape, pass a reference instead of wrapping it:
+
+```kotlin
+fun normalize(value: String) = value.trim().lowercase()
+
+val result = listOf(" A ", " B ").map(::normalize)
+```
+
+Member references are also possible:
+
+```kotlin
+val lengths = listOf("A", "Android").map(String::length)
+```
+
+## Lambdas with receivers
+
+`StringBuilder.() -> Unit` means the lambda runs with a `StringBuilder` as its receiver, so its members can be called without a variable name.
+
+```kotlin
+fun buildMessage(block: StringBuilder.() -> Unit): String =
+    StringBuilder().apply(block).toString()
+
+val message = buildMessage {
+    append("Hello")
+    append(" Android")
+}
+```
+
+This style powers builders and Kotlin DSLs, including many Compose APIs. Use it when the receiver provides a clear, focused vocabulary.
+
+<PlaygroundLink code={`fun buildMessage(block: StringBuilder.() -> Unit): String =
+    StringBuilder().apply(block).toString()
+
+fun main() {
+    val double: (Int) -> Int = { value -> value * 2 }
+    val message = buildMessage {
+        append("Result: ")
+        append(double(4))
+    }
+    println(message)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Result: 8`.</div>
+
+## Common mistakes
+
+- Using `it` when several values are in scope and the reader cannot tell what it represents.
+- Nesting many lambdas without naming parameters.
+- Capturing a mutable value that may be changed concurrently.
+- Capturing an Android UI object in work that may outlive its lifecycle.
+- Using a receiver lambda when an ordinary parameter would be clearer.
+
+<Admonition type="tip" title="Interview-ready answer">
+A lambda is an anonymous function value. Its type describes its parameter and return types, such as `(Int) -> String`. Lambdas can capture outside values, use trailing-lambda syntax, and run with a receiver. Captures are convenient, but lifecycle and concurrency ownership must still be handled correctly.
+</Admonition>
+

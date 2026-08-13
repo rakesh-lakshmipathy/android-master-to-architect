@@ -1,0 +1,123 @@
+---
+id: higher-order-functions
+title: Higher-order functions
+sidebar_position: 4
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Higher-order functions
+
+A higher-order function accepts a function, returns a function, or does both.
+
+```kotlin
+fun calculate(a: Int, b: Int, operation: (Int, Int) -> Int): Int =
+    operation(a, b)
+
+val result = calculate(10, 5) { left, right -> left + right }
+```
+
+`calculate` controls when the operation runs. The caller supplies what the operation does.
+
+## Accepting behavior as a parameter
+
+```kotlin
+fun <T> findFirst(items: List<T>, matches: (T) -> Boolean): T? {
+    for (item in items) {
+        if (matches(item)) return item
+    }
+    return null
+}
+```
+
+The function owns iteration. The caller provides the rule:
+
+```kotlin
+val firstLongName = findFirst(names) { name -> name.length > 6 }
+```
+
+This reduces duplicated control flow while keeping the changing rule visible.
+
+## Returning behavior
+
+```kotlin
+fun minimumLengthValidator(minimum: Int): (String) -> Boolean =
+    { text -> text.length >= minimum }
+
+val validPassword = minimumLengthValidator(8)
+println(validPassword("android")) // true
+```
+
+The returned lambda remembers `minimum`. This is a closure: a function value plus the outside values it captured.
+
+## Collection operations are higher-order functions
+
+```kotlin
+val visibleNames = users
+    .filter { user -> user.isActive }
+    .sortedBy { user -> user.name }
+    .map { user -> user.name }
+```
+
+- `filter` keeps matching items.
+- `map` transforms every item.
+- `sortedBy` chooses the value used for ordering.
+- `any`, `all`, and `none` answer questions about a collection.
+- `fold` combines items into one accumulated result.
+
+Avoid long chains that hide important decisions or create many intermediate collections in a performance-sensitive path. A clear loop is sometimes the better code.
+
+## Callback design
+
+```kotlin
+fun loadUser(
+    id: Long,
+    onSuccess: (User) -> Unit,
+    onError: (Throwable) -> Unit,
+) { /* start work */ }
+```
+
+Callbacks are still useful for UI events and adapting callback-based APIs. For asynchronous operations that produce one result, a `suspend` function is often easier to compose and cancel than multiple callbacks.
+
+## Function composition
+
+```kotlin
+fun <A, B, C> compose(
+    first: (A) -> B,
+    second: (B) -> C,
+): (A) -> C = { value -> second(first(value)) }
+```
+
+Composition is useful when each transformation has one clear job. Do not build an abstract pipeline when a direct function call is easier to follow.
+
+<PlaygroundLink code={`data class User(val name: String, val active: Boolean)
+
+fun <T> findFirst(items: List<T>, matches: (T) -> Boolean): T? {
+    for (item in items) if (matches(item)) return item
+    return null
+}
+
+fun minimumLengthValidator(minimum: Int): (String) -> Boolean =
+    { text -> text.length >= minimum }
+
+fun main() {
+    val users = listOf(User("Ada", false), User("Rakesh", true))
+    println(findFirst(users) { it.active })
+    println(minimumLengthValidator(8)("android"))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> the active `User(name=Rakesh, active=true)`, followed by `true`.</div>
+
+## Common mistakes
+
+- Creating a higher-order function that is harder to understand than duplicated simple code.
+- Accepting several similar function parameters without clear names.
+- Using callbacks for complex asynchronous workflows that need cancellation and error propagation.
+- Forgetting that captured mutable state may be accessed later or from another thread.
+- Assuming every collection chain is free; intermediate lists may be created.
+
+<Admonition type="tip" title="Interview-ready answer">
+A higher-order function accepts or returns another function. Kotlin collection operators such as `map` and `filter` are common examples. They help separate stable control flow from caller-specific behavior, but too many callbacks or transformations can make execution and performance harder to understand.
+</Admonition>
+

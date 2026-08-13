@@ -1,0 +1,142 @@
+---
+id: functions
+title: Functions
+sidebar_position: 2
+---
+
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Functions
+
+A function gives a name to a piece of work. It can receive values as parameters and return a result.
+
+```kotlin
+fun finalPrice(price: Double, discountPercent: Int): Double {
+    val discount = price * discountPercent / 100
+    return price - discount
+}
+```
+
+`price` and `discountPercent` are inputs. `Double` after the parentheses is the return type.
+
+## Expression-body functions
+
+When a function contains one expression, use `=`:
+
+```kotlin
+fun double(value: Int): Int = value * 2
+```
+
+Kotlin can infer the return type here, but an explicit return type is often clearer for public APIs.
+
+## Default and named arguments
+
+```kotlin
+fun greeting(name: String, prefix: String = "Hello"): String =
+    "$prefix, $name"
+
+greeting("Rakesh")
+greeting(name = "Rakesh", prefix = "Welcome")
+```
+
+Default values reduce overloads. Named arguments explain what each value means and let callers change the order.
+
+<Admonition type="warning" title="Java caller note">
+Java does not understand Kotlin default arguments in the same way. For a Java-facing API, `@JvmOverloads` can generate overloads, but use it deliberately because every overload becomes part of the public API.
+</Admonition>
+
+## `Unit`: completes without a useful result
+
+```kotlin
+fun log(message: String): Unit {
+    println(message)
+}
+```
+
+`Unit` means the function completes normally but does not return information the caller needs. It is similar to Java `void`, but `Unit` is an actual Kotlin value. The return type is usually omitted.
+
+## `Nothing`: never completes normally
+
+```kotlin
+fun missingUser(id: Long): Nothing {
+    error("User $id was not found")
+}
+```
+
+`Nothing` means execution never reaches a normal return. The function always throws, loops forever, or otherwise cannot produce a value. Because `Nothing` has no possible values, Kotlin can use it where another type is expected.
+
+## Local functions
+
+A function can live inside another function when it is useful only there:
+
+```kotlin
+fun validateRegistration(name: String, email: String): Boolean {
+    fun isPresent(value: String) = value.isNotBlank()
+    return isPresent(name) && isPresent(email) && "@" in email
+}
+```
+
+This keeps a helper close to its use and prevents unrelated code from calling it.
+
+## Extension functions
+
+An extension function lets you call a helper as if it belonged to a type:
+
+```kotlin
+fun String.initials(): String =
+    trim().split(Regex("\\s+"))
+        .filter { it.isNotEmpty() }
+        .joinToString("") { it.first().uppercase() }
+```
+
+```kotlin
+println("Rakesh Lakshmipathy".initials()) // RL
+```
+
+An extension does not modify the class. It is a normal function selected at compile time. It also cannot access private members of the class.
+
+## Overloading
+
+Functions may share a name when their parameter lists differ:
+
+```kotlin
+fun format(value: Int) = "Number: $value"
+fun format(value: Boolean) = if (value) "Yes" else "No"
+```
+
+Do not overload functions when the meaning changes drastically. A clear name is better than making callers guess which behavior an overload provides.
+
+<PlaygroundLink code={`fun finalPrice(price: Double, discountPercent: Int = 0): Double =
+    price - (price * discountPercent / 100)
+
+fun String.initials(): String =
+    trim().split(Regex("\\\\s+"))
+        .filter { it.isNotEmpty() }
+        .joinToString("") { it.first().uppercase() }
+
+fun main() {
+    println(finalPrice(price = 1000.0, discountPercent = 15))
+    println("Rakesh Lakshmipathy".initials())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `850.0`, followed by `RL`.</div>
+
+## Common mistakes
+
+- Using a default value when the caller should be forced to make a decision.
+- Returning `null` without explaining what absence means.
+- Creating broad utility extension files with unrelated behavior.
+- Omitting explicit types from important public APIs.
+- Using `Nothing` where a recoverable error should be modeled as data.
+
+<Admonition type="tip" title="Interview-ready answer">
+A Kotlin function is declared with `fun`, can have default and named arguments, and may use a block body or expression body. `Unit` means normal completion without a useful result; `Nothing` means the function never returns normally. Extension functions improve call-site readability but do not actually add members to a class.
+</Admonition>
+
+## Quick questions
+
+<details><summary>Does an extension function override a member function?</summary><p>No. A real member wins when both have a matching signature. Extensions are resolved statically using the declared receiver type.</p></details>
+
+<details><summary>Should public functions rely on inferred return types?</summary><p>Usually write the return type explicitly. It documents the API and prevents an implementation change from silently changing the exposed type.</p></details>
+
