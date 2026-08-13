@@ -85,14 +85,34 @@ An extension function lets you call a helper as if it belonged to a type:
 
 ```kotlin
 fun String.initials(): String =
-    trim().split(Regex("\\s+"))
+    trim()
+        .split(Regex("\\s+"))
         .filter { it.isNotEmpty() }
-        .joinToString("") { it.first().uppercase() }
+        .joinToString("") { word -> word.first().uppercase() }
 ```
 
-```kotlin
-println("Rakesh Lakshmipathy".initials()) // RL
-```
+For the input `"  Rakesh   Lakshmipathy  "`, the chain runs from top to bottom:
+
+1. `trim()` removes spaces at the beginning and end → `"Rakesh   Lakshmipathy"`.
+2. `split(Regex("\\s+"))` splits on one or more whitespace characters → `["Rakesh", "Lakshmipathy"]`.
+3. `filter { it.isNotEmpty() }` keeps only non-empty words. Here the list remains unchanged.
+4. `joinToString("") { word -> ... }` takes the first letter of each word, converts it to uppercase, and joins the letters without a separator → `"RL"`.
+
+The regex `\\s+` means “one or more whitespace characters.” Kotlin needs two backslashes in the string so that the regular expression receives one backslash.
+
+<PlaygroundLink code={`fun String.initials(): String =
+    trim()
+        .split(Regex("\\\\s+"))
+        .filter { it.isNotEmpty() }
+        .joinToString("") { word -> word.first().uppercase() }
+
+fun main() {
+    println("  Rakesh   Lakshmipathy  ".initials())
+    println("Ada Lovelace".initials())
+    println("   ".initials())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `RL`, then `AL`, followed by an empty line for the blank input.</div>
 
 An extension does not modify the class. It is a normal function selected at compile time. It also cannot access private members of the class.
 
@@ -106,21 +126,6 @@ fun format(value: Boolean) = if (value) "Yes" else "No"
 ```
 
 Do not overload functions when the meaning changes drastically. A clear name is better than making callers guess which behavior an overload provides.
-
-<PlaygroundLink code={`fun finalPrice(price: Double, discountPercent: Int = 0): Double =
-    price - (price * discountPercent / 100)
-
-fun String.initials(): String =
-    trim().split(Regex("\\\\s+"))
-        .filter { it.isNotEmpty() }
-        .joinToString("") { it.first().uppercase() }
-
-fun main() {
-    println(finalPrice(price = 1000.0, discountPercent = 15))
-    println("Rakesh Lakshmipathy".initials())
-}`} />
-
-<div className="expected-output"><strong>Expected:</strong> `850.0`, followed by `RL`.</div>
 
 ## Common mistakes
 
@@ -139,4 +144,3 @@ A Kotlin function is declared with `fun`, can have default and named arguments, 
 <details><summary>Does an extension function override a member function?</summary><p>No. A real member wins when both have a matching signature. Extensions are resolved statically using the declared receiver type.</p></details>
 
 <details><summary>Should public functions rely on inferred return types?</summary><p>Usually write the return type explicitly. It documents the API and prevents an implementation change from silently changing the exposed type.</p></details>
-
