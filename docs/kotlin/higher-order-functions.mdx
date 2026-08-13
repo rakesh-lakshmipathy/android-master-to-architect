@@ -111,13 +111,82 @@ fun main() {
 
 ## Common mistakes
 
-- Creating a higher-order function that is harder to understand than duplicated simple code.
-- Accepting several similar function parameters without clear names.
-- Using callbacks for complex asynchronous workflows that need cancellation and error propagation.
-- Forgetting that captured mutable state may be accessed later or from another thread.
-- Assuming every collection chain is free; intermediate lists may be created.
+### 1. Several callbacks make the call site confusing
+
+<div className="practice-bad">
+
+**✕ Avoid unnamed meaning**
+
+```kotlin
+loadUser(42, { show(it) }, { log(it) }, { hideLoading() })
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Name every behavior**
+
+```kotlin
+loadUser(
+    id = 42,
+    onSuccess = { user -> show(user) },
+    onError = { error -> log(error) },
+    onComplete = { hideLoading() },
+)
+```
+</div>
+
+If the asynchronous flow keeps growing, prefer a `suspend` function or `Flow` instead of adding more callbacks.
+
+### 2. A collection chain creates unnecessary intermediate lists
+
+<div className="practice-bad">
+
+**✕ Wasteful for a large list**
+
+```kotlin
+val firstName = users
+    .filter { it.active }
+    .map { it.name }
+    .firstOrNull()
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Stop as soon as a match is found**
+
+```kotlin
+val firstName = users.firstOrNull { user -> user.active }?.name
+```
+</div>
+
+The first version can build filtered and mapped lists. The second searches until it finds one active user.
+
+### 3. A generic abstraction hides simple business logic
+
+<div className="practice-bad">
+
+**✕ Unnecessary abstraction**
+
+```kotlin
+fun <T, R> execute(value: T, operation: (T) -> R): R = operation(value)
+
+val total = execute(price) { it * quantity }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Say what the business operation does**
+
+```kotlin
+fun orderTotal(price: Double, quantity: Int): Double = price * quantity
+```
+</div>
+
+Use a higher-order function when it removes repeated control flow or creates a genuinely useful API—not merely because Kotlin allows it.
 
 <Admonition type="tip" title="Interview-ready answer">
 A higher-order function accepts or returns another function. Kotlin collection operators such as `map` and `filter` are common examples. They help separate stable control flow from caller-specific behavior, but too many callbacks or transformations can make execution and performance harder to understand.
 </Admonition>
-

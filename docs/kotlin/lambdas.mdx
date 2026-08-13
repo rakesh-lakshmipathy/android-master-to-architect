@@ -127,13 +127,84 @@ fun main() {
 
 ## Common mistakes
 
-- Using `it` when several values are in scope and the reader cannot tell what it represents.
-- Nesting many lambdas without naming parameters.
-- Capturing a mutable value that may be changed concurrently.
-- Capturing an Android UI object in work that may outlive its lifecycle.
-- Using a receiver lambda when an ordinary parameter would be clearer.
+### 1. Too many `it` values hide the meaning
+
+<div className="practice-bad">
+
+**✕ Hard to read**
+
+```kotlin
+users.filter { it.orders.any { it.total > 1_000 } }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Clear names**
+
+```kotlin
+users.filter { user ->
+    user.orders.any { order -> order.total > 1_000 }
+}
+```
+</div>
+
+Both compile. The second version makes it obvious which object owns `orders` and which object has `total`.
+
+### 2. Capturing a Fragment in long-running work
+
+<div className="practice-bad">
+
+**✕ Avoid**
+
+```kotlin
+repository.loadUser { user ->
+    binding.name.text = user.name // May run after the Fragment view is destroyed
+}
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Prefer lifecycle-owned collection**
+
+```kotlin
+viewLifecycleOwner.lifecycleScope.launch {
+    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.uiState.collect { state -> render(state) }
+    }
+}
+```
+</div>
+
+The problem is not “lambdas cause leaks.” The problem is that the callback may outlive the View it captured. Give long-running work a lifecycle owner.
+
+### 3. Capturing mutable loop state
+
+<div className="practice-bad">
+
+**✕ Surprising result**
+
+```kotlin
+var selectedId = 1L
+val onClick = { println(selectedId) }
+selectedId = 2L
+onClick() // Prints 2, not 1
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Capture the intended value**
+
+```kotlin
+val selectedId = 1L
+val onClick = { println(selectedId) }
+```
+</div>
+
+A lambda captures access to the variable, not necessarily a frozen copy of its old value.
 
 <Admonition type="tip" title="Interview-ready answer">
 A lambda is an anonymous function value. Its type describes its parameter and return types, such as `(Int) -> String`. Lambdas can capture outside values, use trailing-lambda syntax, and run with a receiver. Captures are convenient, but lifecycle and concurrency ownership must still be handled correctly.
 </Admonition>
-

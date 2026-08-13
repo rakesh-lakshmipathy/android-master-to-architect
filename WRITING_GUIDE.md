@@ -29,6 +29,7 @@ Write for a software engineer who wants to understand Android deeply and answer 
 - Explain evaluation order when it affects the result.
 - Chained Kotlin is welcome, but explain what each important operation receives and returns. Show intermediate values when the result is not immediately obvious.
 - Put a Playground link directly below every independently runnable Kotlin/JVM example. If a snippet is Android-only, intentionally invalid, or incomplete, label that reason clearly instead of presenting a broken Playground link.
+- Present common mistakes as practical **✕ Avoid / ✓ Prefer** comparisons. Show real code, the concrete failure or risk, corrected code, and one short explanation of why the correction works. Do not use theory-only bullet lists.
 - Use architecture terminology only after the concrete problem is clear.
 - Keep correctness and nuance, but place advanced caveats after the basic answer.
 

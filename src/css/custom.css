@@ -30,6 +30,11 @@
 .playground-link:hover { background: #5338c2; border-color: #5338c2; color: white !important; transform: translateY(-1px); box-shadow: 0 5px 14px rgba(100, 71, 215, .22); }
 .playground-link__external { font-size: 1rem; line-height: 1; }
 .expected-output { border-left: 4px solid #087f5b; background: rgba(8,127,91,.08); padding: .9rem 1rem; border-radius: 0 10px 10px 0; margin-bottom: 1rem; }
+.practice-bad, .practice-good { margin: .65rem 0; padding: .85rem 1rem .1rem; border: 1px solid var(--ifm-color-emphasis-200); border-left-width: 5px; border-radius: 8px; }
+.practice-bad { border-left-color: #d64545; background: rgba(214,69,69,.07); }
+.practice-good { border-left-color: #16875f; background: rgba(22,135,95,.07); }
+.practice-bad > strong { color: #c73737; }
+.practice-good > strong { color: #087f5b; }
 .decision-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 1rem; }
 .decision-card { border: 1px solid var(--ifm-color-emphasis-200); border-radius: 12px; padding: 1rem; }
 .badge-complete { color: #087f5b; font-weight: 700; }

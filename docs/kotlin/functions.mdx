@@ -129,11 +129,86 @@ Do not overload functions when the meaning changes drastically. A clear name is 
 
 ## Common mistakes
 
-- Using a default value when the caller should be forced to make a decision.
-- Returning `null` without explaining what absence means.
-- Creating broad utility extension files with unrelated behavior.
-- Omitting explicit types from important public APIs.
-- Using `Nothing` where a recoverable error should be modeled as data.
+### 1. A dangerous default hides a required decision
+
+<div className="practice-bad">
+
+**✕ Avoid**
+
+```kotlin
+fun deleteAccount(userId: Long, permanently: Boolean = true) { /* ... */ }
+
+deleteAccount(42) // Permanent deletion happened without saying so
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Prefer**
+
+```kotlin
+fun deleteAccount(userId: Long, permanently: Boolean) { /* ... */ }
+
+deleteAccount(userId = 42, permanently = false)
+```
+</div>
+
+Defaults are useful for harmless convenience. Do not default a security, payment, deletion, or data-loss decision.
+
+### 2. A nullable result does not explain why no value exists
+
+<div className="practice-bad">
+
+**✕ Avoid**
+
+```kotlin
+fun register(email: String): User? = null
+```
+
+The caller cannot tell whether the email was invalid, already registered, or the server failed.
+</div>
+
+<div className="practice-good">
+
+**✓ Prefer**
+
+```kotlin
+sealed interface RegistrationResult {
+    data class Success(val user: User) : RegistrationResult
+    data object InvalidEmail : RegistrationResult
+    data object AlreadyRegistered : RegistrationResult
+    data class Failed(val cause: Throwable) : RegistrationResult
+}
+```
+</div>
+
+Use `null` when simple absence is the complete meaning. Use a result type when the caller must react differently to several outcomes.
+
+### 3. A broad extension looks available everywhere
+
+<div className="practice-bad">
+
+**✕ Avoid**
+
+```kotlin
+fun String.saveUserToDatabase() { /* hidden database dependency */ }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Prefer**
+
+```kotlin
+fun String.normalizedEmail(): String = trim().lowercase()
+
+class UserRepository(private val database: UserDatabase) {
+    fun saveEmail(email: String) = database.save(email.normalizedEmail())
+}
+```
+</div>
+
+An extension should naturally describe the receiver. Database or network work belongs to an object whose dependency and responsibility are visible.
 
 <Admonition type="tip" title="Interview-ready answer">
 A Kotlin function is declared with `fun`, can have default and named arguments, and may use a block body or expression body. `Unit` means normal completion without a useful result; `Nothing` means the function never returns normally. Extension functions improve call-site readability but do not actually add members to a class.
