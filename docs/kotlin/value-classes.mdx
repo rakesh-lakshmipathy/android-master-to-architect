@@ -9,7 +9,7 @@ import Admonition from '@theme/Admonition';
 
 # Kotlin value classes
 
-A value class wraps one value to create a distinct domain type. The compiler gains type information while the runtime can often represent the instance using the underlying value.
+A value class gives an existing value a new, meaningful Kotlin type. A user ID and an order ID may both be strings, but Kotlin should stop you from accidentally passing one where the other is required.
 
 ```kotlin
 @JvmInline
@@ -52,7 +52,7 @@ value class UserId private constructor(val value: String) {
 }
 ```
 
-The private constructor prevents arbitrary outside construction. The factory normalizes and validates before creating the domain value.
+The private constructor stops other code from creating an unchecked `UserId`. Callers must use `parse`, which trims the input and accepts only values matching the required format.
 
 <PlaygroundLink code={`@JvmInline
 value class UserId private constructor(val value: String) {
@@ -75,7 +75,7 @@ fun main() {
 
 ## Android boundary
 
-Routes, `SavedStateHandle`, bundles, databases and network DTOs usually transport primitives. Read the primitive, validate it, and create the domain value at the boundary.
+Routes, `SavedStateHandle`, Bundles, databases, and network models usually carry plain strings or numbers. When that value enters your feature, validate it and convert it to `UserId`. The rest of the feature can then use a meaningful type instead of repeatedly checking a raw string.
 
 ```kotlin
 private val userId: UserId =
@@ -97,6 +97,10 @@ Throwing may be correct for an internal programmer invariant. For external deep-
 
 <Admonition type="danger" title="Performance truth">
 Value classes can reduce allocations, but “zero allocation” is not guaranteed. Benchmark measured hot paths instead of inferring performance from source syntax.
+</Admonition>
+
+<Admonition type="tip" title="Interview-ready answer">
+A value class wraps one value to create a distinct type, such as `UserId` around `String`. Its main benefit is type safety and clearer APIs. It may avoid allocation in some JVM cases, but nullable, generic, interface, Java, and reflection usage can require boxing.
 </Admonition>
 
 ## Value class versus alternatives

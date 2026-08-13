@@ -34,7 +34,7 @@ After the early return, every remaining path proves that `value` is a `String`. 
 
 ## Why a smart cast can fail
 
-The compiler must prove the value cannot change between check and use. Mutable properties, open/custom getters, and values changeable through another path may be unstable.
+Kotlin smart-casts only when it is sure the value cannot change after the check. A mutable property might have one value during the check and another during the next read, so the compiler may refuse the smart cast.
 
 ```kotlin
 class Profile(var nickname: String?)
@@ -45,7 +45,7 @@ fun length(profile: Profile): Int {
 }
 ```
 
-Capturing one read in a local `val` avoids both a compiler problem and a potential check-then-use race in the logic.
+The local `val` reads `nickname` once. Kotlin knows this local value cannot be reassigned, so the null check remains valid when `length` is called.
 
 ## Explicit and safe casts
 
@@ -57,7 +57,11 @@ val routeId: String? = arguments["id"] as? String
 ```
 
 <Admonition type="warning" title="Boundary rule">
-At Bundle, Intent, network, database, reflection, and Java boundaries, safely cast and validate once, then convert the result into a strong domain type. Do not spread `Any?` through the application.
+Values from a Bundle, Intent, network response, database, reflection, or Java may not have the expected type. Safely cast and validate them when they enter your code. Then pass a clear Kotlin type through the application instead of passing `Any?` everywhere.
+</Admonition>
+
+<Admonition type="tip" title="Interview-ready answer">
+A smart cast is Kotlin automatically treating a value as a more specific type after a successful check. It works only when the compiler can prove the value will not change between the check and its use. For a mutable property, copy one read into a local `val` when that behavior is correct.
 </Admonition>
 
 <PlaygroundLink code={`fun describe(value: Any?): String = when (value) {
@@ -73,4 +77,3 @@ fun main() {
 ## Interview check
 
 <details><summary>Why does checking a mutable property not always smart-cast it?</summary><p>Because another read may produce a different value. The compiler cannot prove the checked fact still holds. Capture the property in a local `val` when snapshot semantics are correct.</p></details>
-

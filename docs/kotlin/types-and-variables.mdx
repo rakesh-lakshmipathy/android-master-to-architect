@@ -44,7 +44,7 @@ names += "Grace"                  // object changes
 | `Char` | `'A'` | Not a `String` |
 | `String` | `"Android"` | Immutable character sequence |
 
-Kotlin presents these as a unified type system. On the JVM, the compiler commonly emits primitives where nullability, generics, and boundaries do not require boxing.
+In Kotlin code, these all look and behave like normal types. Behind the scenes, the JVM can store many non-null numbers and booleans as efficient primitive values. You usually do not need to think about that optimization while writing ordinary application code.
 
 ### Why numbers are not booleans
 
@@ -59,9 +59,9 @@ if (count > 0) {
 }
 ```
 
-Kotlin does not assume that `0` means false or that every nonzero number means true. An explicit comparison communicates whether the domain rule is “positive,” “nonzero,” “exactly one,” or something else.
+Kotlin does not guess that `0` means false or that a nonzero number means true. You must write the rule you actually mean: `count > 0`, `value != 0`, or `value == 1`.
 
-When a database or legacy API encodes booleans as numbers, convert using the actual contract:
+If a database or old API uses `1` and `0`, convert it explicitly:
 
 ```kotlin
 val databaseValue = 1
@@ -79,7 +79,7 @@ val count: Int = 10
 val total: Long = count.toLong()
 ```
 
-`count.toLong()` creates the `Long` value `10L`. The conversion is visible, so a reader and the compiler know exactly which numeric type crosses the assignment, overload, or generic boundary.
+`count.toLong()` creates the `Long` value `10L`. In simple terms: Kotlin makes you say when you want a different numeric type instead of silently guessing.
 
 ### Mixed arithmetic is different
 
@@ -93,7 +93,7 @@ val total = count + price
 println(total) // 110
 ```
 
-Here `total` is a `Long`. This does not mean that direct `Int`-to-`Long` assignment is allowed; the `plus` operation produces a new result from two operands.
+Here, `total` is a `Long` because the addition includes a `Long`. This is a new arithmetic result; it is not a direct assignment of the original `Int` to a `Long` variable.
 
 <PlaygroundLink code={`fun main() {
     val count: Int = 10
@@ -108,7 +108,10 @@ Here `total` is a `Long`. This does not mean that direct `Int`-to-`Long` assignm
 
 ## Arithmetic overflow is a separate problem
 
-Conversion answers **which numeric type should hold a value**. Overflow happens when a calculation produces a value outside the range of its result type.
+Conversion and overflow are different:
+
+- **Conversion:** changing a value from one numeric type to another, such as `Int` to `Long`.
+- **Overflow:** producing a number that is too large or too small for the type doing the calculation.
 
 The largest `Int` is `2,147,483,647`. Adding one exceeds the `Int` range:
 
@@ -138,7 +141,7 @@ val wrong: Long = (Int.MAX_VALUE + 1).toLong()
 println(wrong) // -2147483648
 ```
 
-The expression inside the parentheses is calculated as an `Int`. It overflows before `.toLong()` receives the result. The conversion preserves the already incorrect value.
+The calculation inside the parentheses happens first. Both operands are `Int`, so the result overflows as an `Int`. Calling `.toLong()` afterward only converts the already-wrong value.
 
 <Admonition type="warning" title="Android and backend scenario">
 Counts, file sizes, time durations, prices in minor units, and pagination offsets may originate outside your code. Validate their permitted ranges and perform calculations in a sufficiently wide type. For calculations where overflow must fail rather than wrap, use checked operations such as Java's `Math.addExact` and handle `ArithmeticException`.
@@ -162,9 +165,13 @@ Counts, file sizes, time durations, prices in minor units, and pagination offset
     }
 }`} />
 
+<Admonition type="tip" title="Interview-ready answer">
+Kotlin does not automatically assign an `Int` to a `Long`; use `toLong()`. Conversion order matters: if an `Int` calculation overflows first, converting its result to `Long` cannot repair it. Convert an operand before the calculation when the result needs `Long` range.
+</Admonition>
+
 ## Public API guidance
 
-Inference is excellent for local implementation details. Explicit types are useful for public properties and functions because they document the contract and prevent an implementation edit from silently changing the exposed type.
+For short local code, inferred types are usually easy to read. For public functions and properties, writing the type explicitly often makes the API clearer and prevents an internal edit from unexpectedly changing what callers receive.
 
 <PlaygroundLink code={`fun main() {
     val names = mutableListOf("Ada")

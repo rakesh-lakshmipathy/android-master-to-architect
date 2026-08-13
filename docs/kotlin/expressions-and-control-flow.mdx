@@ -11,7 +11,7 @@ import PlaygroundLink from '@site/src/components/PlaygroundLink';
 
 # Expressions and control flow
 
-An expression produces a value. Kotlin makes `if`, `when`, `try`, blocks, and calls expressions. Assignment and loops do not produce a useful value.
+An expression gives back a value. In Kotlin, `if`, `when`, `try`, a code block, and a function call can all give back a value. This often removes temporary variables and repeated assignments.
 
 <Tabs>
 <TabItem value="expression" label="Expression style" default>
@@ -31,7 +31,7 @@ if (isOnline) label = "Connected" else label = "Offline"
 </TabItem>
 </Tabs>
 
-The expression style initializes the value exactly once. A block's last expression becomes the branch value.
+The first version creates `label` once. There is no moment when it exists without a value, and it does not need to be mutable. Inside a block, the last expression becomes that branch's result.
 
 ```kotlin
 val message = if (items.isEmpty()) {
@@ -72,7 +72,7 @@ fun title(state: LoadState): String = when (state) {
 }
 ```
 
-Do not add a broad `else` to a closed hierarchy without a reason. When a new state is introduced, exhaustive compilation errors identify every consumer needing a decision.
+For a sealed type, list every case instead of immediately adding `else`. If someone later adds a new state, the compiler points to each `when` that must be updated. That is useful protection during refactoring.
 
 ## Loops and safe ranges
 
@@ -89,6 +89,10 @@ for (value in 10 downTo 0 step 2) { /* 10, 8 ... 0 */ }
 
 Use `while` when repetition depends on a changing condition, such as fetching until a continuation token is absent.
 
+<Admonition type="tip" title="Interview-ready answer">
+In Kotlin, `if` and `when` are expressions, so they can return values. I use `if` for two-way conditions and `when` for several meaningful cases. With enums or sealed classes, an exhaustive `when` also lets the compiler tell me when a new case is not handled.
+</Admonition>
+
 <PlaygroundLink code={`sealed interface LoadState {
     data object Loading : LoadState
     data class Content(val count: Int) : LoadState
@@ -103,4 +107,3 @@ fun main() {
     listOf(LoadState.Loading, LoadState.Content(3), LoadState.Failed("Try again"))
         .forEach { println(title(it)) }
 }`} />
-

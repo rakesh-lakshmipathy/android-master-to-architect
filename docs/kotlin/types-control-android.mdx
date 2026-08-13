@@ -33,7 +33,13 @@ fun UserResult.toUiState(): UserUiState = when (this) {
 }
 ```
 
-This design uses an exhaustive `when`, branch-specific smart casts, expression-based initialization, immutable structural equality, and deliberate nullability.
+What is happening here:
+
+1. `UserResult` lists every result the repository can produce.
+2. `when` handles every result; no state is silently ignored.
+3. Inside `Success` and `Error`, Kotlin smart-casts `this`, so their properties are available safely.
+4. Each branch creates one complete `UserUiState` instead of changing several variables one by one.
+5. `errorMessage` is nullable because “there is no error” is a valid state.
 
 ## Common mistakes
 
@@ -47,13 +53,13 @@ This design uses an exhaustive `when`, branch-specific smart casts, expression-b
 | Forced `as` on input | Wrong input crashes | `as?`, validate, model |
 | Re-reading mutable properties | Check may become stale | Capture local `val` |
 
-## Architect perspective
+## Why this matters in a larger Android app
 
-- Use sealed state instead of combinations of booleans that can contradict one another.
-- Prefer immutable values at module and concurrency boundaries.
-- Convert weak external values into domain types at the boundary.
-- Design equality intentionally for state, caching, diffing, and identity.
-- Treat an exhaustive `when` as a compile-time change detector.
+- A sealed state prevents impossible combinations such as `isLoading = true` and `hasError = true` unless that combination is intentionally modeled.
+- Immutable values are easier to pass between ViewModels, repositories, coroutines, and Compose without hidden changes.
+- Convert untrusted strings, numbers, and `Any?` values when they enter the feature, so inner layers receive reliable types.
+- Decide what equality means because Compose, lists, flows, caches, and tests use it.
+- Use exhaustive `when` expressions so a new state creates a compiler reminder wherever handling is missing.
 
 ## Interview questions
 
@@ -86,4 +92,3 @@ This design uses an exhaustive `when`, branch-specific smart casts, expression-b
 - [ ] I distinguish equality, identity, unsafe casts, and safe casts.
 - [ ] I can explain smart-cast stability.
 - [ ] I can model exhaustive immutable Android UI state.
-

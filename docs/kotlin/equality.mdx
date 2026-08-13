@@ -29,9 +29,9 @@ println(first === second) // false
 
 `a == b` behaves conceptually like `a?.equals(b) ?: (b === null)`.
 
-## Equality contract
+## Rules a custom `equals` must follow
 
-A correct `equals` implementation is reflexive, symmetric, transitive, and consistent, and returns false for `null`. Equal objects must produce equal hash codes.
+If you write `equals` yourself, it must behave predictably: an object equals itself; equality works in both directions; equality remains consistent across a chain of equal objects; and equal objects return the same `hashCode`.
 
 Never mutate fields involved in equality while an object is a `HashSet` member or `HashMap` key. Its hash bucket may change, making the entry effectively unreachable.
 
@@ -45,15 +45,19 @@ data class User(val id: Long, val name: String) {
 }
 ```
 
-That can be intentional, but it must match the domain meaning of equality.
+That may be correct, but decide it deliberately. Ask: should changing `selected` make these two users different for this use case?
 
 <Admonition type="warning" title="Android UI consequence">
-Compose state policies, RecyclerView diffing, `StateFlow` conflation, caches, and assertions may rely on equality. Poor semantics can suppress a necessary update or cause unnecessary rendering.
+Compose, RecyclerView diffing, `StateFlow`, caches, and tests may compare values. Incorrect equality can hide a real UI change or cause work when nothing meaningful changed.
 </Admonition>
 
 ## Architect decision
 
-Database identity, business identity, and visible-content equality are different questions. Decide which one a model represents. Prefer immutable UI models, and give diffing APIs separate identity and content comparisons where needed.
+A database row can be the same item while its visible content has changed. Two users with ID `7` may be the same user, but a changed name means the UI content is different. Decide separately what identifies an item and what counts as changed content.
+
+<Admonition type="tip" title="Interview-ready answer">
+`==` compares values by calling `equals` safely, even with nulls. `===` checks whether two variables point to the exact same object. In most business and UI code, use `==`; use `===` only when reference identity itself matters.
+</Admonition>
 
 <PlaygroundLink code={`data class User(val id: Long, val name: String)
 fun main() {
@@ -69,4 +73,3 @@ fun main() {
 ## Interview check
 
 <details><summary>When should `===` be used?</summary><p>Only when object identity itself matters, such as checking a specific singleton or diagnosing reference sharing. Business value comparison normally uses `==`.</p></details>
-

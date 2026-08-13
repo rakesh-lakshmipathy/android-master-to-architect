@@ -50,7 +50,17 @@ fun main() {
 
 ## Android scenario
 
-A navigation query can be omitted, deliberately empty, or meaningful. Converting both omitted and empty to `""` may send incorrect analytics or call the wrong repository path. Model the states according to the domain instead of defaulting automatically.
+An Android navigation value can be missing, empty, or contain real text:
+
+- `null`: the value was not supplied.
+- `""`: the value was supplied but is empty.
+- `"Rakesh"`: the value contains usable text.
+
+If you immediately replace `null` with `""`, you lose the difference between “missing” and “empty.” That can produce incorrect analytics, validation, or repository calls. Choose a default only when both states truly mean the same thing in your feature.
+
+<Admonition type="tip" title="Interview-ready answer">
+The safe-call operator `?.` accesses the next value only when the receiver is non-null. If `nickname` is null, `nickname?.length` returns null and its type is `Int?`; it does not return zero.
+</Admonition>
 
 ## Interview check
 
