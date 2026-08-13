@@ -46,25 +46,158 @@ Default values reduce overloads. Named arguments explain what each value means a
 Java does not understand Kotlin default arguments in the same way. For a Java-facing API, `@JvmOverloads` can generate overloads, but use it deliberately because every overload becomes part of the public API.
 </Admonition>
 
-## `Unit`: completes without a useful result
+## `Unit` versus `Nothing`
+
+The names are confusing at first because neither is used to return useful data. The key difference is whether control comes back to the caller:
+
+| Question | `Unit` | `Nothing` |
+|---|---|---|
+| Does the function finish normally? | Yes | No |
+| Does the caller continue to its next line? | Yes | Not normally |
+| How many values exist for the type? | One: `Unit` | None |
+| Typical use | Actions and callbacks | Throwing or never-ending paths |
+
+### `Unit`: the action finishes
 
 ```kotlin
-fun log(message: String): Unit {
+fun showMessage(message: String): Unit {
     println(message)
 }
 ```
 
-`Unit` means the function completes normally but does not return information the caller needs. It is similar to Java `void`, but `Unit` is an actual Kotlin value. The return type is usually omitted.
+```kotlin
+showMessage("Saved")
+println("Continue")
+```
 
-## `Nothing`: never completes normally
+Both lines run. `showMessage` completes and returns control to the caller. Kotlin technically returns the single `Unit` value, but the caller receives no useful information. You normally omit `: Unit`:
 
 ```kotlin
-fun missingUser(id: Long): Nothing {
-    error("User $id was not found")
+fun showMessage(message: String) {
+    println(message)
 }
 ```
 
-`Nothing` means execution never reaches a normal return. The function always throws, loops forever, or otherwise cannot produce a value. Because `Nothing` has no possible values, Kotlin can use it where another type is expected.
+Use `Unit` for actions such as logging, updating state, saving data, sending analytics, and UI callbacks like `() -> Unit`.
+
+### `Nothing`: the path cannot continue normally
+
+```kotlin
+fun fail(message: String): Nothing {
+    throw IllegalStateException(message)
+}
+
+fun runForever(): Nothing {
+    while (true) {
+        println("Running")
+    }
+}
+```
+
+`fail` throws. `runForever` never reaches its end. Neither function can return control normally, and there is no possible value of type `Nothing`.
+
+### Could these functions be declared as `Unit`?
+
+Yes. This compiles and behaves the same at runtime:
+
+```kotlin
+fun failWithUnit(message: String): Unit {
+    throw IllegalStateException(message)
+}
+```
+
+But the signature is less accurate. It says that normal completion is allowed, even though this implementation always throws. `Nothing` gives the compiler and callers the stronger guarantee that execution cannot continue through this path.
+
+### Why the stronger type matters
+
+<div className="practice-bad">
+
+**✕ Declared as `Unit`**
+
+```kotlin
+fun failWithUnit(message: String): Unit {
+    throw IllegalStateException(message)
+}
+
+val name: String? = null
+// Does not compile: the right side is Unit
+// val result: String = name ?: failWithUnit("Missing name")
+```
+
+</div>
+
+<div className="practice-good">
+
+**✓ Declared as `Nothing`**
+
+```kotlin
+fun failWithNothing(message: String): Nothing {
+    throw IllegalStateException(message)
+}
+
+val name: String? = "Rakesh"
+val result: String = name ?: failWithNothing("Missing name")
+```
+
+</div>
+
+Kotlin reasons as follows:
+
+1. If `name` is non-null, the Elvis expression produces a `String`.
+2. If `name` is null, `failWithNothing` throws and that path stops.
+3. Every path that continues therefore has a non-null `String`.
+
+<PlaygroundLink code={`fun showMessage(message: String): Unit {
+    println(message)
+}
+
+fun fail(message: String): Nothing {
+    throw IllegalStateException(message)
+}
+
+fun main() {
+    showMessage("Saved")
+    println("The caller continued after Unit")
+
+    val name: String? = "Rakesh"
+    val result: String = name ?: fail("Missing name")
+    println("result = $result")
+
+    // Change name to null to see fail() stop this path.
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Saved`, `The caller continued after Unit`, and `result = Rakesh`.</div>
+
+### Android rule
+
+<div className="practice-bad">
+
+**✕ Do not crash for a normal failure**
+
+```kotlin
+fun loadUser(): Nothing = error("Network failed")
+```
+
+</div>
+
+<div className="practice-good">
+
+**✓ Model a recoverable failure**
+
+```kotlin
+sealed interface LoadResult {
+    data class Success(val user: User) : LoadResult
+    data class Failure(val message: String) : LoadResult
+}
+```
+
+</div>
+
+Use `Nothing` for a truly impossible internal state or a helper that deliberately throws. Network errors, invalid public deep links, missing permissions, and empty search results are expected situations; represent them as data the UI can handle.
+
+<Admonition type="tip" title="Interview-ready answer">
+`Unit` means a function completes normally without returning useful information. `Nothing` means it cannot return normally, usually because it throws or never terminates. A throwing function can be declared as `Unit`, but `Nothing` is more precise and helps Kotlin reason about expressions such as `nullableValue ?: error("Missing")`.
+</Admonition>
 
 ## Local functions
 
