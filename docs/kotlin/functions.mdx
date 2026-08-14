@@ -42,6 +42,29 @@ greeting(name = "Rakesh", prefix = "Welcome")
 
 Default values reduce overloads. Named arguments explain what each value means and let callers change the order.
 
+### Practical scenario: an optional greeting prefix
+
+```kotlin
+fun greeting(name: String, prefix: String = "Hello"): String =
+    "$prefix, $name"
+```
+
+Execution:
+
+- `greeting("Rakesh")` does not provide `prefix`, so Kotlin uses `"Hello"`.
+- `greeting(name = "Rakesh", prefix = "Welcome")` supplies both values explicitly.
+- Named arguments make two adjacent strings easier to understand at the call site.
+
+<PlaygroundLink code={`fun greeting(name: String, prefix: String = "Hello"): String =
+    "$prefix, $name"
+
+fun main() {
+    println(greeting("Rakesh"))
+    println(greeting(name = "Rakesh", prefix = "Welcome"))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Hello, Rakesh`, followed by `Welcome, Rakesh`.</div>
+
 <Admonition type="warning" title="Java caller note">
 Java does not understand Kotlin default arguments in the same way. For a Java-facing API, `@JvmOverloads` can generate overloads, but use it deliberately because every overload becomes part of the public API.
 </Admonition>
@@ -212,6 +235,26 @@ fun validateRegistration(name: String, email: String): Boolean {
 
 This keeps a helper close to its use and prevents unrelated code from calling it.
 
+Step by step for `validateRegistration("Rakesh", "rakesh@example.com")`:
+
+1. The local `isPresent` function is created for use only inside `validateRegistration`.
+2. Both `name` and `email` must contain non-whitespace text.
+3. The email must contain `@`.
+4. All three Boolean conditions must be true.
+
+<PlaygroundLink code={`fun validateRegistration(name: String, email: String): Boolean {
+    fun isPresent(value: String) = value.isNotBlank()
+    return isPresent(name) && isPresent(email) && "@" in email
+}
+
+fun main() {
+    println(validateRegistration("Rakesh", "rakesh@example.com"))
+    println(validateRegistration("", "rakesh@example.com"))
+    println(validateRegistration("Rakesh", "invalid-email"))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `true`, `false`, and `false`.</div>
+
 ## Extension functions
 
 An extension function lets you call a helper as if it belonged to a type:
@@ -259,6 +302,16 @@ fun format(value: Boolean) = if (value) "Yes" else "No"
 ```
 
 Do not overload functions when the meaning changes drastically. A clear name is better than making callers guess which behavior an overload provides.
+
+<PlaygroundLink code={`fun format(value: Int) = "Number: $value"
+fun format(value: Boolean) = if (value) "Yes" else "No"
+
+fun main() {
+    println(format(42))
+    println(format(true))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Number: 42`, followed by `Yes`. Kotlin selects the overload using the argument's compile-time type.</div>
 
 ## Common mistakes
 

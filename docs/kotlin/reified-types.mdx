@@ -9,12 +9,34 @@ import PlaygroundLink from '@site/src/components/PlaygroundLink';
 
 # Reified type parameters
 
-Most generic type information is erased on the JVM. Inside an ordinary generic function, Kotlin usually cannot ask whether a value is `T` or access `T::class`.
+<Admonition type="tip" title="Short answer">
+`reified` lets an inline generic function use the caller's real type, such as `String`, inside the function. It enables code such as `value is T` and `T::class`. Without it, the JVM normally forgets what `T` was.
+</Admonition>
+
+## The problem: an ordinary `T` is not available at runtime
+
+Consider a normal generic function:
+
+```kotlin
+fun <T> echo(value: T): T = value
+```
+
+The caller knows the type:
+
+```kotlin
+echo<String>("Android")
+```
+
+But on the JVM, most generic type information is **erased**. In simple terms, the runtime function usually does not receive a separate value saying, “`T` is String.” Therefore, this does not compile:
 
 ```kotlin
 // Does not compile:
 // fun <T> isType(value: Any): Boolean = value is T
 ```
+
+The compiler cannot generate a runtime `is T` check when the runtime does not know what `T` means.
+
+## The solution: `inline` plus `reified`
 
 An inline function can mark a type parameter `reified`:
 
@@ -25,6 +47,30 @@ println(isType<String>("Android")) // true
 println(isType<Int>("Android"))    // false
 ```
 
+For `isType<String>("Android")`, Kotlin can conceptually place this at the call site:
+
+```kotlin
+"Android" is String
+```
+
+For `isType<Int>("Android")`, it can place:
+
+```kotlin
+"Android" is Int
+```
+
+That is why the first result is true and the second is false.
+
+<PlaygroundLink code={`inline fun <reified T> isType(value: Any): Boolean = value is T
+
+fun main() {
+    println(isType<String>("Android"))
+    println(isType<Int>("Android"))
+    println(isType<Int>(42))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `true`, `false`, and `true`.</div>
+
 ## Why `inline` is required
 
 At each call site, the compiler knows the actual type:
@@ -34,6 +80,8 @@ isType<String>(value)
 ```
 
 Because the function is inlined, the compiler can place a real `String` check into the generated code. Without inlining, the runtime would see only an erased `T`.
+
+`reified` is therefore allowed only on an `inline` function. A non-inline function has one shared runtime body and cannot specialize that body separately at every call site.
 
 ## Accessing the class
 
@@ -48,6 +96,19 @@ For Java reflection APIs, use `T::class.java`:
 inline fun <reified T : Any> javaClassOf(): Class<T> = T::class.java
 ```
 
+<PlaygroundLink code={`inline fun <reified T> typeName(): String =
+    T::class.simpleName ?: "Unknown"
+
+inline fun <reified T : Any> javaClassOf(): Class<T> = T::class.java
+
+fun main() {
+    println(typeName<String>())
+    println(typeName<Double>())
+    println(javaClassOf<Int>().name)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `String`, `Double`, and the JVM class name for Kotlin `Int`.</div>
+
 ## Filtering by runtime type
 
 ```kotlin
@@ -60,13 +121,68 @@ val numbers = listOf(1, "two", 3L, 4).valuesOfType<Int>()
 println(numbers) // [1, 4]
 ```
 
+Step by step:
+
+1. The source list accepts different value types because its element type is broad.
+2. The caller requests `valuesOfType<Int>()`.
+3. `filterIsInstance<Int>()` checks each value at runtime.
+4. Only `1` and `4` pass the check; the `String` and `Long` are removed.
+
+<PlaygroundLink code={`inline fun <reified T> List<*>.valuesOfType(): List<T> =
+    filterIsInstance<T>()
+
+fun main() {
+    val mixed = listOf(1, "two", 3L, 4, null)
+    println(mixed.valuesOfType<Int>())
+    println(mixed.valuesOfType<String>())
+    println(mixed.valuesOfType<Long>())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `[1, 4]`, `[two]`, and `[3]`.</div>
+
 ## Reified does not preserve every nested generic detail
 
 ```kotlin
 inline fun <reified T> check(value: Any) = value is T
 ```
 
-A check such as `check<List<String>>(value)` can verify that the value is a `List`, but JVM type erasure prevents checking every element's generic type through a simple runtime `is` check. Reified is powerful, not magical.
+A check such as `check<List<String>>(value)` can confirm that the value is a `List`, but it cannot reliably prove that every element is a `String`. The outer `List` type is visible; its nested element type is still erased.
+
+<div className="practice-bad">
+
+**✕ Do not assume nested elements were validated**
+
+```kotlin
+val value: Any = listOf(1, 2, 3)
+val looksLikeStrings = check<List<String>>(value)
+```
+
+The outer object is a `List`, so the check can be true even though its elements are integers.
+
+</div>
+
+<div className="practice-good">
+
+**✓ Validate the elements when element type matters**
+
+```kotlin
+val allStrings = (value as? List<*>)?.all { element -> element is String } == true
+```
+
+</div>
+
+<PlaygroundLink code={`inline fun <reified T> check(value: Any): Boolean = value is T
+
+fun main() {
+    val value: Any = listOf(1, 2, 3)
+    println(check<List<String>>(value))
+
+    val allStrings = (value as? List<*>)
+        ?.all { element -> element is String } == true
+    println(allStrings)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> the outer reified check reports `true`, while explicit element validation reports `false`.</div>
 
 ## Alternative: pass type information explicitly
 
@@ -81,6 +197,16 @@ isType("Android", String::class.java)
 
 This is useful when the function cannot be inline, when Java callers need a straightforward API, or when a serialization library requires richer type information.
 
+<PlaygroundLink code={`fun <T : Any> isType(value: Any, type: Class<T>): Boolean =
+    type.isInstance(value)
+
+fun main() {
+    println(isType("Android", String::class.java))
+    println(isType("Android", Int::class.java))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `true`, followed by `false`.</div>
+
 ## Android examples
 
 Reified helpers are often used for:
@@ -93,22 +219,15 @@ Reified helpers are often used for:
 
 Keep public framework helpers honest: a concise reified API should still validate missing or malformed data and should not hide lifecycle or serialization failures.
 
-<PlaygroundLink code={`inline fun <reified T> isType(value: Any): Boolean = value is T
+### Android-only example shape
 
-inline fun <reified T> List<*>.valuesOfType(): List<T> =
-    filterIsInstance<T>()
+```kotlin
+inline fun <reified T : Activity> Context.openActivity() {
+    startActivity(Intent(this, T::class.java))
+}
+```
 
-inline fun <reified T> typeName(): String =
-    T::class.simpleName ?: "Unknown"
-
-fun main() {
-    println(isType<String>("Android"))
-    println(isType<Int>("Android"))
-    println(listOf(1, "two", 3L, 4).valuesOfType<Int>())
-    println(typeName<Double>())
-}`} />
-
-<div className="expected-output"><strong>Expected:</strong> `true`, `false`, `[1, 4]`, and `Double`.</div>
+This snippet requires Android's `Activity`, `Context`, and `Intent`, so it cannot run in plain Kotlin Playground. The Kotlin-only pages demonstrate the same `T::class.java` mechanism without Android dependencies.
 
 <Admonition type="tip" title="Interview-ready answer">
 JVM type erasure normally prevents an ordinary generic function from checking `value is T` or using `T::class`. An `inline` function with a `reified` type parameter receives the actual type at each call site, enabling those operations. It still cannot fully recover nested generic element types erased by the JVM.
@@ -119,4 +238,3 @@ JVM type erasure normally prevents an ordinary generic function from checking `v
 <details><summary>Can a non-inline function use a reified type parameter?</summary><p>No. Reification works because the compiler substitutes the actual type while inlining the function at the call site.</p></details>
 
 <details><summary>Is reified always better than passing `Class&lt;T&gt;`?</summary><p>No. An explicit class or type token can work from Java, avoids forcing an inline API, and may represent richer generic information depending on the library.</p></details>
-

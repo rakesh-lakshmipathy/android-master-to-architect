@@ -20,6 +20,21 @@ val result = calculate(10, 5) { left, right -> left + right }
 
 `calculate` controls when the operation runs. The caller supplies what the operation does.
 
+This is useful when the steps stay the same but one rule changes. `calculate` always receives two numbers and invokes one operation; the caller chooses addition, subtraction, or another calculation.
+
+<PlaygroundLink code={`fun calculate(
+    a: Int,
+    b: Int,
+    operation: (Int, Int) -> Int,
+): Int = operation(a, b)
+
+fun main() {
+    println(calculate(10, 5) { left, right -> left + right })
+    println(calculate(10, 5) { left, right -> left - right })
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `15`, followed by `5`.</div>
+
 ## Accepting behavior as a parameter
 
 ```kotlin
@@ -39,6 +54,15 @@ val firstLongName = findFirst(names) { name -> name.length > 6 }
 
 This reduces duplicated control flow while keeping the changing rule visible.
 
+Execution of `findFirst(names) { name -> name.length > 6 }`:
+
+1. `findFirst` starts at the first item.
+2. It calls `matches(item)` for that item.
+3. It returns immediately when the predicate is true.
+4. It returns null only if every item fails the test.
+
+This short-circuit behavior matters: items after the first match are never tested.
+
 ## Returning behavior
 
 ```kotlin
@@ -50,6 +74,17 @@ println(validPassword("android")) // true
 ```
 
 The returned lambda remembers `minimum`. This is a closure: a function value plus the outside values it captured.
+
+<PlaygroundLink code={`fun minimumLengthValidator(minimum: Int): (String) -> Boolean =
+    { text -> text.length >= minimum }
+
+fun main() {
+    val validPassword = minimumLengthValidator(8)
+    println(validPassword("android"))
+    println(validPassword("short"))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `true`, followed by `false`. The returned function remembers that `minimum` is `8`.</div>
 
 ## Collection operations are higher-order functions
 
@@ -68,6 +103,23 @@ val visibleNames = users
 
 Avoid long chains that hide important decisions or create many intermediate collections in a performance-sensitive path. A clear loop is sometimes the better code.
 
+<PlaygroundLink code={`data class User(val name: String, val active: Boolean)
+
+fun main() {
+    val users = listOf(
+        User("Rakesh", true),
+        User("Ada", false),
+        User("Grace", true),
+    )
+    val visibleNames = users
+        .filter { user -> user.active }
+        .sortedBy { user -> user.name }
+        .map { user -> user.name }
+    println(visibleNames)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `[Grace, Rakesh]`.</div>
+
 ## Callback design
 
 ```kotlin
@@ -80,6 +132,8 @@ fun loadUser(
 
 Callbacks are still useful for UI events and adapting callback-based APIs. For asynchronous operations that produce one result, a `suspend` function is often easier to compose and cancel than multiple callbacks.
 
+The `loadUser` snippet is intentionally incomplete because thread choice, cancellation, and the actual data source depend on the Android application. It demonstrates the callback API shape; it is not presented as runnable Playground code.
+
 ## Function composition
 
 ```kotlin
@@ -90,6 +144,45 @@ fun <A, B, C> compose(
 ```
 
 Composition is useful when each transformation has one clear job. Do not build an abstract pipeline when a direct function call is easier to follow.
+
+<PlaygroundLink code={`fun <A, B, C> compose(
+    first: (A) -> B,
+    second: (B) -> C,
+): (A) -> C = { value -> second(first(value)) }
+
+fun trim(value: String): String = value.trim()
+fun length(value: String): Int = value.length
+
+fun main() {
+    val trimmedLength = compose(::trim, ::length)
+    println(trimmedLength("  Android  "))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `7`. The string is trimmed first; the resulting string is then measured.</div>
+
+## Corner cases
+
+### A function parameter may be nullable
+
+```kotlin
+fun notify(message: String, listener: ((String) -> Unit)?) {
+    listener?.invoke(message)
+}
+```
+
+Use a nullable callback only when “no listener” is a valid state. If the behavior is required, keep the parameter non-null so callers must provide it.
+
+<PlaygroundLink code={`fun notify(message: String, listener: ((String) -> Unit)?) {
+    listener?.invoke(message)
+}
+
+fun main() {
+    notify("Saved") { message -> println("Received: $message") }
+    notify("Ignored", null)
+    println("Finished")
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Received: Saved`, followed by `Finished`. The null listener performs no action.</div>
 
 <PlaygroundLink code={`data class User(val name: String, val active: Boolean)
 

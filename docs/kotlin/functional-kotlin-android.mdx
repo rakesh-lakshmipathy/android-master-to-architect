@@ -8,7 +8,13 @@ import Admonition from '@theme/Admonition';
 
 # Android use cases
 
+<Admonition type="note" title="Why these snippets have no Playground button">
+The examples on this page use Android, Compose, ViewModel, Flow, RecyclerView, or Intent classes. Plain Kotlin Playground does not include those dependencies. Each snippet is therefore labeled and explained as Android-only rather than linked to a program that would fail to compile.
+</Admonition>
+
 ## Compose event handlers
+
+**Android/Compose-only example:**
 
 ```kotlin
 @Composable
@@ -27,6 +33,40 @@ fun ProfileScreen(
 
 The composable displays state and reports events through function parameters. It does not need to know whether retrying calls a ViewModel, navigator, fake, or preview action.
 
+Execution when the user taps a user row:
+
+1. `UserList` invokes `onUserClick` with a `UserId`.
+2. `ProfileScreen` does not decide what navigation means; it forwards the event supplied by its caller.
+3. A production caller may navigate, while a preview or test may record the ID.
+
+<div className="practice-bad">
+
+**✕ UI directly creates its dependency**
+
+```kotlin
+@Composable
+fun ProfileScreen() {
+    val repository = RealUserRepository()
+    // UI now owns data construction and is difficult to preview or test.
+}
+```
+
+</div>
+
+<div className="practice-good">
+
+**✓ UI receives state and reports events**
+
+```kotlin
+@Composable
+fun ProfileScreen(
+    state: ProfileUiState,
+    onRetry: () -> Unit,
+) { /* render state */ }
+```
+
+</div>
+
 ### Why this is testable
 
 A test or preview can pass a small lambda and record the event:
@@ -42,7 +82,11 @@ ProfileScreen(
 
 Do not pass every ViewModel function through many UI layers without thinking. When the list becomes difficult to understand, group events into one clear event lambda or interface.
 
+Corner case: callbacks passed to a composable may capture old values during recomposition. For long-lived effects that need the latest callback, Compose APIs such as `rememberUpdatedState` can be appropriate. That behavior belongs in the advanced Compose chapter; do not solve it by making every callback global or mutable.
+
 ## ViewModel state transformation
+
+**AndroidX ViewModel, coroutines, and Flow example:**
 
 ```kotlin
 val uiState: StateFlow<SearchUiState> = repository.results
@@ -56,7 +100,23 @@ val uiState: StateFlow<SearchUiState> = repository.results
 
 `map` is a higher-order function. It receives a conversion lambda and applies it to every repository result. Flow behavior, cancellation, and lifecycle belong to their own chapter; the important point here is that the transformation is passed as a value.
 
+Practical scenario:
+
+- The repository emits data-layer results.
+- `map` converts each result into a screen-specific `SearchUiState`.
+- `stateIn` keeps the latest state in the ViewModel scope.
+- The UI observes one stable state type instead of understanding repository details.
+
+Corner cases to decide explicitly:
+
+- What initial state appears before the first result?
+- What happens when mapping throws?
+- Should upstream work continue when the UI is not observing?
+- Are equal consecutive states expected to produce another UI update?
+
 ## RecyclerView click callback
+
+**Android RecyclerView-only example:**
 
 ```kotlin
 class UserAdapter(
@@ -74,7 +134,39 @@ class UserAdapter(
 
 Passing only `UserId` keeps navigation outside the adapter. The screen decides what clicking means. Also ensure listeners and captured Views do not outlive the ViewHolder or screen.
 
+<div className="practice-bad">
+
+**✕ Adapter performs navigation itself**
+
+```kotlin
+holder.itemView.setOnClickListener {
+    holder.itemView.context.startActivity(detailsIntent)
+}
+```
+
+The adapter now owns a screen decision and needs Android navigation details.
+
+</div>
+
+<div className="practice-good">
+
+**✓ Adapter reports the item identity**
+
+```kotlin
+holder.itemView.setOnClickListener {
+    onUserClick(item.id)
+}
+```
+
+The Fragment or screen-level caller decides whether to navigate, show a dialog, or ignore the event.
+
+</div>
+
+Corner case: never trust an old adapter position captured earlier. Read or bind the current item appropriately, and account for list updates between binding and clicking.
+
 ## Inline and reified Activity helper
+
+**Android Activity/Intent-only example:**
 
 ```kotlin
 inline fun <reified T : Activity> Context.openActivity(
@@ -96,6 +188,35 @@ context.openActivity<DetailsActivity> {
 
 This improves syntax, but string extras are still not type-safe. A typed route model or destination-owned factory may be safer in a large application.
 
+<div className="practice-bad">
+
+**✕ Helper hides a mismatched extra key**
+
+```kotlin
+putExtra("user_id", userId.value)
+// Destination accidentally reads "userId" and receives null.
+```
+
+</div>
+
+<div className="practice-good">
+
+**✓ Destination owns construction and parsing**
+
+```kotlin
+object DetailsContract {
+    private const val EXTRA_USER_ID = "userId"
+
+    fun intent(context: Context, userId: UserId): Intent =
+        Intent(context, DetailsActivity::class.java)
+            .putExtra(EXTRA_USER_ID, userId.value)
+}
+```
+
+</div>
+
+The reified helper removes class-literal repetition; it does not validate extras, flags, exported-component rules, or whether a suitable Activity exists.
+
 ## Choosing the right tool
 
 | Situation | Good first choice | Why |
@@ -111,4 +232,3 @@ This improves syntax, but string extras are still not type-safe. A typed route m
 <Admonition type="tip" title="Architect-level takeaway">
 Function parameters reduce direct dependencies, but they do not automatically create good architecture. Keep ownership clear: UI reports events, ViewModels coordinate screen behavior, repositories handle data, and lifecycle-aware scopes own asynchronous work.
 </Admonition>
-

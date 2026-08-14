@@ -18,6 +18,21 @@ println(double(4)) // 8
 
 `(Int) -> Int` is the function type: it receives one `Int` and returns one `Int`.
 
+Read it from left to right:
+
+1. `(Int)` — the lambda accepts one `Int`.
+2. `->` — separates the inputs from the result.
+3. The final `Int` — the lambda returns an `Int`.
+4. `{ value -> value * 2 }` — `value` is the input; the final expression is returned.
+
+<PlaygroundLink code={`fun main() {
+    val double: (Int) -> Int = { value -> value * 2 }
+    println(double(4))
+    println(double(-3))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `8`, followed by `-6`.</div>
+
 ## Reading lambda syntax
 
 ```kotlin
@@ -44,6 +59,20 @@ Use `it` only when the meaning is obvious. In nested or longer lambdas, an expli
 ```kotlin
 users.filter { user -> user.isActive }
 ```
+
+Use `it` for a tiny, obvious lambda. Name the parameter when the lambda is nested, has several lines, or represents an important business object.
+
+<PlaygroundLink code={`data class User(val name: String, val active: Boolean)
+
+fun main() {
+    val users = listOf(User("Ada", false), User("Rakesh", true))
+    val activeNames = users
+        .filter { user -> user.active }
+        .map { user -> user.name }
+    println(activeNames)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `[Rakesh]`.</div>
 
 ## Trailing lambda syntax
 
@@ -75,6 +104,18 @@ println(total) // 5
 
 The lambda **captures** `total`, meaning it keeps access to a value declared outside its body.
 
+It captures access to the variable, not a frozen copy of its old value. Every invocation reads and updates the current `total`.
+
+<PlaygroundLink code={`fun main() {
+    var total = 0
+    val add: (Int) -> Unit = { value -> total += value }
+    add(5)
+    add(3)
+    println(total)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `8`.</div>
+
 <Admonition type="warning" title="Capture carefully">
 A lambda that outlives an Activity, Fragment, View, or large object can keep that object reachable longer than expected. Lifecycle ownership matters more than the lambda syntax itself.
 </Admonition>
@@ -95,6 +136,19 @@ Member references are also possible:
 val lengths = listOf("A", "Android").map(String::length)
 ```
 
+`::normalize` is a reference to the existing function. In this example, it replaces `{ value -> normalize(value) }` without changing the behavior.
+
+<PlaygroundLink code={`fun normalize(value: String) = value.trim().lowercase()
+
+fun main() {
+    val normalized = listOf(" Kotlin ", " ANDROID ").map(::normalize)
+    val lengths = listOf("A", "Android").map(String::length)
+    println(normalized)
+    println(lengths)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `[kotlin, android]`, followed by `[1, 7]`.</div>
+
 ## Lambdas with receivers
 
 `StringBuilder.() -> Unit` means the lambda runs with a `StringBuilder` as its receiver, so its members can be called without a variable name.
@@ -111,6 +165,13 @@ val message = buildMessage {
 
 This style powers builders and Kotlin DSLs, including many Compose APIs. Use it when the receiver provides a clear, focused vocabulary.
 
+Execution of `buildMessage`:
+
+1. `StringBuilder()` creates one mutable builder.
+2. `apply(block)` runs the caller's lambda with that builder as `this`.
+3. `append` calls update the same builder.
+4. `toString()` creates the final immutable string.
+
 <PlaygroundLink code={`fun buildMessage(block: StringBuilder.() -> Unit): String =
     StringBuilder().apply(block).toString()
 
@@ -124,6 +185,33 @@ fun main() {
 }`} />
 
 <div className="expected-output"><strong>Expected:</strong> `Result: 8`.</div>
+
+## Corner cases
+
+### Nullable lambda versus lambda returning null
+
+```kotlin
+val optionalAction: (() -> Unit)? = null
+val nullableResult: () -> String? = { null }
+```
+
+- `optionalAction` may contain no function at all.
+- `nullableResult` always contains a function, but calling it may return null.
+
+<PlaygroundLink code={`fun main() {
+    val optionalAction: (() -> Unit)? = null
+    val nullableResult: () -> String? = { null }
+
+    optionalAction?.invoke()
+    println("action exists = " + (optionalAction != null))
+    println("result = " + nullableResult())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `action exists = false`, followed by `result = null`.</div>
+
+### Android-only example
+
+The `Button { ... }` snippet above requires the Compose compiler and Android/Compose libraries, so it cannot run in plain Kotlin Playground. The standalone lambda behavior is demonstrated by the surrounding Playground examples.
 
 ## Common mistakes
 
