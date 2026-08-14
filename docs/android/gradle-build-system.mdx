@@ -1,0 +1,80 @@
+---
+id: gradle-build-system
+title: Gradle, AGP, variants, R8, and build performance
+---
+import Admonition from '@theme/Admonition';
+
+# Gradle, Android build tools, variants, and optimization
+
+Gradle executes a task graph. The Android Gradle Plugin (AGP) adds Android-specific models and tasks for manifests, resources, code, packaging, signing, testing, lint, and publishing.
+
+## Build flow
+
+```text
+Source + dependencies + resources + manifest
+→ generated code/resources
+→ Kotlin/Java compilation
+→ bytecode transforms/desugaring
+→ D8/R8 DEX
+→ resource processing/shrinking
+→ packaging and signing
+```
+
+## Build types, flavors, and variants
+
+- Build type: debug/release behavior, optimization, signing, debuggability.
+- Product flavor: product/environment dimension such as free/paid or demo/prod.
+- Variant: combination of build type and each flavor dimension.
+
+Avoid multiplying flavors for values that can be runtime configuration. Variant count multiplies tasks, generated outputs, CI work, and maintenance.
+
+## Dependency configurations
+
+- `implementation`: dependency hidden from consumers' compile classpath when possible.
+- `api`: exposed as part of a library module's public API.
+- `compileOnly`, `runtimeOnly`, test configurations: specialized availability.
+
+Overusing `api` increases recompilation and coupling.
+
+## R8
+
+R8 shrinks, optimizes, and obfuscates release code. Reflection, JNI, serialization, and dynamically referenced classes may need keep rules or generated adapters.
+
+<div className="practice-bad">
+
+**✕ Disable shrinking when one release crash occurs**
+
+```kotlin
+isMinifyEnabled = false
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Reproduce release build and add the narrow correct rule**
+
+```text
+Identify reflected entry → prefer generated adapter → add targeted keep rule → test mapping/retrace
+```
+</div>
+
+## Signing
+
+Signing keys identify app updates. Keep release keys/secrets out of source control, restrict access, plan backup/recovery, and use Play App Signing where appropriate.
+
+## Build performance
+
+Measure with build scans/profile reports. Common improvements:
+
+- Configuration cache and build cache compatibility
+- Avoid dynamic/changing dependencies
+- Reduce annotation processing; prefer incremental KSP where supported
+- Correct module/API boundaries
+- Avoid task code reading environment/time unpredictably
+- Parallelize CI safely and cache verified inputs
+- Track clean and incremental builds separately
+
+<Admonition type="tip" title="Interview-ready answer">
+Gradle builds a task graph; AGP adds Android tasks and variants. Build types and flavors combine into variants. `implementation` limits exposure, R8 optimizes release code, signing protects update identity, and build performance must be measured rather than guessed.
+</Admonition>
+

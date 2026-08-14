@@ -1,0 +1,75 @@
+---
+id: activities-tasks
+title: Activities, tasks, and back stack
+---
+
+# Activities, tasks, and back stack
+
+An **activity** is a screen-level Android entry point. A **task** is an ordered stack of activities representing work the user is doing. Pressing Back normally removes the top destination; it does not simply “close the app.”
+
+## A concrete journey
+
+```text
+Launcher → ProductListActivity → ProductActivity → CheckoutActivity
+                                               ↑ top of stack
+```
+
+Back from checkout reveals the product. Home keeps the task for later. The system may destroy stopped activities or the whole process, so the stack’s appearance does not mean every object still exists in memory.
+
+## Launch modes in plain language
+
+| Mode | What happens | Typical caution |
+|---|---|---|
+| `standard` | A new instance is pushed | Safest default |
+| `singleTop` | Reuses only if already at the top | Handle the new intent |
+| `singleTask` | Finds/reuses one instance and can clear above it | Can produce surprising navigation |
+| `singleInstancePerTask` | Restricts the activity instance per task | Rare; verify the UX carefully |
+
+:::warning Android-only code
+`Activity`, `Intent`, and task APIs require Android and cannot run in Kotlin Playground.
+:::
+
+## The `singleTop` corner case
+
+```kotlin
+class ProductActivity : AppCompatActivity() {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        showProduct(intent.getStringExtra("productId"))
+    }
+}
+```
+
+If Android reuses the top activity, `onCreate()` does not run again. The new data arrives through `onNewIntent()`. Forgetting this produces a screen that shows the old product.
+
+## Deep links must reconstruct meaningful state
+
+A notification might open checkout when no task exists. Do not assume the product-list screen or an authenticated session is already in memory. Validate the URI, authenticate if needed, load durable state, and build a sensible back path.
+
+### ✕ Avoid
+
+```kotlin
+lateinit var selectedProduct: Product // Set only by the previous activity.
+```
+
+### ✓ Prefer
+
+```kotlin
+val productId = intent.getStringExtra("productId")
+    ?: return finish()
+// ViewModel loads the product from a repository using productId.
+```
+
+Pass identifiers, not large object graphs. This survives process recreation and avoids Binder transaction pressure.
+
+## Interview-ready answer
+
+A task models the user’s navigation history as an activity stack. Launch modes change whether Android creates or reuses an activity, so reused activities must process `onNewIntent`. Deep links must work from a cold start and rebuild state from identifiers rather than relying on previous in-memory screens.
+
+## Questions and exercises
+
+1. What is the difference between Home and Back?
+2. When does `singleTop` still create a new instance?
+3. Design the back stack for a product notification opened from a cold start.
+

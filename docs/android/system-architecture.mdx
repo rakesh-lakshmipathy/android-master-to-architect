@@ -1,0 +1,74 @@
+---
+id: system-architecture
+title: Android system architecture
+---
+import Admonition from '@theme/Admonition';
+
+# Android system architecture
+
+Think of Android as layers. Your app normally uses framework APIs; those APIs communicate with system services; native libraries and the kernel operate the device.
+
+```text
+Application
+  ↓ Android framework APIs
+System services (Activity, Package, Window, Notification, Location...)
+  ↓ Binder IPC
+Native services and libraries
+  ↓ system calls
+Linux kernel and hardware drivers
+```
+
+## Practical example: opening an Activity
+
+```kotlin
+startActivity(Intent(this, DetailsActivity::class.java))
+```
+
+This one line does not directly construct the destination Activity:
+
+1. Your app asks the framework to start an Activity.
+2. The request crosses into the system process through Binder.
+3. Activity/task rules and manifest declarations are checked.
+4. Android may start or reuse an app process.
+5. The framework creates the Activity and drives its lifecycle.
+6. Window management places its surface on screen.
+
+## Application sandbox
+
+Every installed app normally receives its own Linux UID and private data area. The sandbox prevents ordinary direct access to another app's files and memory. Communication occurs through controlled mechanisms such as Binder, content providers, intents, and shared system APIs with permission checks.
+
+## System services
+
+```kotlin
+val notificationManager = getSystemService(NotificationManager::class.java)
+```
+
+The returned manager is often a client-side API backed by a service in another process. A method call may therefore include IPC, permission checks, serialization, scheduling, and remote failure.
+
+<div className="practice-bad">
+
+**✕ Treat every framework call as a cheap local method**
+
+```kotlin
+repeat(10_000) { packageManager.getApplicationInfo(packageName, 0) }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Understand the boundary and avoid repeated remote work**
+
+```kotlin
+val appInfo = packageManager.getApplicationInfo(packageName, 0)
+repeat(10_000) { use(appInfo) }
+```
+</div>
+
+## Zygote
+
+Android starts app processes from a pre-initialized process called Zygote. Forking from a warmed process reduces startup cost and allows sharing of clean memory pages. Each application process then runs with its own UID, heap, runtime state, and application classes.
+
+<Admonition type="tip" title="Interview-ready answer">
+Android apps run above framework APIs and system services. Binder connects app processes to system services, while the Linux kernel provides process isolation, scheduling, memory, and drivers. An apparently simple framework call may cross a process boundary and perform permission or lifecycle work.
+</Admonition>
+

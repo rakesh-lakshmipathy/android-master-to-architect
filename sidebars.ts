@@ -95,7 +95,25 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
-    {type: 'category', label: 'Parts II-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part II - Platform and Builds',
+      collapsed: true,
+      items: [
+        {type: 'doc', id: 'android/platform-build-overview', label: 'Chapter overview'},
+        'android/system-architecture',
+        'android/processes-startup',
+        'android/art-dex-runtime',
+        'android/binder-ipc',
+        'android/components-lifecycle',
+        'android/activities-tasks',
+        'android/fragments',
+        'android/resources-configuration',
+        'android/gradle-build-system',
+        'android/platform-interview',
+      ],
+    },
+    {type: 'category', label: 'Parts III-X - Android to Architect', items: ['roadmap']},
   ],
 };
 

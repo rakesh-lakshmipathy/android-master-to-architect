@@ -1,0 +1,57 @@
+---
+id: binder-ipc
+title: Binder and Android IPC
+---
+import Admonition from '@theme/Admonition';
+
+# Binder and Android IPC
+
+Binder is Android's primary inter-process communication mechanism. It lets a client call a remote service through generated or framework proxy objects.
+
+```text
+Client call → proxy → Binder driver → remote Binder thread → service implementation
+```
+
+## AIDL mental model
+
+An AIDL interface defines callable methods and parcelable data. Build tools generate a client proxy and server stub. Arguments are marshalled into a Parcel, copied across the boundary, and unmarshalled remotely.
+
+## Practical constraints
+
+- IPC is slower than a local call.
+- Arguments must be serializable/parcelable in supported forms.
+- Transactions have size limits; large bitmaps/lists should not be placed in Bundles or Binder calls.
+- The remote process may die; calls can fail.
+- Service code runs on Binder threads, not automatically on the main thread.
+- Caller identity and permissions must be validated for exported services.
+
+<div className="practice-bad">
+
+**✕ Send a large image through an Intent extra**
+
+```kotlin
+intent.putExtra("bitmap", hugeBitmap)
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Send an identifier or URI**
+
+```kotlin
+intent.putExtra("imageUri", imageUri.toString())
+```
+</div>
+
+## Main-thread risk
+
+A synchronous Binder call can block while the remote process works. Repeated PackageManager, content-provider, or service calls on the main thread can contribute to jank or ANR.
+
+## Security scenario
+
+An exported service must not trust caller-supplied IDs or paths. Enforce manifest/runtime permissions, validate `Binder.getCallingUid()`, constrain inputs, and avoid confused-deputy behavior where your privileged app performs an action for an untrusted caller.
+
+<Admonition type="tip" title="Interview-ready answer">
+Binder provides RPC-like IPC through proxies, stubs, Parcels, and the Binder driver. Calls have serialization, latency, transaction-size, threading, process-death, and security implications. Treat remote calls as unreliable boundaries, not ordinary local methods.
+</Admonition>
+

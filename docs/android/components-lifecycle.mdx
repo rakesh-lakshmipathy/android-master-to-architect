@@ -1,0 +1,102 @@
+---
+id: components-lifecycle
+title: App components and lifecycle
+---
+
+# App components and lifecycle
+
+Android components are **entry points controlled by the operating system**. Your app does not create a `main()` function and own the process forever. Android starts the process when needed and calls a declared component.
+
+## The four component types
+
+| Component | Use it for | Practical example | Do not assume |
+|---|---|---|---|
+| `Activity` | A user-facing screen entry point | Checkout screen | It lives as long as the app |
+| `Service` | Work that must continue without a visible screen | Music playback | It automatically uses a background thread |
+| `BroadcastReceiver` | A short reaction to a broadcast | Reschedule work after boot | It can run lengthy work safely |
+| `ContentProvider` | Structured data shared through URIs | Share a file with another app | It is needed for every database |
+
+:::warning Android-only code
+The examples on this page require the Android framework, so they cannot run in Kotlin Playground.
+:::
+
+## Activity lifecycle: what the callbacks mean
+
+```kotlin
+class CheckoutActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Create UI and restore small UI state.
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Screen is visible.
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Screen is visible and interactive.
+    }
+
+    override fun onPause() {
+        // Pause exclusive resources quickly.
+        super.onPause()
+    }
+
+    override fun onStop() {
+        // Screen is no longer visible.
+        super.onStop()
+    }
+}
+```
+
+Lifecycle callbacks describe the component's **current usability**, not whether the user has permanently finished with it. Rotation can destroy and recreate an activity. The system can later kill a stopped app process without calling `onDestroy()`.
+
+## A Service is not a worker thread
+
+```kotlin
+class SyncService : Service() {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // This callback starts on the main thread.
+        return START_NOT_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}
+```
+
+Use a foreground service only for user-noticeable ongoing work that qualifies under current platform rules. Use WorkManager for guaranteed, deferrable work. Use an in-process coroutine for work that matters only while the screen or process is alive.
+
+## Practical mistake
+
+### ✕ Avoid: starting a long upload directly in a receiver
+
+```kotlin
+override fun onReceive(context: Context, intent: Intent) {
+    uploadEveryPendingFile() // Blocks a short-lived callback.
+}
+```
+
+The process may be stopped after `onReceive` returns, and blocking can cause an ANR.
+
+### ✓ Prefer: enqueue durable work
+
+```kotlin
+override fun onReceive(context: Context, intent: Intent) {
+    WorkManager.getInstance(context).enqueue(
+        OneTimeWorkRequestBuilder<UploadWorker>().build()
+    )
+}
+```
+
+## Interview-ready answer
+
+Android components are OS-managed entry points. Lifecycle callbacks tell us when a component is usable, but they do not guarantee process survival or a final cleanup callback. I choose an Activity for UI, WorkManager for deferrable guaranteed work, and a foreground service only for qualifying user-visible ongoing work.
+
+## Questions and exercises
+
+1. Why must important data not wait until `onDestroy()` to be saved?
+2. Why can a started service still freeze the UI?
+3. Choose a mechanism for music playback, an immediate screen request, and a nightly upload.
+

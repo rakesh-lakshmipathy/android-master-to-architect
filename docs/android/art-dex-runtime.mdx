@@ -1,0 +1,63 @@
+---
+id: art-dex-runtime
+title: ART, DEX, and runtime execution
+---
+import Admonition from '@theme/Admonition';
+
+# ART, DEX, and runtime execution
+
+Kotlin and Java source become JVM bytecode, then Android build tools convert it to DEX bytecode packaged in the app.
+
+```text
+Kotlin/Java source
+→ compiler bytecode (.class)
+→ desugaring and D8
+→ DEX files
+→ APK/App Bundle delivery
+→ ART executes optimized code
+```
+
+## D8 and desugaring
+
+- D8 converts class bytecode to DEX.
+- Desugaring rewrites supported newer language/library features for older Android runtimes when necessary.
+- The minimum SDK and toolchain configuration affect what needs transformation.
+
+## ART execution
+
+ART combines installation-time, ahead-of-time, and just-in-time/profile-guided optimization depending on platform conditions. Do not reduce it to “Android interprets DEX” or “everything is compiled once.”
+
+## Garbage collection
+
+Managed objects live on the heap and are reclaimed when unreachable. A memory leak means an object remains reachable even though the app no longer needs it.
+
+<div className="practice-bad">
+
+**✕ Static reference keeps an Activity alive**
+
+```kotlin
+object Holder { var activity: Activity? = null }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Store application-scoped dependencies or short-lived callbacks with clear ownership**
+
+```kotlin
+class Analytics(private val appContext: Context)
+```
+</div>
+
+## DEX limits and multidex
+
+Large method-reference counts may require multiple DEX files. Modern Android tooling handles multidex for configured applications, but excessive dependencies still affect build time, download size, startup, and class loading.
+
+## Baseline profiles
+
+Baseline profiles describe important code paths for ahead-of-time optimization, improving startup and common interactions. They complement—not replace—good startup architecture and macrobenchmark measurement.
+
+<Admonition type="tip" title="Interview-ready answer">
+Android build tools convert JVM class files into DEX. ART executes and optimizes that code using platform-dependent compilation and profiles. Garbage collection removes unreachable objects; leaks remain reachable. R8/D8, desugaring, multidex, and baseline profiles affect packaging and runtime behavior.
+</Admonition>
+

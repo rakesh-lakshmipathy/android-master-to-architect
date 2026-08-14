@@ -1,0 +1,82 @@
+---
+id: fragments
+title: Fragments and view lifecycle
+---
+
+# Fragments and view lifecycle
+
+A Fragment has two related lifecycles:
+
+1. the **Fragment lifecycle**, for the Fragment object;
+2. the **view lifecycle**, for the UI created by `onCreateView`.
+
+The view can be destroyed while the Fragment object remains on the back stack. Most Fragment bugs come from treating those lifecycles as identical.
+
+:::warning Android-only code
+These examples use Fragment and Lifecycle APIs and cannot run in Kotlin Playground.
+:::
+
+## Safe view binding
+
+```kotlin
+class ProfileFragment : Fragment(R.layout.profile_fragment) {
+    private var _binding: ProfileFragmentBinding? = null
+    private val binding get() = requireNotNull(_binding)
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        _binding = ProfileFragmentBinding.bind(view)
+        binding.retryButton.setOnClickListener { viewModel.retry() }
+    }
+
+    override fun onDestroyView() {
+        _binding = null
+        super.onDestroyView()
+    }
+}
+```
+
+Step by step:
+
+1. `onViewCreated` receives the new view and creates its binding.
+2. Code may use `binding` only while that view exists.
+3. `onDestroyView` removes the Fragment’s reference to the old view tree.
+4. A later navigation pop can create a fresh view for the same Fragment object.
+
+## Collect UI state with the view lifecycle
+
+```kotlin
+viewLifecycleOwner.lifecycleScope.launch {
+    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.uiState.collect { state -> render(state) }
+    }
+}
+```
+
+Collection starts when the view is at least STARTED, stops when it falls below STARTED, and restarts for a new view. Using the Fragment lifecycle can update a destroyed binding.
+
+### ✕ Avoid
+
+```kotlin
+lifecycleScope.launch {
+    viewModel.uiState.collect { binding.render(it) }
+}
+```
+
+### ✓ Prefer
+
+Use `viewLifecycleOwner`, `repeatOnLifecycle`, and clear view references in `onDestroyView`.
+
+## Fragment arguments
+
+Use stable IDs or small serializable values. Do not use a Fragment constructor for runtime arguments because Android must be able to recreate the Fragment.
+
+## Interview-ready answer
+
+A Fragment can outlive its view. UI references and UI-state collection therefore belong to `viewLifecycleOwner`, and binding must be cleared in `onDestroyView`. Persistent screen data belongs in a ViewModel or repository, not in the view tree.
+
+## Questions and exercises
+
+1. Why can `_binding` be null while the Fragment still exists?
+2. What failure can occur when collecting with `fragment.lifecycleScope`?
+3. Where should a loaded profile survive view recreation?
+

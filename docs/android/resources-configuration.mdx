@@ -1,0 +1,67 @@
+---
+id: resources-configuration
+title: Resources and configuration
+---
+import Admonition from '@theme/Admonition';
+
+# Resources, configuration, and compatibility
+
+Android chooses resources using the current configuration: locale, layout direction, screen size, orientation, density, night mode, API level, and more.
+
+```text
+res/values/strings.xml
+res/values-fr/strings.xml
+res/values-night/colors.xml
+res/layout-sw600dp/screen.xml
+```
+
+## Resource selection
+
+Android finds matching candidates, then chooses the most specific appropriate resource according to qualifier precedence. Do not write manual device-name or pixel-size checks when a resource qualifier expresses the requirement.
+
+## Density
+
+- `dp`: layout size independent of density.
+- `sp`: text size and user font scaling.
+- `px`: physical pixels; rarely the correct source-unit for layout.
+
+## Configuration change
+
+By default, relevant configuration changes recreate Activities so resources are re-resolved. ViewModels survive ordinary configuration recreation; Views and Activities do not.
+
+<div className="practice-bad">
+
+**✕ Lock orientation to hide recreation bugs**
+
+```xml
+android:screenOrientation="portrait"
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Model state and build adaptive UI**
+
+```text
+ViewModel/domain state survives recreation
+Saved state restores small transient input
+Resources/adaptive layout respond to available space
+```
+</div>
+
+## Localization corner cases
+
+- Never concatenate translated sentence fragments.
+- Use quantity strings for plural rules.
+- Use locale-aware formatting for numbers/dates/currency.
+- Test longer text, right-to-left layout, and large font scale.
+- Resource shrinking and dynamic features require testing of indirect resource access.
+
+## API compatibility
+
+Use runtime API checks only when behavior/API availability differs. Prefer AndroidX compatibility APIs where they provide a stable abstraction. Keep minimum, target, and compile SDK meanings separate.
+
+<Admonition type="tip" title="Interview-ready answer">
+Android resolves resources from configuration qualifiers and may recreate UI components when configuration changes. Use dp/sp correctly, model state outside Views, localize complete messages, and design for available space instead of specific device names.
+</Admonition>
+

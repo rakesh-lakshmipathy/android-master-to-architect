@@ -1,0 +1,50 @@
+---
+id: platform-interview
+title: Platform scenarios and interviews
+---
+import Admonition from '@theme/Admonition';
+
+# Platform system-design scenarios and interviews
+
+## Scenario: app returns after process death
+
+Symptoms: blank checkout, missing navigation ID, singleton is null.
+
+Reasoning:
+
+1. Activity/task navigation was restored.
+2. The old process and every in-memory object were gone.
+3. Essential state lived only in a singleton.
+4. Restore small keys through saved state and reload durable business data from persistence/server.
+
+## Scenario: release works in debug but crashes
+
+Check R8/obfuscation, reflection, generated adapters, resource shrinking, release-only manifest placeholders, signing, and environment configuration. Reproduce with the actual release variant and retrace obfuscated stack traces using mapping files.
+
+## Scenario: TransactionTooLargeException
+
+Inspect Bundles, saved state, fragment arguments, Intent extras, and Binder calls. Pass IDs/URIs, not large object graphs or bitmaps; reload data at the destination.
+
+## Interview questions
+
+<details><summary>Task versus process?</summary><p>A task is a user navigation history of Activities. A process is an OS execution container with memory and threads. They have different lifetimes.</p></details>
+
+<details><summary>Does Service run in background thread?</summary><p>No. A Service is a component/lifetime abstraction and runs callbacks on the main thread unless work is dispatched.</p></details>
+
+<details><summary>What is Binder?</summary><p>Android's IPC mechanism using proxies, stubs, Parcels, the Binder driver, identity, and remote process threads.</p></details>
+
+<details><summary>Why can Fragment binding leak?</summary><p>The Fragment may remain while its View is destroyed. A retained binding keeps the old View tree reachable.</p></details>
+
+## Checklist
+
+- [ ] I distinguish component, task, and process lifetimes.
+- [ ] I can explain cold-start steps and process death.
+- [ ] I understand DEX, ART, Binder, and transaction limits.
+- [ ] I know Activity reuse and `onNewIntent` behavior.
+- [ ] I use Fragment view lifecycle ownership.
+- [ ] I understand resource qualifiers and configuration recreation.
+- [ ] I can explain variants, dependency exposure, R8, signing, and build measurement.
+
+<Admonition type="tip" title="Architect takeaway">
+Platform mastery means designing for work Android controls: process lifetime, component recreation, IPC, resources, packaging, and release optimization. Treat those as normal operating conditions, not exceptional bugs.
+</Admonition>

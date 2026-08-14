@@ -1,0 +1,70 @@
+---
+id: processes-startup
+title: Processes, startup, and process death
+---
+import Admonition from '@theme/Admonition';
+
+# Processes, app startup, and process death
+
+Android controls process lifetime. The user does not need to swipe an app away before Android may kill its background process to reclaim memory.
+
+## Cold, warm, and hot startup
+
+- **Cold:** no app process; Android creates the process, Application, Activity, and first frame.
+- **Warm:** process exists, but Activity must be created.
+- **Hot:** Activity/process already exist and return to foreground.
+
+## Cold-start flow
+
+```text
+Launcher tap
+→ system resolves launch intent
+→ process forked from Zygote
+→ Application created
+→ providers initialized
+→ Activity created
+→ first frame drawn
+```
+
+Every eager SDK, content provider, dependency graph, disk read, and class load before the first frame can increase startup time.
+
+## Process death is not lifecycle destruction
+
+Android can kill the process without calling final cleanup callbacks. In-memory singletons, static fields, ViewModels, and coroutines disappear.
+
+<div className="practice-bad">
+
+**✕ Keep essential state only in memory**
+
+```kotlin
+object CheckoutSession { var orderId: String? = null }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Persist durable state and save small UI state**
+
+```kotlin
+class CheckoutViewModel(private val savedState: SavedStateHandle) {
+    var orderId: String?
+        get() = savedState["orderId"]
+        set(value) { savedState["orderId"] = value }
+}
+```
+</div>
+
+SavedStateHandle is for small restorable state, not large datasets. Durable business data belongs in Room, DataStore, files, or a server.
+
+## Multiple processes
+
+Declaring `android:process` creates another process with a separate heap and singleton instances. It adds IPC, initialization, debugging, and consistency costs. Use only for a measured requirement such as isolation—not as a casual performance trick.
+
+## Practical testing
+
+Use developer options such as “Don't keep activities” to expose lifecycle assumptions, but remember it destroys Activities, not necessarily the whole process. Test real process recreation by stopping the process and restoring navigation/state through an appropriate test strategy.
+
+<Admonition type="tip" title="Interview-ready answer">
+Android owns process lifetime. Process death removes all in-memory state and may happen without cleanup callbacks. Restore small UI state, persist durable data, and keep startup work minimal. Cold startup includes process creation; warm and hot starts reuse more existing state.
+</Admonition>
+
