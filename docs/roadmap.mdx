@@ -2,54 +2,576 @@
 id: roadmap
 title: Master roadmap
 sidebar_position: 2
+description: Complete learning path from Kotlin and Android foundations to Android architect-level engineering.
 ---
 
 import Admonition from '@theme/Admonition';
 
-# Android Master to Architect roadmap
+# Android Master to Architect — complete roadmap
 
-<span className="badge-complete">● Completed lesson</span> &nbsp; ○ Planned lesson
+This is the curriculum for the entire book. It is arranged in learning order: language foundations first, Android internals next, then UI, architecture, data, device capabilities, production engineering, and architect-level decision-making.
 
-This roadmap shows the complete learning path. A completed lesson is clickable. Planned lessons will become clickable after their full content is written.
+**Status:** ✅ Written and clickable &nbsp;&nbsp; ◐ Rewrite in progress &nbsp;&nbsp; ○ Planned
+
+<Admonition type="info" title="How to use this roadmap">
+Do not try to memorize everything in one pass. Learn a topic, run its examples, answer its interview questions, complete its practical exercise, and revisit it while building a real feature. A topic is marked complete only after it meets that standard.
+</Admonition>
 
 ## Part I — Kotlin and Java foundations
 
-- <span className="badge-complete">●</span> [Why Kotlin instead of Java?](./kotlin/why-kotlin)
-- <span className="badge-complete">●</span> [Types, variables, expressions, control flow, equality, and smart casts](./kotlin/types-and-control-flow)
-- <span className="badge-complete">●</span> [Null safety](./kotlin/null-safety)
-- <span className="badge-complete">●</span> [Functions, lambdas, higher-order functions, inline functions, and reified types](./kotlin/functions-overview)
-- <span className="badge-complete">●</span> [Constructors, `init`, properties, inheritance, interfaces, objects, data classes, enums, and sealed types](./kotlin/classes-overview)
-- <span className="badge-complete">●</span> [Value classes](./kotlin/value-classes)
-- <span className="badge-complete">●</span> [Collections, sequences, generics, variance, extensions, delegates, and DSLs](./kotlin/collections-overview)
-- <span className="badge-complete">●</span> [Coroutines, structured concurrency, Flow, StateFlow, SharedFlow, and channels](./kotlin/coroutines-overview)
-- <span className="badge-complete">●</span> [Java interoperability and gradual migration](./kotlin/java-interop-overview)
+### Chapter 1: Why Kotlin for Android
+
+- ✅ [Why Kotlin instead of Java?](./kotlin/why-kotlin)
+  - Kotlin-first Android ecosystem
+  - Null safety and safer type modelling
+  - Concise code versus unreadable cleverness
+  - Coroutines and structured concurrency
+  - Java coexistence, migration cost, and trade-offs
+
+### Chapter 2: Types, variables, and program flow
+
+- ✅ [Types and control-flow overview](./kotlin/types-and-control-flow)
+- ✅ [Types, `val`, `var`, inference, and conversions](./kotlin/types-and-variables)
+- ✅ [Expressions and control flow](./kotlin/expressions-and-control-flow)
+- ✅ [Equality, identity, and comparison](./kotlin/equality)
+- ✅ [Type checks, casts, and smart casts](./kotlin/smart-casts)
+- ✅ [Null safety](./kotlin/null-safety)
+  - Nullable types, safe calls, and Elvis operator
+  - `let`, safe transformations, and nullable collections
+  - `!!`, platform types, and production failure scenarios
+
+### Chapter 3: Functions and functional Kotlin
+
+- ✅ [Functions overview](./kotlin/functions-overview)
+- ✅ [Functions, parameters, return types, `Unit`, and `Nothing`](./kotlin/functions)
+- ✅ [Lambdas and higher-order functions](./kotlin/lambdas)
+- ✅ [Inline, `noinline`, and `crossinline`](./kotlin/inline-functions)
+- ✅ [Reified type parameters](./kotlin/reified-types)
+- ✅ [Practical Android functional patterns](./kotlin/functional-kotlin-android)
+- ✅ [Function interview questions and exercises](./kotlin/functional-kotlin-interview)
+
+### Chapter 4: Classes and Kotlin type modelling
+
+- ✅ [Classes overview](./kotlin/classes-overview)
+- ✅ [Constructors, `init`, properties, backing fields, and `lateinit`](./kotlin/constructors-init-properties)
+- ✅ [Inheritance and interfaces](./kotlin/inheritance-interfaces)
+- ✅ [Objects, companion objects, and object expressions](./kotlin/objects-companions)
+- ✅ [Data classes, copying, enums, and sealed hierarchies](./kotlin/data-enum-sealed)
+- ✅ [Value classes](./kotlin/value-classes)
+- ✅ [Class design for Android and interview questions](./kotlin/classes-android-interview)
+
+### Chapter 5: Collections, generics, and advanced language tools
+
+- ✅ [Collections chapter overview](./kotlin/collections-overview)
+- ✅ [Collections and transformations](./kotlin/collections)
+- ✅ [Sequences and lazy evaluation](./kotlin/sequences)
+- ✅ [Generics, constraints, variance, and star projections](./kotlin/generics-variance)
+- ✅ [Extension functions and resolution rules](./kotlin/extensions-deep-dive)
+- ✅ [Delegated properties and type-safe DSLs](./kotlin/delegates-dsls)
+- ✅ [Collections in Android and interview questions](./kotlin/collections-android-interview)
+
+### Chapter 6: Coroutines and reactive streams
+
+- ✅ [Coroutines and Flow overview](./kotlin/coroutines-overview)
+- ✅ [Coroutine fundamentals](./kotlin/coroutine-basics)
+- ✅ [Structured concurrency and cancellation](./kotlin/structured-concurrency)
+- ✅ [Dispatchers, context, and thread confinement](./kotlin/dispatchers-context)
+- ✅ [Cold Flow, operators, exceptions, and completion](./kotlin/flow)
+- ✅ [StateFlow, SharedFlow, and channels](./kotlin/hot-flows-channels)
+- ✅ [Coroutine and Flow interview scenarios](./kotlin/coroutines-android-interview)
+
+### Chapter 7: Java interoperability and migration
+
+- ✅ [Java interoperability overview](./kotlin/java-interop-overview)
+- ✅ [Calling Java from Kotlin](./kotlin/java-from-kotlin)
+- ✅ [Designing Kotlin APIs for Java callers](./kotlin/kotlin-from-java)
+- ✅ [Gradual Java-to-Kotlin migration](./kotlin/java-migration)
+- ✅ [Interop interview questions](./kotlin/java-interop-interview)
+
+---
 
 ## Part II — Android platform and build system
 
-**[Open Part II: Android platform and build system →](./android/platform-build-overview)**
+### Chapter 8: How Android works
 
-How Android runs apps: processes, ART, Binder, application components, activities, tasks, fragments, resources, Gradle, Android Gradle Plugin, build variants, R8, and build performance.
+- ✅ [Android architecture — the big picture](./android/system-architecture)
+- ✅ [Framework APIs and system services](./android/framework-system-services)
+- ✅ [Linux processes, UIDs, and the application sandbox](./android/linux-sandbox)
+- ✅ [Execution trace: posting a notification](./android/architecture-execution-trace)
+- ◐ [Binder and Android IPC](./android/binder-ipc)
+  - Binder proxy, stub, driver, and thread pool
+  - Parcel and AIDL
+  - Synchronous versus one-way calls
+  - Transaction-size limits and remote-process failure
 
-## Part III — User-interface engineering
+### Chapter 9: Process startup, ART, and runtime behaviour
 
-Views and XML, rendering, RecyclerView, Compose from fundamentals to internals, state management, accessibility, localization, tablets, foldables, and adaptive layouts.
+- ◐ [Processes, startup, and process death](./android/processes-startup)
+  - Zygote, fork, and application-process creation
+  - Cold, warm, and hot starts
+  - `Application` initialization and ContentProvider startup
+  - Process importance, memory pressure, and recreation
+- ◐ [ART, DEX, and runtime execution](./android/art-dex-runtime)
+  - Kotlin/Java bytecode to DEX
+  - D8, desugaring, multidex, and class loading
+  - AOT, JIT, profiles, and garbage collection
+  - Baseline Profiles and startup optimization
 
-## Part IV — Architecture and large applications
+### Chapter 10: Components and lifecycle
 
-MVC, MVP, MVVM, MVI, Clean Architecture, SOLID, design patterns, ViewModel, SavedStateHandle, Hilt, Dagger, navigation, modularization, and enterprise-scale decisions.
+- ◐ [Application components and lifecycle](./android/components-lifecycle)
+  - Application, Activity, Service, Receiver, and Provider
+  - Manifest registration and exported components
+  - Lifecycle versus process lifetime
+  - Configuration change versus process death
+- ◐ [Activities, tasks, back stack, and launch modes](./android/activities-tasks)
+- ◐ [Fragments and the Fragment view lifecycle](./android/fragments)
+- ○ Intents, intent filters, Activity Result APIs, and secure intent handling
+- ○ Context: application, activity, service, and themed contexts
 
-## Part V — Data, networking, and offline-first design
+### Chapter 11: Resources and device configuration
 
-SQLite, Room, DataStore, storage, repositories, use cases, Retrofit, OkHttp, serialization, offline synchronization, conflict resolution, and Paging 3.
+- ◐ [Resources, configuration, and compatibility](./android/resources-configuration)
+  - Resource IDs and runtime resolution
+  - Density, `dp`, `sp`, and screen qualifiers
+  - Themes, styles, drawables, fonts, and assets
+  - Configuration changes and state restoration
+  - API-level compatibility and AndroidX
+- ○ Manifest merging, placeholders, permissions, and package visibility
 
-## Part VI — Background work and device features
+### Chapter 12: Gradle and the Android build pipeline
 
-WorkManager, services, alarms, notifications, permissions, location, maps, BLE, NFC, sensors, camera, media, files, and relevant Firebase services.
+- ◐ [Gradle, AGP, variants, R8, and build performance](./android/gradle-build-system)
+  - Gradle lifecycle, task graph, plugins, and convention plugins
+  - Android Gradle Plugin and SDK configuration
+  - Build types, product flavors, dimensions, and variants
+  - Dependency configurations and version catalogs
+  - APK versus App Bundle
+  - D8, R8, shrinking, optimization, and obfuscation
+  - Resources shrinking and keep rules
+  - Signing configs, secrets, and reproducible builds
+  - Build cache, configuration cache, KSP, and build profiling
+- ◐ [Platform interview scenarios](./android/platform-interview)
 
-## Parts VII–X — Production engineering and architect practice
+---
 
-Security, authentication, Keystore, performance, testing, observability, CI/CD, publishing, Android-version compatibility, migration, code review, Automotive, NDK/JNI, KMP, architecture decision records, system-design case studies, and architect interviews.
+## Part III — UI engineering: Views and Jetpack Compose
 
-<Admonition type="note" title="When a lesson is marked complete">
-A lesson is complete only when it contains a plain-English explanation, runnable examples, expected results, important mistakes and edge cases, Android usage, deeper engineering details, interview answers, and exercises. A topic name by itself does not count as completed content.
+### Chapter 13: Rendering and the traditional View system
+
+- ○ Android UI thread, Looper, MessageQueue, Choreographer, and frame deadlines
+- ○ View measurement, layout, drawing, invalidation, and requestLayout
+- ○ XML layouts, ViewBinding, themes, styles, and custom attributes
+- ○ ConstraintLayout and responsive XML layouts
+- ○ Custom Views, Canvas, gestures, touch dispatch, and accessibility
+- ○ RecyclerView
+  - Adapter, ViewHolder, recycling, and pools
+  - DiffUtil and ListAdapter
+  - Multiple view types and nested lists
+  - Pagination, selection, animation, and performance
+
+### Chapter 14: Jetpack Compose foundations
+
+- ○ Why Compose and how declarative UI differs from Views
+- ○ Composable functions, composition, recomposition, and skipping
+- ○ Modifiers, layout, constraints, alignment, and drawing
+- ○ Material 3, theming, typography, shapes, and dark mode
+- ○ Lists, grids, keys, sticky headers, and item animations
+- ○ User input, focus, keyboard, gestures, and forms
+- ○ Images, resources, previews, and interoperability with Views
+
+### Chapter 15: Compose state and side effects
+
+- ○ State, events, state hoisting, and unidirectional data flow
+- ○ `remember`, `rememberSaveable`, and snapshot state
+- ○ Stability, immutability, recomposition scope, and derived state
+- ○ `LaunchedEffect`, `DisposableEffect`, `SideEffect`, and `produceState`
+- ○ `snapshotFlow` and bridging Compose with Flow
+- ○ Lifecycle-aware state collection
+- ○ Common stale-lambda and incorrect-key failures
+
+### Chapter 16: Advanced Compose
+
+- ○ Custom layouts, `Layout`, `SubcomposeLayout`, and intrinsic measurement
+- ○ Animation APIs and transition design
+- ○ Semantics, accessibility testing, and screen readers
+- ○ Compose performance, tracing, stability reports, and benchmarks
+- ○ Design systems, reusable component APIs, and slot patterns
+- ○ Compose navigation and adaptive navigation structures
+- ○ Compose testing and screenshot testing
+
+### Chapter 17: Inclusive and adaptive UI
+
+- ○ Accessibility: semantics, contrast, touch targets, focus, and TalkBack
+- ○ Localization, plurals, formatting, RTL, and pseudo-locales
+- ○ Window size classes and adaptive layouts
+- ○ Tablets, foldables, multi-window, and resizable activities
+- ○ Large screens, keyboard/mouse input, and drag-and-drop
+
+---
+
+## Part IV — Application architecture and modularization
+
+### Chapter 18: Architecture foundations
+
+- ○ Separation of concerns, coupling, cohesion, and boundaries
+- ○ SOLID principles with Android feature examples
+- ○ MVC, MVP, MVVM, and MVI
+  - State ownership and event flow
+  - Strengths, weaknesses, and migration paths
+  - Avoiding “god” Activities, Fragments, and ViewModels
+- ○ Unidirectional data flow and state machines
+- ○ Clean Architecture
+  - Presentation, domain, and data boundaries
+  - Dependency rule and dependency inversion
+  - When a domain layer helps—and when it is ceremony
+
+### Chapter 19: Android architecture components
+
+- ○ ViewModel lifecycle, factories, scope, and memory rules
+- ○ `SavedStateHandle`, process recreation, and navigation arguments
+- ○ Lifecycle, LifecycleOwner, repeatOnLifecycle, and lifecycle-aware concurrency
+- ○ Navigation Component and Navigation Compose
+  - Graphs, nested graphs, arguments, results, and deep links
+  - Multiple back stacks and authentication flows
+  - Type-safe routes and process recreation
+- ○ Repository and use-case patterns
+- ○ Single source of truth and immutable UI state
+
+### Chapter 20: Dependency injection
+
+- ○ Dependency inversion versus dependency injection
+- ○ Manual constructor injection and composition roots
+- ○ Dagger graph, modules, components, subcomponents, qualifiers, and scopes
+- ○ Hilt application, activity, fragment, ViewModel, service, and worker integration
+- ○ Assisted injection and runtime parameters
+- ○ Multibinding and plugin-style architectures
+- ○ DI testing, graph validation, startup cost, and common scope leaks
+
+### Chapter 21: Design patterns for Android
+
+- ○ Factory, Builder, Strategy, Adapter, Decorator, Facade, and Proxy
+- ○ Observer, State, Command, Chain of Responsibility, and Mediator
+- ○ Repository, Use Case, Mapper, Result, and Circuit Breaker
+- ○ Choosing patterns from a concrete problem rather than pattern collecting
+
+### Chapter 22: Modularization and enterprise-scale codebases
+
+- ○ Layer modules versus feature modules
+- ○ API and implementation boundaries
+- ○ Core, feature, domain, data, and design-system modules
+- ○ Dependency graphs, cyclic dependencies, and build performance
+- ○ Dynamic feature delivery
+- ○ Navigation and DI across module boundaries
+- ○ Ownership, team topology, public APIs, and module contracts
+- ○ Monorepo considerations and scalable test strategy
+
+---
+
+## Part V — Data, networking, and offline-first systems
+
+### Chapter 23: Local persistence
+
+- ○ SQLite fundamentals, schema design, indexes, joins, and transactions
+- ○ Room entities, DAOs, relations, embedded objects, and type converters
+- ○ Room migrations, destructive migration risks, and migration tests
+- ○ Transactions, concurrency, invalidation, Flow queries, and performance
+- ○ DataStore Preferences and Proto DataStore
+- ○ DataStore migrations, corruption handling, and multi-process limitations
+- ○ Choosing Room, DataStore, files, memory cache, or Keystore
+
+### Chapter 24: Repository and data-layer design
+
+- ○ Repository responsibilities and boundaries
+- ○ Local and remote data sources
+- ○ Mapping DTOs, entities, domain models, and UI models
+- ○ Error models, retries, freshness, caching, and invalidation
+- ○ Use cases and business-rule orchestration
+- ○ Single source of truth and reactive read streams
+
+### Chapter 25: Networking
+
+- ○ HTTP methods, status codes, headers, caching, and idempotency
+- ○ Retrofit service design, suspend APIs, and error handling
+- ○ OkHttp interceptors, authenticators, connection pooling, and timeouts
+- ○ JSON serialization with Kotlin serialization, Moshi, or Gson
+- ○ DTO evolution, unknown fields, nullability, and backward compatibility
+- ○ Multipart uploads, downloads, progress, cancellation, and streaming
+- ○ WebSockets and server-sent updates overview
+- ○ Network security configuration and certificate pinning trade-offs
+
+### Chapter 26: Offline-first architecture and synchronization
+
+- ○ Local database as the application’s readable source of truth
+- ○ Read-through, write-through, and cache-aside strategies
+- ○ Optimistic updates and rollback
+- ○ Sync queues, retries, exponential backoff, and idempotency keys
+- ○ Conflict detection and resolution
+  - Last-write-wins and its risks
+  - Server authority, client authority, merge rules, and version vectors overview
+- ○ Tombstones, deletions, pagination cursors, and clock problems
+- ○ Connectivity changes and why “online” does not guarantee server reachability
+- ○ Multi-device editing and eventually consistent UI
+
+### Chapter 27: Paging 3
+
+- ○ PagingSource, Pager, PagingData, and load states
+- ○ RemoteMediator and database-backed paging
+- ○ Refresh keys, invalidation, separators, transformations, and cachedIn
+- ○ Retry, empty states, errors, and process recreation
+- ○ Testing paged data and avoiding duplicate requests
+
+---
+
+## Part VI — Background work, notifications, and device capabilities
+
+### Chapter 28: Background execution
+
+- ○ Choosing coroutines, WorkManager, services, foreground services, and alarms
+- ○ WorkManager requests, constraints, input/output, progress, and cancellation
+- ○ Unique work, chaining, retries, backoff, and idempotency
+- ○ CoroutineWorker, dependency injection, and testing
+- ○ Started and bound services
+- ○ Foreground-service types, user visibility, and platform restrictions
+- ○ Exact and inexact alarms, Doze, App Standby, and battery optimizations
+- ○ Boot, process death, reboot, and durable scheduling
+
+### Chapter 29: Notifications and external entry points
+
+- ○ Notification channels, importance, permission, grouping, and actions
+- ○ PendingIntent identity, mutability, and security
+- ○ Deep links, custom schemes, verified App Links, and intent validation
+- ○ Cold-start navigation and authentication gates
+- ○ Firebase Cloud Messaging, token lifecycle, topics, data messages, and delivery limits
+
+### Chapter 30: Permissions, storage, files, and media
+
+- ○ Runtime permissions and capability-based UX
+- ○ Permission denial, rationale, “don’t ask again,” and Settings recovery
+- ○ Scoped storage, MediaStore, Storage Access Framework, and FileProvider
+- ○ Internal, external, cache, and no-backup storage
+- ○ File I/O, streaming, large files, and cleanup
+- ○ Audio/video playback and Media3 overview
+- ○ Media capture, background playback, audio focus, and media sessions
+
+### Chapter 31: Location and maps
+
+- ○ Location permissions, precision, foreground/background access
+- ○ Fused location concepts, current versus continuous location
+- ○ Geofencing, battery accuracy trade-offs, and mock locations
+- ○ Maps architecture, markers, camera state, clustering, and offline considerations
+- ○ Privacy, retention, and location security
+
+### Chapter 32: BLE, NFC, sensors, and camera
+
+- ○ Bluetooth permissions and Bluetooth Low Energy concepts
+- ○ Scanning, advertising, GATT services, characteristics, and notifications
+- ○ Connection state, retries, MTU, concurrency, and device quirks
+- ○ NFC tags, NDEF, reader mode, and Host Card Emulation overview
+- ○ Sensor types, sampling, coordinate systems, batching, and battery
+- ○ CameraX lifecycle, preview, image capture, analysis, rotation, and backpressure
+- ○ Device capability detection and graceful degradation
+
+---
+
+## Part VII — Security and privacy
+
+### Chapter 33: Android application security
+
+- ○ Threat modelling, assets, trust boundaries, attackers, and mitigations
+- ○ Sandbox, exported components, intent injection, and PendingIntent risks
+- ○ Secure storage and Android Keystore
+- ○ Encryption at rest, keys, IVs, authenticated encryption, and rotation
+- ○ TLS, Network Security Config, cleartext policy, and pinning trade-offs
+- ○ WebView security, JavaScript bridges, and untrusted content
+- ○ SQL injection, path traversal, unsafe deserialization, and logging leaks
+- ○ Rooted devices, tamper resistance, integrity APIs, and realistic guarantees
+
+### Chapter 34: Authentication and authorization
+
+- ○ OAuth 2.0 and OpenID Connect concepts for mobile clients
+- ○ Authorization Code with PKCE
+- ○ Access tokens, refresh tokens, expiry, rotation, and revocation
+- ○ OkHttp authentication refresh without retry storms
+- ○ Biometrics and device credentials
+- ○ Session logout, multi-account handling, and sensitive screen protection
+- ○ Authentication versus authorization
+
+### Chapter 35: Privacy engineering
+
+- ○ Data minimization, retention, consent, and purpose limitation
+- ○ Runtime permission UX and privacy dashboard implications
+- ○ Analytics identifiers and sensitive-data redaction
+- ○ Screenshot, clipboard, notification, backup, and log exposure
+- ○ Security review and release checklist
+
+---
+
+## Part VIII — Performance, reliability, and quality
+
+### Chapter 36: Performance and memory
+
+- ○ CPU, memory, network, disk, GPU, and battery measurement
+- ○ Android Studio Profiler, Perfetto, system tracing, and Macrobenchmark
+- ○ Memory model, GC pressure, leaks, retained objects, and LeakCanary
+- ○ Bitmap and large-object handling
+- ○ Startup: cold/warm/hot, App Startup, lazy initialization, and Baseline Profiles
+- ○ ANRs, main-thread blocking, StrictMode, and watchdog behaviour
+- ○ Jank, frame deadlines, recomposition, overdraw, and list performance
+- ○ Battery, wake locks, background limits, and power-aware scheduling
+
+### Chapter 37: Testing strategy
+
+- ○ Test pyramid versus test portfolio
+- ○ Unit, integration, component, UI, end-to-end, and contract tests
+- ○ Testable architecture and deterministic concurrency
+- ○ Fakes, stubs, mocks, spies, and when each is appropriate
+- ○ JUnit, coroutine test APIs, Flow testing, and virtual time
+- ○ Room, Retrofit/MockWebServer, WorkManager, and migration testing
+- ○ Espresso and UI Automator
+- ○ Compose UI tests, semantics, screenshots, and accessibility checks
+- ○ Robolectric and instrumented-test trade-offs
+- ○ Flaky-test diagnosis, test reports, coverage, mutation testing overview
+
+### Chapter 38: Observability and operational reliability
+
+- ○ Structured logging and sensitive-data redaction
+- ○ Crash reporting, symbol/mapping uploads, and release correlation
+- ○ Analytics event contracts and data quality
+- ○ Traces, metrics, startup monitoring, and custom performance signals
+- ○ Offline telemetry buffering and sampling
+- ○ SLOs, SLIs, alerting, incident triage, and postmortems
+- ○ Firebase Crashlytics, Performance Monitoring, Analytics, and Remote Config where appropriate
+
+### Chapter 39: Feature flags and experimentation
+
+- ○ Release flags, operational flags, experiments, and permissions
+- ○ Safe defaults, caching, targeting, and offline behaviour
+- ○ Kill switches and server-driven configuration
+- ○ Flag ownership, expiry, testing, and technical-debt cleanup
+- ○ Experiment metrics, bias, and rollout guardrails
+
+---
+
+## Part IX — Delivery, compatibility, and platform expansion
+
+### Chapter 40: CI/CD and release engineering
+
+- ○ CI stages: formatting, static analysis, tests, build, security, and publishing
+- ○ Gradle caching, parallelization, managed devices, and test sharding
+- ○ Build types, flavors, environments, and secret management
+- ○ Signing keys, Play App Signing, key rotation, and secure CI
+- ○ Version codes, version names, artifacts, mapping files, and provenance
+- ○ Internal, closed, open, and production tracks
+- ○ Staged rollout, monitoring, rollback/forward-fix strategy, and release notes
+- ○ Play policy, App Bundle, dynamic delivery, and store metadata
+
+### Chapter 41: API and Android-version compatibility
+
+- ○ `minSdk`, `targetSdk`, and `compileSdk`
+- ○ Runtime API checks and compatibility wrappers
+- ○ Behaviour changes by target SDK
+- ○ AndroidX, desugaring, and dependency compatibility
+- ○ Device/OEM differences and capability-based testing
+- ○ Backward-compatible storage, notification, permission, and background-work behaviour
+
+### Chapter 42: Migration and refactoring
+
+- ○ Java-to-Kotlin migration
+- ○ Views-to-Compose interoperability and staged migration
+- ○ LiveData-to-Flow migration
+- ○ Dagger-to-Hilt and legacy-DI migration
+- ○ Monolith-to-modular architecture
+- ○ Database and network-contract migration
+- ○ Strangler pattern, compatibility adapters, and rollback plans
+- ○ Measuring improvement and preventing endless rewrites
+
+### Chapter 43: Beyond the standard phone application
+
+- ○ Android Automotive OS and Android Auto overview
+- ○ Automotive UX restrictions, car app library, and distraction safety
+- ○ NDK and JNI fundamentals
+- ○ Native libraries, ABI packaging, memory safety, and debugging
+- ○ Kotlin Multiplatform architecture
+- ○ Shared domain/data code and platform-specific boundaries
+- ○ Compose Multiplatform architecture and UI-sharing trade-offs
+
+---
+
+## Part X — Android architect mastery
+
+### Chapter 44: Engineering standards and technical leadership
+
+- ○ Coding standards, naming, documentation, and API consistency
+- ○ Code review for correctness, architecture, security, performance, and teaching
+- ○ Static analysis, lint rules, Detekt, formatting, and quality gates
+- ○ Technical-debt identification, prioritization, and communication
+- ○ Mentoring, design reviews, and cross-team alignment
+- ○ Build versus buy and library evaluation
+
+### Chapter 45: Architecture decisions and trade-offs
+
+- ○ Requirements, constraints, quality attributes, and assumptions
+- ○ Architecture Decision Records: context, options, decision, and consequences
+- ○ Reversible versus irreversible decisions
+- ○ Coupling, complexity, team capacity, delivery speed, and operational cost
+- ○ Risk analysis, proof of concept, evolutionary architecture, and fitness functions
+- ○ Avoiding architecture by fashion
+
+### Chapter 46: Scalable mobile architecture
+
+- ○ Multi-team module ownership and platform teams
+- ○ Stable contracts, dependency direction, and versioning
+- ○ Design systems and shared infrastructure
+- ○ Large-scale navigation, authentication, and configuration
+- ○ Offline-first behaviour across many features
+- ○ Performance budgets, build budgets, and release governance
+- ○ White-label and multi-brand applications
+- ○ Enterprise security, compliance, auditability, and device management
+
+### Chapter 47: System-design case studies
+
+- ○ Offline-first e-commerce application
+- ○ Real-time chat and presence
+- ○ Banking application with secure authentication
+- ○ Ride tracking with location and maps
+- ○ Media streaming and offline downloads
+- ○ Large news feed with Paging and caching
+- ○ BLE-connected health device
+- ○ Multi-module super-app
+- ○ For each case: requirements, data flow, APIs, storage, sync, security, testing, observability, scaling, and trade-offs
+
+### Chapter 48: Interview preparation
+
+- ○ Kotlin and coroutine coding questions
+- ○ Android lifecycle, process, Binder, and component questions
+- ○ Compose and View-system questions
+- ○ Architecture-pattern comparison questions
+- ○ Data, networking, caching, and offline-sync questions
+- ○ Security, performance, testing, and release questions
+- ○ Senior debugging scenarios
+- ○ Architect system-design interviews
+- ○ Trade-off communication and follow-up questioning
+- ○ Resume/project walkthrough and leadership stories
+- ○ Mock interview scorecards and revision checklists
+
+---
+
+## Definition of a completed lesson
+
+A topic becomes ✅ only when it contains:
+
+- A plain-English explanation of **what it is and why it exists**
+- A small example followed by a realistic production scenario
+- Step-by-step execution and expected behaviour
+- Practical ✅ Prefer and ❌ Avoid comparisons
+- Lifecycle, process-death, concurrency, security, and performance implications where relevant
+- Corner cases and failure handling
+- Runnable Playground links for every independent Kotlin/JVM example
+- Clear Android-only labels for framework examples
+- Interview-ready answers, follow-up questions, and exercises
+- Useful diagrams, decision tables, or checklists
+
+<Admonition type="tip" title="The destination">
+Mastery is not remembering every API. An Android architect can explain how the platform behaves, choose an appropriate design under real constraints, predict failure modes, measure results, communicate trade-offs, and guide a team toward a maintainable system.
 </Admonition>
