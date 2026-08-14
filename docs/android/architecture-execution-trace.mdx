@@ -1,0 +1,236 @@
+---
+id: architecture-execution-trace
+title: Execution trace — posting a notification
+---
+import Admonition from '@theme/Admonition';
+
+# Execution trace — posting a notification
+
+This page connects the layers through one feature: an order-tracking app posts “Your order has shipped.”
+
+## Product requirement
+
+When background synchronization confirms shipment, show a notification. Tapping it must open the correct order from a cold start. Duplicate sync attempts must not flood the user.
+
+That requirement touches more than `notify()`:
+
+```text
+durable work → network result → local transaction → notification request
+→ system service → System UI → tap intent → task/process/component → order reload
+```
+
+## Step 1: durable work receives the result
+
+:::warning Android-only example
+WorkManager, Room, and notification APIs need an Android project.
+:::
+
+```kotlin
+class OrderSyncWorker(
+    appContext: Context,
+    params: WorkerParameters,
+    private val repository: OrderRepository,
+    private val notifier: OrderNotifier
+) : CoroutineWorker(appContext, params) {
+
+    override suspend fun doWork(): Result {
+        val orderId = inputData.getString("orderId")
+            ?: return Result.failure()
+
+        return try {
+            val update = repository.refresh(orderId)
+            if (update.becameShipped) notifier.orderShipped(orderId)
+            Result.success()
+        } catch (error: IOException) {
+            Result.retry()
+        }
+    }
+}
+```
+
+### What this models
+
+- Missing input is a permanent request error, so retrying cannot repair it.
+- A temporary network failure can succeed later, so it returns `retry()`.
+- `becameShipped` represents a **state transition**, not merely “server currently says shipped.” This prevents a notification on every repeated sync.
+
+## Step 2: use a stable notification identity
+
+```kotlin
+class OrderNotifier(private val context: Context) {
+    fun orderShipped(orderId: String) {
+        val notificationId = orderId.hashCode()
+        val notification = buildOrderNotification(context, orderId)
+
+        NotificationManagerCompat.from(context)
+            .notify(notificationId, notification)
+    }
+}
+```
+
+Using a stable ID updates the same order notification. A random ID would create duplicates after retries.
+
+## Step 3: construct a safe tap action
+
+```kotlin
+val intent = Intent(context, OrderDetailsActivity::class.java)
+    .putExtra("orderId", orderId)
+    .setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+val pendingIntent = PendingIntent.getActivity(
+    context,
+    orderId.hashCode(),
+    intent,
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+)
+```
+
+Why pass only `orderId`?
+
+1. The complete Order may be stale by tap time.
+2. Large extras consume Binder transaction space.
+3. The app process may be new, so the destination must reload durable truth anyway.
+4. A stable identifier is easier to validate and authorize.
+
+`FLAG_IMMUTABLE` prevents the wrapped intent from being modified by another party when mutability is unnecessary.
+
+## Step 4: the framework crosses into Android
+
+When `notify()` runs:
+
+1. `NotificationManagerCompat` selects compatible behavior.
+2. Framework notification code prepares the request.
+3. Binder marshals the notification data and sends a transaction.
+4. The system notification service identifies the caller.
+5. Android applies channel, permission, user-setting, policy, and validity checks.
+6. Accepted state is coordinated with System UI.
+7. System UI renders the notification.
+
+Your Worker does not directly draw the notification shade. It submits a request to the authority that owns it.
+
+## Step 5: the user taps after process death
+
+Assume Android killed the order app after the notification was posted.
+
+```text
+tap
+ ↓
+Android resolves PendingIntent
+ ↓
+new app process may be created
+ ↓
+Application initialized
+ ↓
+OrderDetailsActivity created
+ ↓
+orderId read and validated
+ ↓
+ViewModel/repository reload durable order
+```
+
+Correct destination code does not rely on the old Worker, repository instance, or singleton still existing.
+
+```kotlin
+class OrderDetailsActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val orderId = intent.getStringExtra("orderId")
+            ?.takeIf { it.matches(Regex("ORD-[0-9]+")) }
+            ?: return finish()
+
+        viewModel.load(orderId)
+    }
+}
+```
+
+In a production app, navigation and ViewModel construction may look different, but the invariant remains: validate the identifier and reload state.
+
+## Failure matrix
+
+| Situation | Correct behavior |
+|---|---|
+| Notifications disabled | Work still saves shipment state; UI can show it later |
+| Network temporarily offline | Work retries with constraints/backoff policy |
+| Same transition processed twice | Stable transition/event logic prevents duplicate alert |
+| App process dead at tap | Android recreates entry point; repository reloads by ID |
+| Order was deleted before tap | Show “Order unavailable”; never crash on `!!` |
+| User signed out before tap | Route through authentication/authorization |
+| Two orders ship | Stable per-order IDs keep notifications distinct |
+
+## Practical mistakes
+
+### ✕ Avoid putting the whole domain object in the Intent
+
+```kotlin
+intent.putExtra("order", hugeParcelableOrder)
+```
+
+This creates stale-data, compatibility, and transaction-size risks.
+
+### ✓ Prefer a stable key
+
+```kotlin
+intent.putExtra("orderId", order.id)
+```
+
+Load current truth from the repository.
+
+### ✕ Avoid a random notification ID
+
+```kotlin
+manager.notify(Random.nextInt(), notification)
+```
+
+Retries create many visually identical notifications.
+
+### ✓ Prefer an identity derived from the logical event
+
+```kotlin
+manager.notify(orderId.hashCode(), notification)
+```
+
+For collision-sensitive systems, persist an explicit integer mapping rather than assuming hashes never collide.
+
+### ✕ Avoid treating notification delivery as business completion
+
+```kotlin
+notifier.orderShipped(id)
+markShipmentHandled(id)
+```
+
+The user may have disabled notifications. UI delivery and durable business state are different concerns.
+
+### ✓ Prefer durable state as the source of truth
+
+Save shipment state transactionally, then treat the notification as a best-effort presentation side effect with an explicit retry/idempotency strategy.
+
+## Architecture lessons from one feature
+
+| Android concept | Where it appeared |
+|---|---|
+| Process lifetime | Worker process and later Activity process need not be the same |
+| Binder | Notification request crosses to a system service |
+| Sandbox/identity | Android knows which UID submitted the notification |
+| System policy | Permission, channel, and user settings affect presentation |
+| Component lifecycle | Activity can be created from a cold notification tap |
+| Transaction limits | Pass a small ID rather than a large object |
+| App architecture | Repository provides durable, reloadable truth |
+| Distributed-systems thinking | Retries require idempotency and transition detection |
+
+<Admonition type="tip" title="Interview-ready answer">
+Posting a notification is a cross-process request, not direct UI drawing. The app sends a bounded payload through framework/Binder APIs to a system service, which applies identity and policy checks and coordinates System UI. I use stable IDs for idempotency, pass only a validated domain identifier in the tap intent, and make the destination reload durable state so it works after process death, sign-out, deletion, or repeated synchronization.
+</Admonition>
+
+## Design exercise
+
+Extend this design for chat messages:
+
+1. How will messages be grouped per conversation?
+2. What is the stable notification ID?
+3. What happens when the message is deleted before the tap?
+4. How will opening one conversation mark only its messages read?
+5. Which state is durable truth, and which state is presentation only?
+
+If your design survives retry, duplication, process death, and stale taps, it is moving from “API usage” toward architecture.
+

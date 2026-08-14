@@ -1,74 +1,171 @@
 ---
 id: system-architecture
-title: Android system architecture
+title: Android architecture — the big picture
 ---
 import Admonition from '@theme/Admonition';
 
-# Android system architecture
+# Android architecture — the big picture
 
-Think of Android as layers. Your app normally uses framework APIs; those APIs communicate with system services; native libraries and the kernel operate the device.
+## Start with one simple idea
+
+Your Android application does **not** control the whole device. It runs as one restricted Linux process and asks Android to perform privileged work on its behalf.
+
+For example, this looks like an ordinary Kotlin call:
+
+```kotlin
+notificationManager.notify(ORDER_READY_ID, notification)
+```
+
+But your app cannot directly place an item in the system notification shade. That UI belongs to Android. The call goes through framework code, crosses a process boundary, reaches a system service, passes validation and permission checks, and only then changes system-managed state.
+
+That is the reason Android architecture matters to an application engineer: a line that **looks local** may involve other processes, serialization, security checks, scheduling, hardware, and failure conditions.
+
+:::warning Android-only example
+Android framework code cannot run in Kotlin Playground. Each Android-only example is therefore labelled rather than linked to a broken playground.
+:::
+
+## The layers, in useful rather than academic language
 
 ```text
-Application
-  ↓ Android framework APIs
-System services (Activity, Package, Window, Notification, Location...)
-  ↓ Binder IPC
-Native services and libraries
-  ↓ system calls
-Linux kernel and hardware drivers
+┌─────────────────────────────────────────────────────────────┐
+│ Your application                                            │
+│ CheckoutActivity, ViewModel, repository, Compose UI         │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ calls Android APIs
+┌──────────────────────────────▼──────────────────────────────┐
+│ Application framework                                      │
+│ ActivityManager, NotificationManager, LocationManager       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ commonly Binder IPC
+┌──────────────────────────────▼──────────────────────────────┐
+│ System services and native services                         │
+│ activity/task, package, window, notification, camera        │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HALs, native APIs, syscalls
+┌──────────────────────────────▼──────────────────────────────┐
+│ Linux kernel and device drivers                             │
+│ processes, memory, scheduling, networking, camera driver    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Practical example: opening an Activity
+This is a **responsibility map**, not a promise that every operation travels through every box. Reading an in-memory string stays inside your process. Asking the camera service for a camera crosses processes and eventually reaches hardware-facing code.
+
+## What each layer contributes
+
+| Layer | Responsibility | What an app developer sees |
+|---|---|---|
+| App | Product behavior and UI | Kotlin/Java classes, resources, native libraries |
+| Framework | Stable, high-level Android API | `Activity`, `Context`, managers, Views, Compose integration |
+| System services | Central coordination and policy | Usually hidden behind a manager or Binder proxy |
+| ART and native runtime | Executes app bytecode/native code | GC, compilation, threads, JNI behavior |
+| HAL | Standard contract around device-specific hardware | Usually indirect access through framework APIs |
+| Kernel | Isolation and low-level resource control | Processes, UIDs, memory, scheduling, drivers |
+
+Android’s official architecture documentation explains that framework APIs communicate with system services and that hardware abstraction layers isolate higher layers from vendor implementations. See the [AOSP architecture overview](https://source.android.com/docs/core/architecture).
+
+## Scenario: opening an order-details screen
 
 ```kotlin
-startActivity(Intent(this, DetailsActivity::class.java))
+val intent = Intent(this, OrderDetailsActivity::class.java)
+    .putExtra("orderId", "ORD-42")
+
+startActivity(intent)
 ```
 
-This one line does not directly construct the destination Activity:
+### What actually happens
 
-1. Your app asks the framework to start an Activity.
-2. The request crosses into the system process through Binder.
-3. Activity/task rules and manifest declarations are checked.
-4. Android may start or reuse an app process.
-5. The framework creates the Activity and drives its lifecycle.
-6. Window management places its surface on screen.
+1. Your Activity calls a framework API.
+2. Framework code packages the request for Android’s activity/task manager.
+3. Binder transports the request to the system process.
+4. Android resolves the target against installed package and manifest information.
+5. Android checks whether the caller may launch it and applies task/back-stack rules.
+6. If the destination process does not exist, Android starts one.
+7. The app-side framework creates `OrderDetailsActivity`.
+8. Android calls lifecycle methods such as `onCreate()`.
+9. Window management coordinates the screen’s surface.
 
-## Application sandbox
+The important correction is this: `startActivity()` does **not** behave like `OrderDetailsActivity()` in ordinary Kotlin. Android owns component creation and lifecycle delivery.
 
-Every installed app normally receives its own Linux UID and private data area. The sandbox prevents ordinary direct access to another app's files and memory. Communication occurs through controlled mechanisms such as Binder, content providers, intents, and shared system APIs with permission checks.
+## Scenario: why the manifest matters
 
-## System services
+```xml
+<application ...>
+    <activity
+        android:name=".OrderDetailsActivity"
+        android:exported="false" />
+</application>
+```
+
+The class file alone is insufficient. Android needs installed metadata describing components, permissions, intent filters, and device requirements. For app components, this metadata comes from the merged manifest.
+
+`exported="false"` means other applications cannot directly launch this Activity. Your own app still can.
+
+## Local call or remote call?
 
 ```kotlin
-val notificationManager = getSystemService(NotificationManager::class.java)
+val text = order.title.uppercase()              // Local computation
+val info = packageManager.getApplicationInfo(  // May involve system service IPC
+    packageName,
+    0
+)
 ```
 
-The returned manager is often a client-side API backed by a service in another process. A method call may therefore include IPC, permission checks, serialization, scheduling, and remote failure.
+Do not memorize which internal implementation is remote in every Android release. Use the safer architectural rule: **framework APIs that coordinate global device state may cross a process boundary, so avoid needless repetition and never rely on implementation accidents.**
 
-<div className="practice-bad">
-
-**✕ Treat every framework call as a cheap local method**
+### ✕ Avoid repeated system queries in a hot loop
 
 ```kotlin
-repeat(10_000) { packageManager.getApplicationInfo(packageName, 0) }
+orders.forEach {
+    val appInfo = packageManager.getApplicationInfo(packageName, 0)
+    render(it, appInfo)
+}
 ```
-</div>
 
-<div className="practice-good">
-
-**✓ Understand the boundary and avoid repeated remote work**
+### ✓ Prefer obtaining stable information once
 
 ```kotlin
 val appInfo = packageManager.getApplicationInfo(packageName, 0)
-repeat(10_000) { use(appInfo) }
+orders.forEach { order -> render(order, appInfo) }
 ```
-</div>
 
-## Zygote
+The improvement is not merely “fewer function calls.” It avoids repeating work that can include synchronization, IPC, lookup, and allocation.
 
-Android starts app processes from a pre-initialized process called Zygote. Forking from a warmed process reduces startup cost and allows sharing of clean memory pages. Each application process then runs with its own UID, heap, runtime state, and application classes.
+## Architecture does not mean app architecture
+
+These terms are related but different:
+
+| Term | Question it answers |
+|---|---|
+| Android platform architecture | How does Android execute, isolate, and coordinate apps and hardware? |
+| Application architecture | How should this app organize UI, domain logic, and data? |
+| System design | How should the complete mobile/backend system satisfy scale, reliability, and security needs? |
+
+MVVM or Clean Architecture does not replace knowledge of process death, Binder, or lifecycle. It organizes your code **inside** the constraints created by the platform.
+
+## What you should remember before continuing
+
+- Your app is a guest in an OS-managed process.
+- Android components are system-controlled entry points; there is no app-owned `main()` lifecycle.
+- Framework managers can be client-side façades over services in another process.
+- Binder is the main IPC mechanism connecting those processes.
+- The kernel supplies isolation, processes, memory, scheduling, and drivers.
+- The HAL hides vendor-specific hardware details behind standard interfaces.
 
 <Admonition type="tip" title="Interview-ready answer">
-Android apps run above framework APIs and system services. Binder connects app processes to system services, while the Linux kernel provides process isolation, scheduling, memory, and drivers. An apparently simple framework call may cross a process boundary and perform permission or lifecycle work.
+Android is a layered Linux-based platform. Applications use framework APIs; many framework operations communicate through Binder with system services; native services and HALs connect the framework to device-specific functionality; and the Linux kernel provides process isolation, memory management, scheduling, networking, and drivers. This matters because an innocent-looking API call can cross processes and therefore has lifecycle, performance, security, and failure implications.
 </Admonition>
+
+## Check your understanding
+
+1. Why does `startActivity()` not directly construct an Activity?
+2. Which layer decides whether your app has camera permission?
+3. Why can repeated calls to a framework manager be more expensive than repeated calls to your own object?
+4. Explain the difference between Android platform architecture and MVVM.
+5. Trace the layers used when an app requests the current location.
+
+## Continue
+
+- [Framework APIs and system services](./framework-system-services)
+- [Linux processes, UIDs, and the application sandbox](./linux-sandbox)
+- [End-to-end execution trace: posting a notification](./architecture-execution-trace)
 

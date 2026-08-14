@@ -1,0 +1,168 @@
+---
+id: framework-system-services
+title: Framework APIs and system services
+---
+import Admonition from '@theme/Admonition';
+
+# Framework APIs and system services
+
+## Plain-English explanation
+
+A framework **manager** is the API your app talks to. A **system service** is often the privileged implementation coordinating that feature for the whole device.
+
+For notifications:
+
+```text
+Your code
+   ↓
+NotificationManager (app-facing framework object)
+   ↓ Binder
+NotificationManagerService (system-side authority)
+   ↓
+System UI and stored notification state
+```
+
+The manager gives app developers a convenient API. The service can make central decisions because it sees requests from every app.
+
+## Getting a manager
+
+:::warning Android-only example
+`Context` and Android system managers require an Android runtime.
+:::
+
+```kotlin
+val notificationManager =
+    context.getSystemService(NotificationManager::class.java)
+
+val connectivityManager =
+    context.getSystemService(ConnectivityManager::class.java)
+```
+
+`getSystemService()` does not mean “create a new operating-system service for my app.” It obtains the app-side access point for a service managed by Android.
+
+## Why Android centralizes these responsibilities
+
+Imagine every application directly controlling the speaker, camera, installed-package database, and notification shade. Apps would race, bypass permissions, and corrupt shared state.
+
+A system service can:
+
+- check the caller’s identity and permissions;
+- arbitrate a device-wide resource;
+- apply background-execution and user-policy rules;
+- keep shared state consistent;
+- notify multiple clients;
+- talk to native services or hardware-facing layers.
+
+## A practical camera scenario
+
+Suppose a video-call app opens the camera.
+
+1. App code calls a camera framework API.
+2. The request reaches the camera service over Binder.
+3. Android checks identity, permission, privacy state, and current availability.
+4. The camera service coordinates access because another app may already own the camera.
+5. Hardware-facing layers communicate with the vendor camera implementation.
+6. Results travel back through buffers/callbacks to the application.
+
+This explains why “camera unavailable” can occur even when the device physically has a camera and permission was granted. Permission is only one condition; availability and policy are separate conditions.
+
+## Binder makes remote calls look deceptively familiar
+
+```kotlin
+val enabled = notificationManager.areNotificationsEnabled()
+```
+
+Syntactically, this is a normal method call. Architecturally, the implementation may involve a proxy and a remote service.
+
+### Remote-call consequences
+
+| Consequence | Practical meaning |
+|---|---|
+| Data is marshalled | Arguments must be converted into a transportable form |
+| Calls have overhead | Avoid unnecessary calls in tight UI loops |
+| Caller identity exists | The service can enforce permissions against the real caller |
+| Processes can die | Robust APIs and clients must handle unavailable/dead peers |
+| Calls use threads | Blocking work can block the caller or consume Binder threads |
+| Payload is bounded | Large object graphs do not belong in transactions |
+
+## Practical example: query once, derive locally
+
+### ✕ Avoid
+
+```kotlin
+@Composable
+fun NotificationBanner(manager: NotificationManager) {
+    // Recomposition can execute this repeatedly.
+    if (!manager.areNotificationsEnabled()) {
+        Text("Enable notifications")
+    }
+}
+```
+
+The composable mixes rendering with a system query. Recomposition frequency is controlled by Compose, not by your assumption that this runs once.
+
+### ✓ Prefer
+
+```kotlin
+data class NotificationUiState(
+    val notificationsEnabled: Boolean
+)
+
+@Composable
+fun NotificationBanner(state: NotificationUiState) {
+    if (!state.notificationsEnabled) {
+        Text("Enable notifications")
+    }
+}
+```
+
+A lifecycle-aware owner can refresh the state at a meaningful time, such as when the screen resumes after the user visits Settings. Rendering remains a cheap, deterministic operation.
+
+## Permissions are checked at boundaries
+
+Declaring a permission in the manifest does not automatically grant every request. Depending on the API, Android can combine:
+
+- manifest declaration;
+- runtime user grant;
+- caller UID/package identity;
+- target SDK behavior;
+- foreground/background state;
+- AppOps or device policy;
+- feature-specific restrictions.
+
+This is why permission handling should model multiple outcomes: granted, denied, denied with rationale, permanently unavailable, restricted by policy, or temporarily unavailable.
+
+## Service lookup does not guarantee feature availability
+
+```kotlin
+val cameraManager = context.getSystemService(CameraManager::class.java)
+val cameraIds = cameraManager.cameraIdList
+```
+
+Obtaining `CameraManager` means the framework API exists. It does not guarantee the device has the lens your feature expects. Query capabilities and degrade gracefully.
+
+## Failure scenario: doing IPC on every frame
+
+A list scrolls at 60–120 frames per second. If binding each row triggers package-manager or content-provider queries, the UI thread can miss frame deadlines.
+
+The architectural correction is:
+
+```text
+system/remote source → repository/cache → immutable UI state → rendering
+```
+
+Do remote work away from the rendering hot path. Cache only for an appropriate lifetime; device state can change, so “cache forever” is not automatically correct.
+
+## Interview-ready answer
+
+<Admonition type="tip" title="Say it like this">
+A framework manager is usually the application-facing API, while a system service owns privileged or device-wide coordination. Many calls use Binder, so they may involve marshalling, permission checks, another process, and thread scheduling even though they look like local Kotlin calls. I keep repeated remote queries out of rendering loops, pass small payloads, model failures, and refresh cached state at a lifecycle-appropriate point.
+</Admonition>
+
+## Scenario questions
+
+1. Why should a Compose function avoid querying a system service during every recomposition?
+2. Camera permission is granted, but opening the camera fails. Name three possible reasons.
+3. When can caching a system-service result become incorrect?
+4. Why is a service better positioned than each app to coordinate shared hardware?
+

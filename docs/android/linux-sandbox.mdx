@@ -1,0 +1,180 @@
+---
+id: linux-sandbox
+title: Linux processes, UIDs, and the app sandbox
+---
+import Admonition from '@theme/Admonition';
+
+# Linux processes, UIDs, and the app sandbox
+
+## The rule that explains most Android security
+
+By default, Android assigns an installed application a Linux user ID (**UID**) and runs its code in an isolated process. Linux file permissions and Android’s SELinux policy use that identity to restrict what the process can access.
+
+Think of a UID as the operating system’s identity for access decisions. It is not your signed-in customer’s ID.
+
+```text
+Shopping app process       Bank app process
+UID 10234                  UID 10481
+private files A            private files B
+      │                           │
+      └── kernel denies direct access ──┘
+```
+
+The [official application sandbox documentation](https://source.android.com/docs/security/app-sandbox) describes this as kernel-level isolation based on unique app UIDs, strengthened by SELinux and other protections.
+
+## Process, application, package, and user are not synonyms
+
+| Word | Meaning |
+|---|---|
+| Package | Installed application identity such as `com.example.shop` |
+| Process | Running OS container with memory and threads |
+| UID | Linux identity used in access control |
+| App user/account | A product concept such as customer `rakesh@example.com` |
+
+A package can have no running process. A process can be killed and recreated while the package remains installed. Logging out the customer does not change the Linux UID.
+
+## What the sandbox protects
+
+By default, another ordinary app cannot directly:
+
+- read your internal files;
+- inspect your heap;
+- call arbitrary methods in your process;
+- use protected device capabilities without the required authorization.
+
+Apps communicate through explicit platform mechanisms such as Binder, intents, content providers, sockets, or files deliberately exposed through controlled APIs.
+
+## Internal storage example
+
+:::warning Android-only example
+`Context.filesDir` requires Android and cannot run in Kotlin Playground.
+:::
+
+```kotlin
+val sessionFile = File(context.filesDir, "session.json")
+sessionFile.writeText("{\"signedIn\":true}")
+```
+
+The file is placed in the application’s internal data area. Ordinary apps with different UIDs cannot simply open that path.
+
+### Important correction
+
+“Private from other apps” does **not** mean “safe for every secret in plain text.” Threats can include a compromised device, backups, accidental logging, memory exposure, or vulnerabilities inside your own app. Use Android Keystore-backed cryptography where the threat model requires it, and avoid storing sensitive tokens unnecessarily.
+
+## Permissions grant capabilities; they do not remove the sandbox
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
+
+Declaring and receiving camera permission allows access through the camera API under platform rules. It does not give your process unrestricted access to the camera driver or other applications’ memory.
+
+```text
+Sandbox = default isolation boundary
+Permission = controlled access to a specific capability
+```
+
+## Exported components are doors in your boundary
+
+```xml
+<activity
+    android:name=".internal.AdminActivity"
+    android:exported="false" />
+```
+
+An exported component can accept requests from outside your app, subject to its filters and permissions. Treat every externally reachable Activity, Service, Receiver, or Provider like a public API endpoint.
+
+### ✕ Avoid trusting external extras
+
+```kotlin
+val accountId = intent.getStringExtra("accountId")!!
+repository.deleteAccount(accountId)
+```
+
+Problems:
+
+1. A missing value crashes the component.
+2. A provided value is untrusted input.
+3. The caller may not be authorized to delete that account.
+
+### ✓ Prefer validation and authorization
+
+```kotlin
+val accountId = intent.getStringExtra("accountId")
+    ?.takeIf { it.matches(Regex("ACC-[0-9]+")) }
+    ?: return finish()
+
+if (!session.canDelete(accountId)) return finish()
+viewModel.requestDeletion(accountId)
+```
+
+Input validation checks whether the value has an allowed shape. Authorization checks whether this caller/user may perform the action. You usually need both.
+
+## Process isolation does not equal thread safety
+
+The sandbox separates processes. It does not prevent two threads inside your app from racing over the same mutable object.
+
+```kotlin
+var cartTotal = 0 // Still unsafe if multiple threads mutate it.
+```
+
+Use thread-confinement, immutable state, mutexes, atomic operations, or database transactions according to the problem. Security isolation and concurrency control solve different problems.
+
+## Multi-process applications: a costly exception
+
+An application can place a component in another process using manifest configuration, but that creates a separate heap and runtime state.
+
+Consequences include:
+
+- singleton objects are no longer single across the application;
+- in-memory caches diverge;
+- initialization runs in more than one process unless guarded;
+- communication requires IPC;
+- debugging and lifecycle reasoning become harder.
+
+### ✕ Incorrect assumption
+
+```kotlin
+object Session {
+    var token: String? = null
+}
+```
+
+In two processes, there are two `Session` objects. Updating one does not update the other.
+
+### ✓ Better decision
+
+Avoid extra processes unless a concrete platform/integration requirement justifies them. When required, make the data source explicit and process-safe—for example, a provider, Binder service, or durable store designed for the access pattern.
+
+## Process death is normal, not a sandbox failure
+
+Android may stop a process to reclaim memory. The installed app, task record, and durable data can remain. On return, Android creates a new process and reconstructs components.
+
+Therefore:
+
+```text
+Kotlin object lifetime ≠ screen history lifetime ≠ installed app lifetime
+```
+
+Never make correctness depend only on a singleton or `Application` field surviving.
+
+## Security scenario: receiving a file
+
+Suppose another app shares a receipt image with yours. Do not ask for its raw private path. It can grant temporary access to a `content://` URI. Your app reads through `ContentResolver`, and Android enforces the grant.
+
+This is the sandbox working as intended: controlled access to one resource without removing process isolation.
+
+## Interview-ready answer
+
+<Admonition type="tip" title="Say it like this">
+Android normally assigns each app a unique Linux UID and runs it in its own process. Linux permissions and SELinux enforce the application sandbox, so apps cannot directly read each other’s files or memory. Apps cross the boundary through controlled IPC and sharing mechanisms, with permission and identity checks. Exported components are public attack surfaces, and a second app process has a separate heap, so in-memory singletons are not shared.
+</Admonition>
+
+## Exercises
+
+1. Explain why a customer account ID is different from an Android UID.
+2. Does camera permission let an app directly access the device driver? Why not?
+3. Your app uses two processes and an `object` cache. Predict the bug.
+4. What checks should an exported “delete order” component perform?
+5. Why does internal storage still require a threat-model discussion?
+

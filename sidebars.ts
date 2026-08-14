@@ -102,6 +102,9 @@ const sidebars: SidebarsConfig = {
       items: [
         {type: 'doc', id: 'android/platform-build-overview', label: 'Chapter overview'},
         'android/system-architecture',
+        'android/framework-system-services',
+        'android/linux-sandbox',
+        'android/architecture-execution-trace',
         'android/processes-startup',
         'android/art-dex-runtime',
         'android/binder-ipc',
