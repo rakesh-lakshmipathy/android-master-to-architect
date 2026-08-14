@@ -1,0 +1,99 @@
+---
+id: data-enum-sealed
+title: Data classes, enums, and sealed types
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Data classes, enums, and sealed types
+
+## Data class: a value made from properties
+
+```kotlin
+data class UserUi(val id: Long, val name: String)
+```
+
+Kotlin generates `equals`, `hashCode`, `toString`, `componentN`, and `copy` from primary-constructor properties.
+
+```kotlin
+val renamed = UserUi(1, "Ada").copy(name = "Grace")
+```
+
+`copy` is shallow: nested mutable objects are shared unless copied separately.
+
+## Enum: fixed named constants of one shape
+
+```kotlin
+enum class SortOrder { NAME, DATE, SIZE }
+```
+
+Use an enum when every option has the same conceptual shape. Enums may have properties and functions.
+
+## Sealed type: fixed variants with different data
+
+```kotlin
+sealed interface Result<out T> {
+    data class Success<T>(val value: T) : Result<T>
+    data class Failure(val message: String) : Result<Nothing>
+    data object Loading : Result<Nothing>
+}
+```
+
+Each variant may carry different data. An exhaustive `when` forces every state to be handled.
+
+<PlaygroundLink code={`sealed interface Result<out T> {
+    data class Success<T>(val value: T) : Result<T>
+    data class Failure(val message: String) : Result<Nothing>
+    data object Loading : Result<Nothing>
+}
+
+fun describe(result: Result<String>): String = when (result) {
+    is Result.Success -> "Value: " + result.value
+    is Result.Failure -> "Error: " + result.message
+    Result.Loading -> "Loading"
+}
+
+fun main() {
+    println(describe(Result.Success("Android")))
+    println(describe(Result.Failure("Offline")))
+    println(describe(Result.Loading))
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> value, error, and loading descriptions.</div>
+
+## Choosing the type
+
+| Need | Choose |
+|---|---|
+| Store comparable values | Data class |
+| Fixed constants with the same shape | Enum |
+| Closed alternatives with different data | Sealed class/interface |
+| One shared no-data state | `data object` |
+
+<div className="practice-bad">
+
+**✕ Contradictory Boolean state**
+
+```kotlin
+data class UiState(val loading: Boolean, val error: Boolean, val data: String?)
+// loading=true, error=true, data!=null is possible
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Model only valid alternatives**
+
+```kotlin
+sealed interface UiState {
+    data object Loading : UiState
+    data class Content(val data: String) : UiState
+    data class Error(val message: String) : UiState
+}
+```
+</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+Data classes model values, enums model a fixed set of same-shaped constants, and sealed types model a closed set of differently shaped states. Sealed types make `when` exhaustive, so adding a new state reveals every consumer that must handle it.
+</Admonition>
+

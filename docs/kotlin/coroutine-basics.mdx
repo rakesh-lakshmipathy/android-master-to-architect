@@ -1,0 +1,79 @@
+---
+id: coroutine-basics
+title: Suspending functions and coroutine basics
+---
+import Admonition from '@theme/Admonition';
+
+# Suspending functions and coroutine basics
+
+## Suspension is not blocking
+
+```kotlin
+suspend fun loadUser(id: Long): User {
+    return api.user(id)
+}
+```
+
+`suspend` means the function may pause and resume. While it is suspended waiting for non-blocking I/O, the thread may run other work. It does not automatically move work to a background thread.
+
+## Launch versus async
+
+```kotlin
+coroutineScope {
+    launch { analytics.refresh() }       // result is Job
+    val user = async { api.user(42) }    // result is Deferred<User>
+    render(user.await())
+}
+```
+
+- `launch`: work whose useful result is completion; failures are propagated through its scope.
+- `async`: produces a value that is retrieved with `await()`.
+
+Do not use `async` merely to call `await()` immediately; that adds complexity without concurrency.
+
+## Sequential versus concurrent
+
+```kotlin
+val user = api.user(id)
+val orders = api.orders(id)
+```
+
+This is sequential. If operations are independent:
+
+```kotlin
+coroutineScope {
+    val user = async { api.user(id) }
+    val orders = async { api.orders(id) }
+    Dashboard(user.await(), orders.await())
+}
+```
+
+Both children are owned by `coroutineScope`. If one fails, the scope cancels the other and does not return until its children complete.
+
+<div className="practice-bad">
+
+**✕ Blocking inside a coroutine**
+
+```kotlin
+suspend fun load() = Thread.sleep(2_000)
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Suspend for delay or use an appropriate dispatcher for blocking APIs**
+
+```kotlin
+suspend fun waitWithoutBlocking() = delay(2_000)
+suspend fun readBlockingFile() = withContext(Dispatchers.IO) { file.readText() }
+```
+</div>
+
+<Admonition type="warning" title="Dependency-specific code">
+These snippets require `kotlinx.coroutines`; Android code also needs lifecycle-aware scopes. They are not linked to the dependency-free Playground configuration used by this site.
+</Admonition>
+
+<Admonition type="tip" title="Interview-ready answer">
+A suspending function may pause without blocking its thread, but `suspend` does not choose a dispatcher. `launch` returns a Job; `async` returns a Deferred result. Use concurrency only for independent work and keep children inside an owning scope.
+</Admonition>
+

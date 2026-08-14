@@ -1,0 +1,65 @@
+---
+id: hot-flows-channels
+title: StateFlow, SharedFlow, and channels
+---
+import Admonition from '@theme/Admonition';
+
+# StateFlow, SharedFlow, and channels
+
+## StateFlow: current state
+
+```kotlin
+private val _uiState = MutableStateFlow(UiState())
+val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+```
+
+StateFlow always has a current value, replays the latest value to new collectors, and conflates equal values using equality.
+
+Update atomically when based on old state:
+
+```kotlin
+_uiState.update { old -> old.copy(count = old.count + 1) }
+```
+
+## SharedFlow: broadcast values
+
+SharedFlow has configurable replay and buffer behavior. It is useful when several collectors should receive the same stream and there is no single current-state meaning.
+
+## Channel: send/receive queue
+
+A channel coordinates senders and receivers. Capacity controls whether send suspends, buffers, or replaces values. Closing a channel is meaningful; SharedFlow does not complete normally in the same way.
+
+## Events are a product decision
+
+Navigation, snackbars, and payments are not solved merely by choosing SharedFlow or Channel. Decide whether an event must survive collector absence, configuration change, process death, or duplicate delivery.
+
+<div className="practice-bad">
+
+**✕ Use state as a one-time event without consumption design**
+
+```kotlin
+data class UiState(val navigateToDetails: Boolean)
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Model durable destination state or explicit event semantics**
+
+```kotlin
+data class UiState(val selectedUserId: UserId?)
+```
+</div>
+
+## Comparison
+
+| Type | Has current value | Replays | Typical meaning |
+|---|---|---|---|
+| StateFlow | Yes | Latest one | Observable state |
+| SharedFlow | No required current value | Configurable | Broadcast values/events |
+| Channel | Queue semantics | Receive consumes | Point-to-point communication |
+
+<Admonition type="tip" title="Interview-ready answer">
+StateFlow represents current state and always has a value. SharedFlow broadcasts values with configurable replay/buffering. Channel provides send/receive queue semantics. Choose based on delivery guarantees, not naming convention.
+</Admonition>
+

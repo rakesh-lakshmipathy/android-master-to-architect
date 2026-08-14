@@ -1,0 +1,69 @@
+---
+id: java-migration
+title: Gradual migration and Android architecture
+---
+import Admonition from '@theme/Admonition';
+
+# Gradual Java-to-Kotlin migration
+
+Do not rewrite a stable application merely to change language. Migrate where normal product work creates value.
+
+## Practical sequence
+
+1. Establish Kotlin style, compiler settings, static analysis, and CI.
+2. Add Java nullability annotations at shared boundaries.
+3. Start new leaf features/utilities in Kotlin.
+4. Convert tests to learn behavior before production conversion.
+5. Convert a class when modifying it for a real feature or defect.
+6. Redesign the API when needed; do not preserve poor Java shape blindly.
+7. Track build time, defects, binary size, and team learning.
+
+## Boundary adapter
+
+```kotlin
+class LegacyUserAdapter(private val api: LegacyUserApi) {
+    fun user(id: Long): UserResult {
+        val raw = api.findUser(id) ?: return UserResult.NotFound
+        val name = raw.name?.trim()?.takeIf(String::isNotEmpty)
+            ?: return UserResult.Invalid
+        return UserResult.Success(User(id, name))
+    }
+}
+```
+
+The adapter contains platform types and legacy conventions. Modern Kotlin code receives explicit domain states.
+
+## Coroutines around callbacks
+
+Use `suspendCancellableCoroutine` only with correct cancellation and exactly-once resumption. Prefer library-supported adapters where available. Removing the listener on cancellation is essential when the API permits it.
+
+## Android build considerations
+
+- Mixed Kotlin/Java modules are normal.
+- KAPT/KSP, annotation processors, and generated-code order can affect build time.
+- Public APIs may require binary compatibility review.
+- R8 rules, reflection, serialization, and JNI may depend on generated names.
+- Measure incremental and clean builds during migration.
+
+<div className="practice-bad">
+
+**✕ Convert thousands of files in one unreviewable change**
+
+```text
+Risk: hidden behavior changes, painful rollback, merge conflicts, no learning loop
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Migrate vertical slices with tests and metrics**
+
+```text
+Feature change → characterize behavior → convert boundary → review Java callers → measure
+```
+</div>
+
+<Admonition type="tip" title="Architect takeaway">
+Migration is a risk-management program, not a syntax conversion. Protect interop boundaries, preserve behavior with tests, migrate incrementally, and measure outcomes.
+</Admonition>
+

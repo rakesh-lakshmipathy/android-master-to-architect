@@ -1,0 +1,79 @@
+---
+id: structured-concurrency
+title: Structured concurrency, cancellation, and errors
+---
+import Admonition from '@theme/Admonition';
+
+# Structured concurrency, cancellation, and errors
+
+Structured concurrency means child work belongs to a scope. The parent waits for children and cancellation/failure follows defined rules.
+
+## Cancellation is cooperative
+
+Suspending functions usually check cancellation. CPU loops must check explicitly:
+
+```kotlin
+while (isActive) {
+    processNextChunk()
+    yield()
+}
+```
+
+Never swallow `CancellationException`:
+
+```kotlin
+try {
+    repository.refresh()
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (error: Throwable) {
+    showError(error)
+}
+```
+
+## Cleanup
+
+```kotlin
+try {
+    resource.use { it.read() }
+} finally {
+    cleanup()
+}
+```
+
+Use `withContext(NonCancellable)` in `finally` only when cleanup itself must suspend. Keep it short; cancellation is requesting that work stop.
+
+## `coroutineScope` versus `supervisorScope`
+
+- `coroutineScope`: one child failure cancels sibling children and fails the scope.
+- `supervisorScope`: one child failure does not automatically cancel siblings; each failure must be handled deliberately.
+
+<div className="practice-bad">
+
+**✕ Detached work with unclear owner**
+
+```kotlin
+GlobalScope.launch { repository.sync() }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Use an owner matching the required lifetime**
+
+```kotlin
+viewModelScope.launch { repository.refresh() }
+// Durable deferrable work: schedule WorkManager instead.
+```
+</div>
+
+## Exception behavior
+
+- `launch` exposes uncaught failure through its parent/handler.
+- `async` stores failure and rethrows it on `await`, while parent cancellation rules still apply.
+- `CoroutineExceptionHandler` handles uncaught root-coroutine exceptions; it is not a replacement for local `try/catch` or result modeling.
+
+<Admonition type="tip" title="Interview-ready answer">
+Structured concurrency ties child coroutines to a parent scope. Cancellation is cooperative. `coroutineScope` fails all siblings when one child fails; `supervisorScope` isolates sibling failure but requires explicit handling. Never use GlobalScope for ordinary application work.
+</Admonition>
+

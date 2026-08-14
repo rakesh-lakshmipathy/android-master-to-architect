@@ -1,0 +1,60 @@
+---
+id: dispatchers-context
+title: Dispatchers and coroutine context
+---
+import Admonition from '@theme/Admonition';
+
+# Dispatchers and coroutine context
+
+A coroutine context carries elements such as its `Job`, dispatcher, name, and exception handler.
+
+## Dispatchers
+
+| Dispatcher | Typical use |
+|---|---|
+| `Main` | UI and main-thread-confined APIs |
+| `Default` | CPU-heavy calculations |
+| `IO` | Blocking file, database driver, or legacy network APIs |
+| `Unconfined` | Specialized cases/tests; not a general background dispatcher |
+
+Well-designed suspending functions are main-safe: callers may invoke them from Main because the function moves its own blocking work.
+
+```kotlin
+suspend fun readConfig(): Config = withContext(Dispatchers.IO) {
+    parse(file.readText())
+}
+```
+
+`withContext` suspends until the block finishes and then resumes in the caller's context.
+
+<div className="practice-bad">
+
+**✕ Caller must guess implementation needs**
+
+```kotlin
+viewModelScope.launch(Dispatchers.IO) {
+    val user = repository.user() // later updates UI from wrong context
+}
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Repository makes blocking implementation main-safe**
+
+```kotlin
+viewModelScope.launch {
+    val user = repository.user()
+    _uiState.value = user.toUi()
+}
+```
+</div>
+
+## Testing
+
+Inject dispatchers or a dispatcher provider so tests use `StandardTestDispatcher` and virtual time. Avoid hard-coding `Dispatchers.IO` deep inside code that must be deterministic in unit tests unless the boundary is intentionally hidden behind a fake.
+
+<Admonition type="tip" title="Interview-ready answer">
+The dispatcher decides where coroutine code executes; `suspend` alone does not. Main is for UI, Default for CPU work, and IO for blocking I/O. Suspending APIs should usually be main-safe and own their dispatcher switching.
+</Admonition>
+

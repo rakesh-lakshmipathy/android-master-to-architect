@@ -1,0 +1,73 @@
+---
+id: extensions-deep-dive
+title: Extension functions in depth
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Extension functions in depth
+
+Extensions are resolved statically using the declared receiver type.
+
+```kotlin
+open class Animal
+class Dog : Animal()
+
+fun Animal.label() = "Animal"
+fun Dog.label() = "Dog"
+
+val animal: Animal = Dog()
+println(animal.label()) // Animal
+```
+
+The runtime object is `Dog`, but the variable is declared as `Animal`; extension dispatch is not virtual.
+
+<PlaygroundLink code={`open class Animal
+class Dog : Animal()
+fun Animal.label() = "Animal"
+fun Dog.label() = "Dog"
+fun main() {
+    val animal: Animal = Dog()
+    val dog: Dog = Dog()
+    println(animal.label())
+    println(dog.label())
+}`} />
+
+## Nullable receiver
+
+```kotlin
+fun String?.orUnknown(): String = this?.takeIf { it.isNotBlank() } ?: "Unknown"
+```
+
+The extension handles null itself, so it can be called on a nullable variable.
+
+## Member wins over extension
+
+If a class member and visible extension have the same applicable signature, the member is called.
+
+## Scope extensions carefully
+
+Extensions are best when they express natural behavior of the receiver and have visible dependencies.
+
+<div className="practice-bad">
+
+**✕ Hidden side effect**
+
+```kotlin
+fun User.uploadAndTrackAndSave() { /* many hidden dependencies */ }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Focused transformation**
+
+```kotlin
+fun User.toAnalyticsProperties(): Map<String, String> = mapOf("id" to id.toString())
+```
+</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+Extensions improve call-site syntax but do not modify a class, access its private state, or provide virtual overriding. They are selected statically, and real members take priority.
+</Admonition>
+

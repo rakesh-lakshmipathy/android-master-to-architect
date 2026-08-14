@@ -1,0 +1,80 @@
+---
+id: sequences
+title: Sequences and performance
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Sequences and performance
+
+Collection chains are eager: each transformation normally produces its result before the next begins. A `Sequence` processes one element through the pipeline at a time.
+
+```kotlin
+val result = numbers.asSequence()
+    .filter { it % 2 == 0 }
+    .map { it * it }
+    .take(2)
+    .toList()
+```
+
+## Observe the order
+
+<PlaygroundLink code={`fun main() {
+    val result = (1..10).asSequence()
+        .filter { value ->
+            println("filter $value")
+            value % 2 == 0
+        }
+        .map { value ->
+            println("map $value")
+            value * value
+        }
+        .take(2)
+        .toList()
+    println("result=$result")
+}`} />
+
+The sequence stops after finding two results. It does not process all ten inputs.
+
+## When sequences help
+
+- Large transformation pipelines
+- Early termination such as `first`, `take`, or `any`
+- Generating potentially unlimited values
+- Avoiding several intermediate collections
+
+## When they may not help
+
+- Tiny collections
+- One simple operation
+- Pipelines where every item must be processed anyway
+- Hot code where per-element iterator/lambda overhead outweighs saved allocations
+
+<div className="practice-bad">
+
+**✕ Assume sequence is always faster**
+
+```kotlin
+listOf(1, 2, 3).asSequence().map { it * 2 }.toList()
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Choose after understanding the workload**
+
+```kotlin
+val firstTwo = hugeList.asSequence()
+    .filter(::isEligible)
+    .map(::toUi)
+    .take(2)
+    .toList()
+```
+</div>
+
+Sequences are synchronous, not coroutines and not background work.
+
+<Admonition type="tip" title="Interview-ready answer">
+Collections evaluate each stage eagerly; sequences evaluate lazily element by element. Sequences can avoid intermediate collections and stop early, but they add iteration overhead. Measure when performance matters.
+</Admonition>
+

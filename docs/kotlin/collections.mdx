@@ -1,0 +1,97 @@
+---
+id: collections
+title: Collections
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Collections
+
+## List, Set, and Map
+
+- `List`: ordered values; duplicates allowed.
+- `Set`: unique values.
+- `Map`: keys mapped to values.
+
+```kotlin
+val names = listOf("Ada", "Ada", "Grace")
+val unique = names.toSet()
+val ages = mapOf("Ada" to 36, "Grace" to 85)
+```
+
+Read-only interfaces prevent mutation through that reference, but do not guarantee the underlying object can never change.
+
+## Transformations
+
+```kotlin
+val result = numbers
+    .filter { number -> number % 2 == 0 }
+    .map { number -> number * number }
+```
+
+For `[1,2,3,4]`, `filter` produces `[2,4]`; `map` produces `[4,16]`.
+
+<PlaygroundLink code={`fun main() {
+    val numbers = listOf(1, 2, 3, 4)
+    val result = numbers
+        .filter { number -> number % 2 == 0 }
+        .map { number -> number * number }
+    println(result)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `[4, 16]`.</div>
+
+## Useful operations
+
+| Operation | Meaning |
+|---|---|
+| `map` | One output per input |
+| `mapNotNull` | Transform and drop null results |
+| `flatMap` | Transform each input into several outputs, then flatten |
+| `associateBy` | Build a map using a selected key |
+| `groupBy` | Group all items under keys |
+| `partition` | Split into matching and non-matching lists |
+| `fold` | Accumulate one result |
+
+```kotlin
+val total = listOf(10, 20, 30).fold(0) { sum, value -> sum + value }
+```
+
+## Mutation and aliases
+
+```kotlin
+val mutable = mutableListOf("A")
+val readOnly: List<String> = mutable
+mutable += "B"
+println(readOnly) // [A, B]
+```
+
+The read-only reference cannot mutate the list, but it observes changes made through the mutable alias.
+
+<div className="practice-bad">
+
+**✕ Expose internal mutable state**
+
+```kotlin
+class Cart { val items = mutableListOf<Item>() }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Keep mutation private**
+
+```kotlin
+class Cart {
+    private val mutableItems = mutableListOf<Item>()
+    val items: List<Item> get() = mutableItems.toList()
+}
+```
+</div>
+
+Returning a copy gives stronger protection but costs allocation. Choose based on ownership and performance requirements.
+
+<Admonition type="tip" title="Interview-ready answer">
+Kotlin separates read-only and mutable collection interfaces. Read-only does not necessarily mean deeply immutable. Collection operators are expressive, but understand whether they create new collections, short-circuit, or expose mutable aliases.
+</Admonition>
+

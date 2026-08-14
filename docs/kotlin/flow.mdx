@@ -1,0 +1,67 @@
+---
+id: flow
+title: Flow
+---
+import Admonition from '@theme/Admonition';
+
+# Flow
+
+A `Flow<T>` describes asynchronous values over time. A cold flow normally starts its producer separately for each collector.
+
+```kotlin
+val numbers = flow {
+    emit(1)
+    emit(2)
+}
+```
+
+Nothing runs until collection starts.
+
+## Operators
+
+```kotlin
+repository.search(query)
+    .map { users -> users.map(User::toUi) }
+    .distinctUntilChanged()
+    .catch { error -> emit(emptyList()) }
+    .collect { users -> render(users) }
+```
+
+`catch` handles upstream exceptions, not exceptions thrown after it by the collector.
+
+## `flowOn`
+
+`flowOn(Dispatchers.IO)` changes the context of upstream operations. It does not move downstream collection after the operator.
+
+## Latest versus every value
+
+- `collect`: process every emission sequentially.
+- `collectLatest`: cancel the previous collector block when a new value arrives.
+- `mapLatest`/`flatMapLatest`: cancel obsolete transformations/inner streams, useful for search queries.
+
+<div className="practice-bad">
+
+**✕ Start a new search without cancelling the old one**
+
+```kotlin
+queryFlow.collect { query -> launch { search(query) } }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Keep only the latest query**
+
+```kotlin
+queryFlow.flatMapLatest { query -> repository.search(query) }
+```
+</div>
+
+## Completion and cancellation
+
+Flow follows coroutine cancellation. Use `onCompletion` for completion observation, but inspect its cause: normal completion, failure, and cancellation are different.
+
+<Admonition type="tip" title="Interview-ready answer">
+Flow is a cold asynchronous stream by default. Operators run in order, `flowOn` affects upstream context, `catch` catches upstream failures, and latest operators cancel obsolete work. Collection must be lifecycle-aware in Android UI.
+</Admonition>
+

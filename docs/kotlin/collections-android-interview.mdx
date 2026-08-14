@@ -1,0 +1,44 @@
+---
+id: collections-android-interview
+title: Collections in Android and interviews
+---
+import Admonition from '@theme/Admonition';
+
+# Android scenarios, corner cases, and interviews
+
+## UI state
+
+Expose `List<UiItem>`, not `MutableList`, from ViewModel state. Replace the list when state changes so Compose and diffing can observe a new value.
+
+## Paging and large data
+
+Do not load millions of records merely to run an elegant collection chain. Filter in the database/network where possible, page results, and measure transformations.
+
+## Corner cases
+
+- `first()` throws on empty collections; `firstOrNull()` returns null.
+- `associateBy` keeps the last value when duplicate keys occur.
+- `groupBy` stores lists for all groups and may allocate heavily.
+- Hash-based collections require stable `equals`/`hashCode` while entries are stored.
+- Sequences are single-pass when backed by an iterator or generator; do not assume replayability.
+- Mutable collections shared across coroutines require ownership or synchronization.
+
+## Interview questions
+
+<details><summary>Read-only versus immutable?</summary><p>A read-only reference exposes no mutation methods, but another alias may still mutate the same object. Immutability means the observable value cannot change.</p></details>
+
+<details><summary>Why is MutableList invariant?</summary><p>It both returns and accepts elements. Treating MutableList&lt;Dog&gt; as MutableList&lt;Animal&gt; would allow inserting a Cat.</p></details>
+
+<details><summary>Sequence versus Flow?</summary><p>A sequence is synchronous lazy iteration. Flow is an asynchronous stream that supports suspension and coroutine cancellation.</p></details>
+
+## Exercises
+
+1. Compare `groupBy` and `associateBy` with duplicate keys.
+2. Demonstrate a read-only list changing through a mutable alias.
+3. Build a producer using `out` and a consumer using `in`.
+4. Create an observable property delegate.
+5. Design a DSL that requires essential values outside the receiver block.
+
+<Admonition type="tip" title="Architect takeaway">
+Choose collections based on ownership, size, ordering, uniqueness, and update behavior. Expressive chains are valuable only when their allocations and execution remain understandable.
+</Admonition>

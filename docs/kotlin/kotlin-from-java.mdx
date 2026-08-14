@@ -1,0 +1,77 @@
+---
+id: kotlin-from-java
+title: Calling Kotlin from Java
+---
+import Admonition from '@theme/Admonition';
+
+# Calling Kotlin from Java
+
+## File functions
+
+```kotlin
+// File: Formatters.kt
+fun formatName(name: String): String = name.trim()
+```
+
+Java normally calls `FormattersKt.formatName(name)`. `@file:JvmName("Formatters")` changes the generated class name.
+
+## Defaults and overloads
+
+Java cannot omit Kotlin default arguments directly.
+
+```kotlin
+@JvmOverloads
+fun greet(name: String, prefix: String = "Hello") = "$prefix, $name"
+```
+
+`@JvmOverloads` generates Java overloads by removing trailing default parameters. Use it only where Java ergonomics justify the expanded API.
+
+## Static-looking members
+
+```kotlin
+class Factory {
+    companion object {
+        @JvmStatic fun create(): Factory = Factory()
+    }
+}
+```
+
+Java may call `Factory.create()`. Without `@JvmStatic`, it calls through `Factory.Companion`.
+
+## Fields and names
+
+- `@JvmField`: expose a property as a field when appropriate.
+- `@JvmName`: change generated JVM method name, often to resolve signature clashes.
+- `@Throws(IOException::class)`: declare checked exceptions for Java callers.
+
+## Function types from Java
+
+Kotlin function types appear as `FunctionN` interfaces to Java and can be awkward. For public Java-facing callbacks, a named `fun interface` may be clearer.
+
+```kotlin
+fun interface UserCallback { fun onUser(user: User) }
+```
+
+<div className="practice-bad">
+
+**✕ Design only for Kotlin, then expose accidentally**
+
+```kotlin
+fun load(callback: (Result<User>) -> Unit)
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Review the generated Java API**
+
+```kotlin
+fun interface LoadCallback { fun onResult(result: UserResult) }
+fun load(callback: LoadCallback)
+```
+</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+Kotlin is callable from Java, but defaults, companions, file functions, function types, checked exceptions, and name mangling affect ergonomics. Use JVM annotations deliberately and test the API from Java source.
+</Admonition>
+

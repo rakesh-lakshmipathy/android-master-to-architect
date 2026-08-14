@@ -1,0 +1,76 @@
+---
+id: java-from-kotlin
+title: Calling Java from Kotlin
+---
+import Admonition from '@theme/Admonition';
+
+# Calling Java from Kotlin
+
+## Platform types
+
+Java without nullability annotations may return a platform type, shown conceptually as `String!`. Kotlin lets you treat it as nullable or non-null, so responsibility moves to you.
+
+```java
+public String findName() { return null; }
+```
+
+```kotlin
+val unsafe: String = javaApi.findName()  // may throw at runtime
+val safe: String? = javaApi.findName()
+```
+
+Add recognized Java nullability annotations and keep platform types from spreading beyond the interop boundary.
+
+## Java getters become properties
+
+`user.getName()`/`user.setName(value)` may be used as `user.name` when they follow JavaBean conventions.
+
+## SAM conversion
+
+For a Java interface with one abstract method:
+
+```java
+interface OnCompleteListener { void onComplete(boolean success); }
+```
+
+Kotlin can pass a lambda:
+
+```kotlin
+api.setListener { success -> println(success) }
+```
+
+## Checked exceptions
+
+Kotlin does not force callers to catch Java checked exceptions. They still occur at runtime.
+
+```kotlin
+val text = try {
+    javaReader.read()
+} catch (error: IOException) {
+    "Fallback"
+}
+```
+
+<div className="practice-bad">
+
+**✕ Trust an unannotated Java return as non-null**
+
+```kotlin
+val length = legacyApi.name.length
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Normalize at the boundary**
+
+```kotlin
+val name = legacyApi.name?.takeIf { it.isNotBlank() }
+    ?: return InvalidLegacyUser
+```
+</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+Java APIs without nullability annotations create platform types. Kotlin relaxes compile-time checks for them, so validate immediately and convert to explicit nullable/non-null Kotlin types. Java SAM interfaces accept lambdas, and checked exceptions remain runtime concerns even though Kotlin does not enforce catches.
+</Admonition>
+

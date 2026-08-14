@@ -1,0 +1,48 @@
+---
+id: classes-android-interview
+title: Android modeling and interviews
+---
+import Admonition from '@theme/Admonition';
+
+# Android modeling, corner cases, and interviews
+
+## Practical Android state
+
+```kotlin
+sealed interface ProfileUiState {
+    data object Loading : ProfileUiState
+    data class Content(val user: UserUi) : ProfileUiState
+    data class Error(val message: String, val retryable: Boolean) : ProfileUiState
+}
+```
+
+**Android/Compose-only use:** a composable can use an exhaustive `when` and access branch-specific data through smart casts.
+
+## Corner cases
+
+- Base constructor calls to open members can execute before subclass initialization; avoid calling overridable members during construction.
+- A data class compares only primary-constructor properties automatically.
+- `copy()` does not deeply copy mutable lists or nested objects.
+- Enum names persisted to disk become a compatibility contract; map them explicitly when names may change.
+- Sealed hierarchies are closed to known direct subclasses, but public API/module boundaries still need deliberate design.
+- Objects do not replace persistence; Android process death clears in-memory singleton state.
+
+## Interview questions
+
+<details><summary>What is the difference between `init` and a constructor?</summary><p>The constructor defines how parameters enter object creation. `init` blocks execute initialization and validation as part of the primary-constructor path, in source order with property initializers.</p></details>
+
+<details><summary>Why are Kotlin classes final by default?</summary><p>Inheritance must be intentional. Final-by-default prevents accidental overrides and makes behavior easier to reason about.</p></details>
+
+<details><summary>Data class versus sealed class?</summary><p>A data class models one value shape. A sealed hierarchy models one of several known variants, each of which may contain different data.</p></details>
+
+## Exercises
+
+1. Create a `Money` class that rejects negative minor units.
+2. Model download states using a sealed interface.
+3. Demonstrate that data-class `copy()` is shallow with a mutable list.
+4. Replace a global mutable object with an injected state holder.
+5. Explain whether an enum name is safe to persist forever.
+
+<Admonition type="tip" title="Architect takeaway">
+Choose a type form that prevents invalid states. Prefer constructor injection and composition, keep mutable ownership narrow, and remember that in-memory objects disappear on Android process death.
+</Admonition>

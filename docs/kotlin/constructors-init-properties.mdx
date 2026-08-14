@@ -1,0 +1,115 @@
+---
+id: constructors-init-properties
+title: Constructors, init, and properties
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Constructors, `init`, and properties
+
+## Primary constructor
+
+```kotlin
+class User(val id: Long, var name: String)
+```
+
+`id` and `name` are constructor parameters and properties because they use `val`/`var`. `id` cannot be reassigned; `name` can.
+
+## `init`: run validation during construction
+
+```kotlin
+class Percentage(val value: Int) {
+    init {
+        require(value in 0..100) { "Percentage must be 0..100" }
+    }
+}
+```
+
+Order of construction follows source order: property initializer, `init` block, next property initializer, next `init` block.
+
+<PlaygroundLink code={`class Example(input: String) {
+    val first = input.also { println("1. first property") }
+    init { println("2. first init") }
+    val length = input.length.also { println("3. second property") }
+    init { println("4. second init") }
+}
+
+fun main() {
+    Example("Android")
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> lines `1` through `4` in source order.</div>
+
+## Secondary constructor
+
+```kotlin
+class User(val id: Long, val name: String) {
+    constructor(id: Long) : this(id, "Unknown")
+}
+```
+
+Every secondary constructor must eventually delegate to the primary constructor. Prefer default arguments or named factory functions when they explain intent better.
+
+## Custom getter and setter
+
+```kotlin
+class Temperature(celsius: Double) {
+    var celsius: Double = celsius
+        set(value) {
+            require(value >= -273.15)
+            field = value
+        }
+
+    val fahrenheit: Double
+        get() = celsius * 9 / 5 + 32
+}
+```
+
+`field` refers to the property's backing field. Calling `celsius = value` inside its setter would call the setter again forever.
+
+<PlaygroundLink code={`class Temperature(celsius: Double) {
+    var celsius: Double = celsius
+        set(value) {
+            require(value >= -273.15)
+            field = value
+        }
+    val fahrenheit: Double get() = celsius * 9 / 5 + 32
+}
+
+fun main() {
+    val temperature = Temperature(0.0)
+    println(temperature.fahrenheit)
+    temperature.celsius = 100.0
+    println(temperature.fahrenheit)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `32.0`, followed by `212.0`.</div>
+
+## `lateinit` and `lazy`
+
+- `lateinit var` promises a non-null property will be assigned before reading. Reading too early throws `UninitializedPropertyAccessException`.
+- `val by lazy { ... }` computes once on first access and then stores the result.
+
+<div className="practice-bad">
+
+**✕ Avoid lifecycle-unsafe `lateinit` access**
+
+```kotlin
+lateinit var token: String
+println(token) // crashes if assignment has not happened
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Prefer constructor injection when the value is required**
+
+```kotlin
+class ApiClient(private val token: String)
+```
+</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+The primary constructor defines the main creation path. Property initializers and `init` blocks execute in source order. Secondary constructors delegate to the primary constructor. Use `lateinit` only when lifecycle-driven delayed assignment is unavoidable; use `lazy` for one-time computation on first access.
+</Admonition>
+

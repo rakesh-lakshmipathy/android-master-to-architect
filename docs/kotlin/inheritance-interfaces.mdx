@@ -1,0 +1,93 @@
+---
+id: inheritance-interfaces
+title: Inheritance and interfaces
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Inheritance and interfaces
+
+Kotlin classes and members are final by default. Mark them `open` only when extension is part of the design.
+
+```kotlin
+open class Animal(open val name: String) {
+    open fun sound() = "Unknown"
+}
+
+class Dog(override val name: String) : Animal(name) {
+    override fun sound() = "Woof"
+}
+```
+
+<PlaygroundLink code={`open class Animal(open val name: String) {
+    open fun sound() = "Unknown"
+}
+class Dog(override val name: String) : Animal(name) {
+    override fun sound() = "Woof"
+}
+fun main() {
+    val animal: Animal = Dog("Pixel")
+    println(animal.name + ": " + animal.sound())
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Pixel: Woof`. Runtime dispatch selects `Dog.sound()`.</div>
+
+## Abstract class versus interface
+
+```kotlin
+interface Retryable {
+    fun retry()
+    fun canRetry(attempt: Int): Boolean = attempt < 3
+}
+
+abstract class BaseWorker(protected val logger: Logger) {
+    abstract fun execute()
+    fun logStart() = logger.log("Starting")
+}
+```
+
+- Interface: describes a capability; a class may implement several.
+- Abstract class: shares state, protected implementation, and one inheritance relationship.
+
+## Interface conflict
+
+```kotlin
+interface A { fun label() = "A" }
+interface B { fun label() = "B" }
+
+class Combined : A, B {
+    override fun label(): String = super<A>.label() + super<B>.label()
+}
+```
+
+Kotlin forces an explicit decision when two inherited defaults conflict.
+
+<div className="practice-bad">
+
+**✕ Deep inheritance for code reuse**
+
+```kotlin
+open class BaseRepository
+open class CachedRepository : BaseRepository()
+class UserRepository : CachedRepository()
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Compose explicit collaborators**
+
+```kotlin
+class UserRepository(
+    private val api: UserApi,
+    private val cache: UserCache,
+)
+```
+</div>
+
+Composition keeps dependencies visible and avoids inheriting behavior a subtype does not truly represent.
+
+<Admonition type="tip" title="Interview-ready answer">
+Kotlin is final by default. Inheritance models a real “is-a” relationship; interfaces model capabilities; abstract classes can share state and implementation. Prefer composition for reusable collaborators because it keeps dependencies and replacement boundaries explicit.
+</Admonition>
+

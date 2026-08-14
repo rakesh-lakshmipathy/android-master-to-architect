@@ -1,0 +1,57 @@
+---
+id: coroutines-android-interview
+title: Lifecycle, testing, and interviews
+---
+import Admonition from '@theme/Admonition';
+
+# Lifecycle-aware concurrency, testing, and interviews
+
+## Android ownership
+
+- `viewModelScope`: screen/business work that should survive configuration change but stop when ViewModel clears.
+- `lifecycleScope`: work owned by a Lifecycle.
+- `repeatOnLifecycle`: start collection when active and cancel it when below the target state.
+- WorkManager: durable deferrable work that must survive process death/reboot constraints.
+
+```kotlin
+viewLifecycleOwner.lifecycleScope.launch {
+    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.uiState.collect(::render)
+    }
+}
+```
+
+**Android-only:** requires AndroidX lifecycle and coroutines.
+
+## Testing
+
+Use `runTest`, test dispatchers, virtual time, fakes, and libraries such as Turbine where appropriate. Assert emissions, cancellation, errors, and absence of unwanted values—not merely the happy path.
+
+## Corner cases
+
+- Rapid repeated clicks may start duplicate jobs; disable, debounce, serialize, or make operations idempotent.
+- `finally` runs during cancellation, but suspending cleanup needs careful `NonCancellable` use.
+- `StateFlow` may suppress equal states; immutable equality must reflect visible changes.
+- Buffer overflow strategy can drop events.
+- A caught exception may accidentally convert cancellation into an error state.
+- Process death is not coroutine cancellation; in-memory state disappears entirely.
+
+## Interview questions
+
+<details><summary>Does suspend mean background thread?</summary><p>No. It means the function may suspend. Execution context comes from the coroutine context/dispatcher.</p></details>
+
+<details><summary>StateFlow versus SharedFlow?</summary><p>StateFlow always represents a current value and replays it. SharedFlow broadcasts values with configurable replay and buffering and need not have a current value.</p></details>
+
+<details><summary>Why structured concurrency?</summary><p>It makes lifetime, cancellation, failure, and completion follow a parent-child structure instead of leaving detached work.</p></details>
+
+## Exercises
+
+1. Convert sequential independent calls to `async` inside `coroutineScope`.
+2. Demonstrate cancellation of a CPU loop with `isActive`.
+3. Design search using debounce and `flatMapLatest`.
+4. Decide delivery guarantees for a snackbar versus payment confirmation.
+5. Test a StateFlow ViewModel with virtual time.
+
+<Admonition type="tip" title="Architect takeaway">
+Concurrency correctness comes from ownership, cancellation, error policy, dispatcher choice, and delivery guarantees. Coroutine syntax alone does not provide those decisions.
+</Admonition>

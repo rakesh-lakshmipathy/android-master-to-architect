@@ -1,0 +1,23 @@
+---
+id: coroutines-overview
+title: Coroutines and reactive streams
+---
+import Admonition from '@theme/Admonition';
+
+# Coroutines, structured concurrency, Flow, StateFlow, SharedFlow, and channels
+
+<Admonition type="tip" title="Simple idea">
+A coroutine is cancellable work that may suspend without blocking its thread. Structured concurrency gives that work an owner. Flow represents asynchronous values over time; StateFlow stores current state; SharedFlow broadcasts events/values; channels send values between coroutines.
+</Admonition>
+
+## Chapter pages
+
+1. [Suspending functions and coroutine basics](./coroutine-basics)
+2. [Structured concurrency, cancellation, and errors](./structured-concurrency)
+3. [Dispatchers and coroutine context](./dispatchers-context)
+4. [Flow](./flow)
+5. [StateFlow, SharedFlow, and channels](./hot-flows-channels)
+6. [Lifecycle, testing, and interviews](./coroutines-android-interview)
+
+Examples in this chapter use `kotlinx.coroutines`. Android examples also require AndroidX lifecycle/ViewModel libraries, so dependency-specific snippets are labeled rather than linked to a dependency-free Playground.
+

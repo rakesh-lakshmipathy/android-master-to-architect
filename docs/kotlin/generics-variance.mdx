@@ -1,0 +1,86 @@
+---
+id: generics-variance
+title: Generics and variance
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Generics and variance
+
+Generics reuse logic while keeping types checked.
+
+```kotlin
+class Box<T>(val value: T)
+val text: Box<String> = Box("Android")
+```
+
+## Constraints
+
+```kotlin
+fun <T : Comparable<T>> maximum(a: T, b: T): T = if (a >= b) a else b
+```
+
+`T` must implement `Comparable<T>`.
+
+## Why variance exists
+
+If `Dog` is an `Animal`, should `Box<Dog>` be a `Box<Animal>`? It depends on how the box uses `T`.
+
+### `out T`: producer
+
+```kotlin
+interface Source<out T> { fun next(): T }
+```
+
+A source only returns `T`, so `Source<Dog>` can safely be used as `Source<Animal>`.
+
+### `in T`: consumer
+
+```kotlin
+interface Sink<in T> { fun accept(value: T) }
+```
+
+A sink that accepts every `Animal` can safely be used where a `Sink<Dog>` is needed.
+
+Remember **producer out, consumer in**.
+
+<PlaygroundLink code={`open class Animal(val name: String)
+class Dog(name: String) : Animal(name)
+
+interface Source<out T> { fun next(): T }
+class DogSource : Source<Dog> { override fun next() = Dog("Pixel") }
+
+interface Sink<in T> { fun accept(value: T) }
+class AnimalSink : Sink<Animal> {
+    override fun accept(value: Animal) = println(value.name)
+}
+
+fun main() {
+    val animals: Source<Animal> = DogSource()
+    println(animals.next().name)
+    val dogSink: Sink<Dog> = AnimalSink()
+    dogSink.accept(Dog("Milo"))
+}`} />
+
+## Invariance and mutable lists
+
+`MutableList<Dog>` is not a `MutableList<Animal>`. If it were, someone could insert a `Cat` into the dog list.
+
+## Star projection
+
+`List<*>` means a list whose element type is unknown. Reading yields `Any?`; adding is not safe because the actual element type is unknown.
+
+<div className="practice-bad">
+
+**✕ Unsafe conceptual assignment**
+
+```kotlin
+// val animals: MutableList<Animal> = mutableListOf<Dog>()
+// animals.add(Cat()) would corrupt the dog list
+```
+</div>
+
+<Admonition type="tip" title="Interview-ready answer">
+Generics preserve type safety in reusable code. `out` is covariance for producers, `in` is contravariance for consumers, and mutable containers are usually invariant because they both produce and consume values.
+</Admonition>
+

@@ -1,0 +1,87 @@
+---
+id: objects-companions
+title: Objects and companion objects
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Objects and companion objects
+
+## Object declaration: one shared instance
+
+```kotlin
+object AppClock {
+    fun nowMillis(): Long = System.currentTimeMillis()
+}
+```
+
+The object is created lazily on first access and provides one instance in that class loader.
+
+## Companion object: class-related behavior
+
+```kotlin
+class UserId private constructor(val value: Long) {
+    companion object {
+        fun parse(raw: String): UserId? = raw.toLongOrNull()?.let(::UserId)
+    }
+}
+```
+
+Call it as `UserId.parse("42")`. A companion is an object associated with the class; it is not a Java `static` block, although JVM annotations can expose static-looking methods to Java.
+
+## Object expression: anonymous implementation
+
+```kotlin
+interface ClickListener { fun onClick(id: Long) }
+
+val listener = object : ClickListener {
+    override fun onClick(id: Long) = println("Clicked $id")
+}
+```
+
+<PlaygroundLink code={`interface ClickListener { fun onClick(id: Long) }
+val listener = object : ClickListener {
+    override fun onClick(id: Long) = println("Clicked $id")
+}
+fun main() {
+    listener.onClick(42)
+}`} />
+
+<div className="expected-output"><strong>Expected:</strong> `Clicked 42`.</div>
+
+## Data object
+
+```kotlin
+sealed interface LoadState {
+    data object Loading : LoadState
+}
+```
+
+`data object` gives a singleton useful generated `toString` and singleton-friendly equality behavior, making it suitable for no-data states.
+
+<div className="practice-bad">
+
+**✕ Global mutable singleton state**
+
+```kotlin
+object Session { var token: String? = null }
+```
+</div>
+
+<div className="practice-good">
+
+**✓ Inject an owned state holder**
+
+```kotlin
+class SessionStore(private val storage: TokenStorage) {
+    fun token(): String? = storage.read()
+}
+```
+</div>
+
+Global mutable objects make tests, concurrency, reset behavior, and process recreation harder to reason about.
+
+<Admonition type="tip" title="Interview-ready answer">
+An object declaration creates one shared instance, a companion object holds class-related factories or constants, and an object expression creates an anonymous instance. Avoid using objects as uncontrolled global mutable state.
+</Admonition>
+

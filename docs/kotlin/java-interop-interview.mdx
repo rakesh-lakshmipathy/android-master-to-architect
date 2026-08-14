@@ -1,0 +1,37 @@
+---
+id: java-interop-interview
+title: Interop corner cases and interviews
+---
+import Admonition from '@theme/Admonition';
+
+# Java interoperability corner cases and interviews
+
+## Corner cases
+
+- Java wildcards may require `@JvmSuppressWildcards` or `@JvmWildcard`, but change them only after inspecting the generated signature.
+- Kotlin unsigned types and value classes have specialized JVM interop considerations.
+- Companion methods are not true Java statics without `@JvmStatic` bridges.
+- Kotlin properties generate accessor methods unless exposed with `@JvmField`.
+- Java may pass null into Kotlin non-null parameters; Kotlin inserts runtime checks at public boundaries.
+- Java serialization/reflection frameworks may need no-arg constructors, annotations, adapters, or generated code.
+- Kotlin internal visibility is not a strong Java/JVM security boundary.
+
+## Interview questions
+
+<details><summary>What is a platform type?</summary><p>A Java-origin type whose nullability is unknown to Kotlin. Kotlin permits flexible use, so the developer must normalize it to an explicit nullable or non-null type.</p></details>
+
+<details><summary>Why use @JvmOverloads?</summary><p>It generates overloads for trailing default parameters so Java callers can omit them. It should be used deliberately because it expands the JVM API.</p></details>
+
+<details><summary>How would you migrate a large Java Android app?</summary><p>Incrementally: annotate boundaries, add Kotlin tooling, use Kotlin for new work, convert tested vertical slices, review Java callers, isolate legacy APIs, and measure build/product outcomes.</p></details>
+
+## Exercises
+
+1. Write a Java method with no nullability annotation and consume it safely from Kotlin.
+2. Expose a Kotlin factory cleanly to Java.
+3. Compare a Kotlin function-type callback with a `fun interface` from Java.
+4. Design an adapter that prevents platform types entering the domain layer.
+5. Create a migration ADR with risks, metrics, and rollback plan.
+
+<Admonition type="tip" title="Interview-ready answer">
+Kotlin/Java interop is strong, but production quality depends on explicit nullability, Java-friendly API design, exception behavior, generic signatures, generated names, and gradual migration controls.
+</Admonition>
