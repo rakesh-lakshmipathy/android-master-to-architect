@@ -1,0 +1,168 @@
+---
+id: binder-interview
+title: Binder interview questions and exercises
+---
+import Admonition from '@theme/Admonition';
+
+# Binder interview questions and exercises
+
+## Quick questions with strong answers
+
+<details>
+<summary><strong>What is Binder?</strong></summary>
+
+Binder is Android’s primary inter-process communication mechanism. A client-side proxy marshals a method request into a Parcel, the Binder kernel driver routes it to a server process, and a Stub on a Binder thread unmarshals it and calls the implementation. It also carries caller identity and supports remote-object lifetime/death behaviour.
+</details>
+
+<details>
+<summary><strong>What is the difference between Binder and AIDL?</strong></summary>
+
+Binder is the IPC mechanism. AIDL is an interface-definition language and toolchain that generates typed Binder Proxy/Stub transport code. You can encounter Binder without writing AIDL, and most same-process interfaces do not need either.
+</details>
+
+<details>
+<summary><strong>Does an Android Service run on a background thread?</strong></summary>
+
+No. Service lifecycle callbacks normally run on its process’s main thread. Incoming remote AIDL calls run on Binder threads and may be concurrent. Long work must be dispatched/designated appropriately in either case.
+</details>
+
+<details>
+<summary><strong>Why should synchronous Binder calls not run on the UI thread?</strong></summary>
+
+The caller blocks until the remote service handles the transaction and returns a reply. Scheduling, lock contention, disk/network work, a frozen process, or overload can delay that reply and freeze the UI or cause ANR.
+</details>
+
+<details>
+<summary><strong>Does `oneway` guarantee delivery or completion?</strong></summary>
+
+No. It means the caller does not wait for a reply. The server can process later or die before processing. If completion matters, design acknowledgement, durable state, or operation-status APIs.
+</details>
+
+<details>
+<summary><strong>What causes TransactionTooLargeException?</strong></summary>
+
+Binder serializes request and reply data into a limited transaction buffer shared by in-progress transactions for the process. A large Bundle, bitmap, list, or several concurrent moderate calls can exceed it. Pass IDs/URIs and page or stream bulk data.
+</details>
+
+<details>
+<summary><strong>Why are AIDL implementations required to be thread-safe?</strong></summary>
+
+Different clients can invoke methods concurrently on different Binder threads. Shared mutable server state, databases, caches, and downstream dependencies must have an explicit concurrency strategy.
+</details>
+
+<details>
+<summary><strong>Why not hold a lock during a Binder call?</strong></summary>
+
+The remote side can block, make another cross-process call, or synchronously call back into the original process. Holding locks across that boundary can create cross-process deadlocks or reentrancy failures.
+</details>
+
+<details>
+<summary><strong>How does a Binder service know who called it?</strong></summary>
+
+The Binder driver supplies caller identity such as UID/PID for the active transaction. The service combines that trustworthy identity with manifest permissions, package/signature checks where appropriate, and business authorization. Caller-supplied package-name strings are not trusted identity.
+</details>
+
+<details>
+<summary><strong>What happens when a remote process dies?</strong></summary>
+
+Calls can throw `DeadObjectException`/`RemoteException`, a bound connection can report disconnection/death, and death recipients may be notified. The client discards the proxy and reconnects according to policy, but must reconcile ambiguous write outcomes before retrying.
+</details>
+
+## Scenario 1: 5,000 contacts
+
+An AIDL method returns all 5,000 contacts as parcelables. It crashes on some devices.
+
+### Expected analysis
+
+- The reply is too large or competes for the shared Binder transaction buffer.
+- Device differences and concurrent transactions make a hard “worked in testing” size unsafe.
+- Return a paged query/result, cursor/provider, file descriptor, or operation handle.
+- Keep each control transaction small.
+
+## Scenario 2: duplicate payment
+
+The client calls `charge()`. The connection dies, the client retries, and the customer is charged twice.
+
+### Expected analysis
+
+The server may have committed before the reply was lost. Add a client-generated idempotency key, persist the result atomically with that key, return the previous result on retries, and provide reconciliation/query APIs.
+
+## Scenario 3: random counter values
+
+An AIDL service stores request count in a `mutableMapOf`. Under load, counts are lost or the map fails.
+
+### Expected analysis
+
+Remote calls execute concurrently on Binder threads. Use concurrency-safe state or, for durable correctness, a transactional store. Add concurrent-client tests.
+
+## Scenario 4: UI ANR
+
+An Activity calls a remote search service directly in `onTextChanged` for every keystroke.
+
+### Expected analysis
+
+- Synchronous IPC blocks the UI.
+- Per-keystroke requests create excessive transactions.
+- Debounce input, cancel/replace obsolete logical operations, call off main, bound concurrency, and return small results.
+- Remote cancellation needs a protocol if server computation must stop.
+
+## Scenario 5: authorization bypass
+
+The server accepts `callerPackage = "com.company.sales"` as an AIDL argument and grants data access.
+
+### Expected analysis
+
+The string is untrusted. Use Binder caller UID, permissions, verified signing/package relationships, and domain-level authorization. Minimize exported surface.
+
+## Architect design exercise
+
+Design an IPC contract for an antivirus scanner running in an isolated process.
+
+Requirements:
+
+- scan files up to 2 GB;
+- report progress;
+- support cancellation;
+- survive client rotation;
+- handle scanner-process death;
+- never send file bytes through Binder;
+- prevent unauthorized callers.
+
+### A strong shape
+
+```aidl
+String startScan(in ParcelFileDescriptor file, in ScanOptions options);
+ScanState getState(String scanId);
+void cancel(String scanId);
+void registerCallback(String scanId, IScanCallback callback);
+void unregisterCallback(String scanId, IScanCallback callback);
+```
+
+Discuss:
+
+1. URI/file-descriptor grant and validation.
+2. Stable `scanId` and ownership by caller identity.
+3. Bounded callback frequency and small progress messages.
+4. Durable versus in-memory scan state.
+5. Death recipients and callback cleanup.
+6. Thread pool and maximum concurrent scans.
+7. Timeout, cancellation, and partial-file handling.
+8. Signature permission or explicit trust policy.
+
+## Final mastery checklist
+
+- [ ] I can draw Proxy → Parcel → driver → Stub → implementation.
+- [ ] I can explain local Stub optimization and why it hides IPC bugs.
+- [ ] I know synchronous and `oneway` semantics.
+- [ ] I assume concurrent Binder-thread entry.
+- [ ] I avoid locks and long work across Binder calls.
+- [ ] I handle process death and ambiguous writes.
+- [ ] I design idempotency for retried side effects.
+- [ ] I keep payloads small and stream/page bulk data.
+- [ ] I authorize using real caller identity.
+- [ ] I version IPC contracts for mixed client/server releases.
+
+<Admonition type="tip" title="Architect takeaway">
+Binder expertise is not memorizing AIDL syntax. It is recognizing a distributed-systems boundary inside one device: copied data, concurrency, latency, identity, version skew, partial failure, idempotency, backpressure, and independent process lifetime all apply.
+</Admonition>
+

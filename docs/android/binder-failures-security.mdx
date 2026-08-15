@@ -1,0 +1,207 @@
+---
+id: binder-failures-security
+title: Binder failures, limits, identity, and security
+---
+import Admonition from '@theme/Admonition';
+
+# Binder failures, limits, identity, and security
+
+## Remote calls have partial failure
+
+A normal local call either returns or throws in the same process. A remote call adds ambiguity:
+
+```text
+Did the request fail before reaching the server?
+Did the server change state but die before replying?
+Did the reply fail while returning?
+```
+
+After transport failure, the client cannot always tell which stage occurred. Write operations therefore need idempotency or reconciliation.
+
+## Dead remote process
+
+```kotlin
+try {
+    remote.confirmShipment(operationId, orderId)
+} catch (dead: DeadObjectException) {
+    // Connection is gone. Do not assume the write did not happen.
+} catch (failure: RemoteException) {
+    // Treat as transport-level failure.
+}
+```
+
+### ❌ Dangerous retry
+
+```kotlin
+while (true) {
+    try {
+        remote.charge(orderId, amount)
+        break
+    } catch (_: RemoteException) {
+        reconnect()
+    }
+}
+```
+
+If the server charged the card and died before replying, the loop can charge again.
+
+### ✅ Idempotent protocol
+
+```kotlin
+val operationId = UUID.randomUUID().toString()
+remote.charge(operationId, orderId, amount)
+```
+
+The server persists `operationId` with the result. A retry returns the same result instead of repeating the side effect.
+
+## TransactionTooLargeException
+
+Binder request arguments and replies use a limited transaction buffer. Android’s [`TransactionTooLargeException` documentation](https://developer.android.com/reference/android/os/TransactionTooLargeException) states that the buffer is currently 1 MB **shared by transactions in progress for the process**.
+
+Important consequences:
+
+- 1 MB is not a safe per-call payload budget.
+- Several moderate concurrent transactions can exhaust the shared buffer.
+- Failure can occur while sending the request or returning the reply.
+- The client should treat the outcome as a possible partial failure.
+
+### Common sources
+
+- large bitmaps in Intent extras;
+- a huge list in `savedInstanceState`;
+- deeply nested Bundles/parcelables;
+- returning thousands of rows from AIDL;
+- oversized ContentProvider query metadata.
+
+### ❌ Avoid
+
+```kotlin
+val photos: List<Bitmap> = loadFullResolutionPhotos()
+intent.putParcelableArrayListExtra("photos", ArrayList(photos))
+```
+
+### ✅ Prefer
+
+```kotlin
+intent.putStringArrayListExtra(
+    "photoUris",
+    ArrayList(photoUris.map(Uri::toString))
+)
+```
+
+For a very large collection, pass a query/filter or operation ID and page/stream the results.
+
+## Binder is a control plane, not a bulk-data pipe
+
+| Data | Better transport |
+|---|---|
+| Small command and result | Binder/AIDL |
+| Large file/image/video | URI, file descriptor, stream |
+| Many database rows | ContentProvider cursor/paging or app protocol |
+| High-volume buffer sharing | Shared memory/specialized native API |
+
+## Caller identity
+
+Inside an incoming Binder call, the server can inspect the calling UID/PID:
+
+```kotlin
+override fun getStatus(orderId: String): OrderStatus {
+    val callerUid = Binder.getCallingUid()
+    enforceCallingPermission(ACCESS_ORDER_STATUS, "Not allowed")
+    audit.record(callerUid, "getStatus", orderId)
+    return repository.get(orderId)
+}
+```
+
+Never authorize using a caller-supplied claim:
+
+### ❌ Avoid
+
+```aidl
+OrderStatus getStatus(String callerPackage, String orderId);
+```
+
+Any client can send the trusted package name as text.
+
+### ✅ Prefer
+
+Use kernel-provided caller identity, declared/signature permissions, verified package/signature relationships, and domain authorization appropriate to the deployment model.
+
+## `clearCallingIdentity()`
+
+System-side code sometimes needs to stop acting with the caller’s Binder identity before performing work as itself:
+
+```kotlin
+val token = Binder.clearCallingIdentity()
+try {
+    performAsServiceProcess()
+} finally {
+    Binder.restoreCallingIdentity(token)
+}
+```
+
+This is powerful and easy to misuse.
+
+- Validate/authorize while the original identity is present.
+- Clear identity only for the smallest required scope.
+- Always restore it in `finally`.
+- Do not use it to bypass checks casually.
+
+Most ordinary application AIDL services do not need to clear identity.
+
+## Exported service hardening
+
+An exported Binder service is a public endpoint on the device.
+
+Checklist:
+
+- [ ] Use an explicit Intent/package for binding.
+- [ ] Protect with an appropriate manifest permission.
+- [ ] Recheck authorization in sensitive methods.
+- [ ] Validate lengths, formats, enum values, and nulls.
+- [ ] Limit request rate and result size.
+- [ ] Avoid returning sensitive data not required by the contract.
+- [ ] Do not log tokens, personal data, or entire Parcels.
+- [ ] Keep dependencies patched and fuzz/test malformed inputs.
+- [ ] Document contract compatibility.
+
+## Death recipients
+
+Low-level clients can register an `IBinder.DeathRecipient` using `linkToDeath` when they need prompt notification that a remote Binder died. Higher-level bound-service code also receives connection callbacks such as `onBindingDied`/`onServiceDisconnected` depending on circumstances.
+
+Death notification means the remote object is gone. It does not prove whether the last operation committed.
+
+## Performance rules
+
+### Latency
+
+Remote calls include marshalling, kernel routing, server scheduling, execution, and reply work. Avoid N+1 IPC patterns.
+
+### Allocation
+
+Parcelable creation and copying allocate memory. Keep models narrow.
+
+### Main thread
+
+Do not perform potentially slow synchronous IPC in rendering or input callbacks.
+
+### Measurement
+
+Use traces/Perfetto when Binder latency matters. Do not “optimize” by adding large caches without a freshness and memory policy.
+
+## Failure-handling matrix
+
+| Failure | Client response |
+|---|---|
+| Not bound | Wait/bind or show unavailable state |
+| DeadObjectException | Drop proxy, reconnect by policy |
+| SecurityException | Do not retry; configuration/authorization problem |
+| Invalid argument | Fix request; do not retry unchanged |
+| Transaction too large | Redesign payload; do not merely catch and repeat |
+| Timeout at higher layer | Reconcile before retrying a write |
+| Server business rejection | Show/model explicit domain result |
+
+<Admonition type="tip" title="Interview-ready answer">
+Binder can fail before a request, after a server side effect, or while returning a reply, so transport failure can be ambiguous. I make writes idempotent, keep every request and reply small, avoid bulk objects, and treat the documented shared transaction buffer as a strict limit rather than a target. On the server I authorize using Binder-provided identity and permissions, validate all input, minimize exported surface, and never trust a package name supplied by the caller.
+</Admonition>
+

@@ -1,0 +1,242 @@
+---
+id: binder-threading
+title: Binder threading, reentrancy, and deadlocks
+---
+import Admonition from '@theme/Admonition';
+
+# Binder threading, reentrancy, and deadlocks
+
+## The rule that prevents many production bugs
+
+**Incoming remote AIDL calls can execute concurrently on Binder threads.** They are not automatically delivered to a Service’s main thread.
+
+This differs from lifecycle callbacks such as `Service.onCreate()`, which Android normally invokes on the hosting process’s main thread.
+
+```text
+Main thread:    Service.onCreate(), onBind()
+
+Binder thread 1: client A → getStatus("ORD-1")
+Binder thread 2: client B → getStatus("ORD-2")
+Binder thread 3: client C → cancel("ORD-3")
+```
+
+The service implementation must be thread-safe from its first release.
+
+## Concrete race condition
+
+### ❌ Unsafe shared mutable state
+
+```kotlin
+private val requestCounts = mutableMapOf<Int, Int>()
+
+override fun getStatus(orderId: String): OrderStatus {
+    val uid = Binder.getCallingUid()
+    requestCounts[uid] = (requestCounts[uid] ?: 0) + 1
+    return repository.findStatus(orderId)
+}
+```
+
+Two Binder threads can read the same old value and overwrite each other. `MutableMap` itself is also not safe for concurrent mutation.
+
+### ✅ Use an appropriate concurrency mechanism
+
+```kotlin
+private val requestCounts = ConcurrentHashMap<Int, AtomicInteger>()
+
+override fun getStatus(orderId: String): OrderStatus {
+    val uid = Binder.getCallingUid()
+    requestCounts.computeIfAbsent(uid) { AtomicInteger() }
+        .incrementAndGet()
+    return repository.findStatus(orderId)
+}
+```
+
+For durable business changes, a database transaction is usually more meaningful than an in-memory concurrent collection.
+
+## Synchronous calls block the caller
+
+```aidl
+OrderStatus getStatus(String orderId);
+```
+
+This call is synchronous because it is not marked `oneway`.
+
+```text
+Client thread:  transact ───────────── waiting ────────────► reply
+Server thread:                  execute query
+```
+
+### ❌ Main-thread call
+
+```kotlin
+fun onRefreshClicked() {
+    val status = remote.getStatus(orderId)
+    render(status)
+}
+```
+
+If the server is slow, frozen, overloaded, or performs disk/network work, the UI freezes and can ANR.
+
+### ✅ Suspend at the client boundary
+
+```kotlin
+suspend fun status(orderId: String): OrderStatus =
+    withContext(Dispatchers.IO) {
+        remote.getStatus(orderId)
+    }
+```
+
+`Dispatchers.IO` does not make the remote operation faster. It prevents the waiting caller from occupying the UI thread. Still define time, cancellation, and fallback behaviour at the product level.
+
+## `oneway` changes waiting, not correctness
+
+```aidl
+oneway void recordAnalytics(Event event);
+```
+
+The caller returns after handing the transaction to Binder. The server handles it later.
+
+Useful when:
+
+- no direct reply is required;
+- occasional delayed handling is acceptable;
+- the protocol has independent delivery/acknowledgement semantics.
+
+Not sufficient when:
+
+- the caller must know persistence succeeded;
+- unbounded calls can overwhelm buffers/queues;
+- ordering across different Binder nodes matters;
+- a failed server must be reported immediately.
+
+## Thread starvation
+
+Imagine every Binder thread performs a slow network request:
+
+```kotlin
+override fun getStatus(orderId: String): OrderStatus =
+    blockingHttpClient.fetch(orderId)
+```
+
+As Binder threads become occupied, unrelated client calls queue. The system appears hung even though no single lock is deadlocked.
+
+### Better architecture
+
+- Keep Binder handlers short.
+- Validate and copy small inputs.
+- Query fast local state when a synchronous answer is required.
+- For long operations, return an operation ID and complete asynchronously.
+- Bound concurrency and provide explicit status/cancellation APIs.
+
+```aidl
+String beginExport(ExportRequest request);
+ExportState getExportState(String operationId);
+void cancelExport(String operationId);
+```
+
+## Deadlock across processes
+
+### The dangerous sequence
+
+```text
+Process A                         Process B
+lock(A)                           lock(B)
+   │                                 │
+   └─ synchronous call to B          └─ synchronous call to A
+           waits...                         waits...
+```
+
+Each process holds a lock needed by the other. Neither can return.
+
+The official [Binder threading guidance](https://source.android.com/docs/core/architecture/ipc/binder-threading) gives the central rule: do not hold a lock while making a Binder call.
+
+### ❌ Avoid
+
+```kotlin
+synchronized(cacheLock) {
+    cache[orderId] = remote.refresh(orderId)
+}
+```
+
+The process holds `cacheLock` during an outgoing IPC call. The remote implementation can call back, block, or re-enter in an unexpected order.
+
+### ✅ Prefer
+
+```kotlin
+val refreshed = remote.refresh(orderId)
+synchronized(cacheLock) {
+    cache[orderId] = refreshed
+}
+```
+
+No application lock is held across the remote boundary. Revalidate assumptions after reacquiring the lock because local state may have changed meanwhile.
+
+## Reentrancy: the surprising corner case
+
+During a synchronous transaction, the server can make a callback into the client. Binder may execute that nested call on a thread already involved in the transaction chain.
+
+```text
+A calls B.update()
+        B calls A.onProgress()
+                 callback enters A before original A→B call returns
+```
+
+Code that assumes “nothing can call me until `update()` returns” is unsafe.
+
+### Reentrancy-safe design
+
+- Do not hold locks across IPC.
+- Do not expose partially updated state before a remote call.
+- Keep callbacks small and avoid nested synchronous call chains.
+- Prefer immutable snapshots/events.
+- Document whether callbacks can occur before method return.
+
+## Callback lifecycle
+
+If clients register a remote callback, the server must remove dead callbacks. Android provides `RemoteCallbackList` for managing remote Binder callbacks safely.
+
+```kotlin
+private val callbacks = RemoteCallbackList<IOrderCallback>()
+
+override fun registerCallback(callback: IOrderCallback) {
+    callbacks.register(callback)
+}
+
+private fun publish(status: OrderStatus) {
+    val count = callbacks.beginBroadcast()
+    try {
+        for (index in 0 until count) {
+            callbacks.getBroadcastItem(index).onStatusChanged(status)
+        }
+    } finally {
+        callbacks.finishBroadcast()
+    }
+}
+```
+
+Callback design still needs rate limits, small payloads, slow-client policy, and clear registration/unregistration ownership.
+
+## Cancellation mismatch
+
+Cancelling the client coroutine waiting on a blocking Binder call does not automatically guarantee that arbitrary server work stops. Cancellation must be represented by the remote protocol when it matters.
+
+```aidl
+String startSearch(SearchRequest request);
+void cancelSearch(String requestId);
+```
+
+## Threading checklist
+
+- [ ] All Stub methods assume concurrent entry.
+- [ ] No main-thread synchronous remote calls.
+- [ ] No application lock is held across IPC.
+- [ ] Long work is not performed on Binder threads.
+- [ ] Callback reentrancy is documented and tested.
+- [ ] Remote callback death is handled.
+- [ ] Cancellation exists in the protocol when required.
+- [ ] Rate limits and backpressure are defined.
+
+<Admonition type="tip" title="Interview-ready answer">
+Remote AIDL methods run on Binder threads and can arrive concurrently, so the service must be thread-safe. Synchronous calls block the caller, and long server work can starve the Binder pool. I never call slow IPC from the main thread or hold a lock across Binder calls because nested callbacks and cross-process lock cycles can deadlock. For long operations I return an operation ID, expose status and cancellation, and keep Binder transactions short.
+</Admonition>
+

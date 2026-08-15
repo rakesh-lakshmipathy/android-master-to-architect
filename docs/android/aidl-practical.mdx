@@ -1,0 +1,245 @@
+---
+id: aidl-practical
+title: Practical AIDL — complete client and server
+---
+import Admonition from '@theme/Admonition';
+
+# Practical AIDL — complete client and server
+
+## Requirement
+
+An operations app exposes order status to an authorized sales app. The processes are separate, calls may be concurrent, and the service must not expose customer data to arbitrary installed apps.
+
+## Project contract
+
+Both client and server compile the same AIDL contract. In a real organization, publish/version a dedicated contract artifact rather than copying files by hand without ownership.
+
+### `IOrderStatusService.aidl`
+
+```aidl
+package com.example.orderipc;
+
+import com.example.orderipc.OrderStatus;
+
+interface IOrderStatusService {
+    OrderStatus getStatus(String orderId);
+}
+```
+
+### `OrderStatus.aidl`
+
+```aidl
+package com.example.orderipc;
+
+parcelable OrderStatus;
+```
+
+The Kotlin model must be parcelable and have the matching package name:
+
+```kotlin
+@Parcelize
+data class OrderStatus(
+    val orderId: String,
+    val state: String,
+    val updatedAtEpochMillis: Long
+) : Parcelable
+```
+
+In Gradle, enable the Parcelize plugin for this model. A production contract should prefer stable enum/code representations and document how unknown future values are handled.
+
+## Protect the service with a signature permission
+
+If both apps are controlled and signed by the same organization:
+
+```xml
+<permission
+    android:name="com.example.orderipc.ACCESS_ORDER_STATUS"
+    android:protectionLevel="signature" />
+
+<application ...>
+    <service
+        android:name=".OrderStatusService"
+        android:exported="true"
+        android:permission="com.example.orderipc.ACCESS_ORDER_STATUS"
+        android:process=":order_ipc">
+        <intent-filter>
+            <action android:name="com.example.orderipc.ORDER_STATUS" />
+        </intent-filter>
+    </service>
+</application>
+```
+
+The client also declares `<uses-permission>`. A signature permission is suitable only when the signing and distribution model supports it. Otherwise design another explicit authorization mechanism.
+
+## Server implementation
+
+```kotlin
+class OrderStatusService : Service() {
+
+    private val repository: OrderRepository by lazy {
+        applicationContext.orderRepository
+    }
+
+    private val binder = object : IOrderStatusService.Stub() {
+        override fun getStatus(orderId: String?): OrderStatus {
+            val validId = orderId
+                ?.takeIf { it.matches(Regex("ORD-[0-9]+")) }
+                ?: throw IllegalArgumentException("Invalid order ID")
+
+            enforceAuthorizedCaller()
+
+            return repository.findStatus(validId)
+                ?: OrderStatus(validId, "NOT_FOUND", 0L)
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
+    private fun enforceAuthorizedCaller() {
+        enforceCallingPermission(
+            "com.example.orderipc.ACCESS_ORDER_STATUS",
+            "Caller may not read order status"
+        )
+    }
+}
+```
+
+### What happens on each call
+
+1. A Binder thread enters `getStatus`, not necessarily the main thread.
+2. The nullable boundary is validated even if the API intends non-null input.
+3. Caller authorization is checked at the server boundary.
+4. Repository access must be safe for concurrent calls.
+5. The result is converted into a bounded parcelable response.
+
+### Security nuance
+
+`Binder.getCallingUid()` and calling-permission APIs refer to the current incoming Binder caller. If server code clears calling identity or posts work asynchronously, that implicit identity does not automatically represent the original caller later. Capture only the minimal verified information needed, and do not trust a package name sent as an argument.
+
+## Client binding
+
+```kotlin
+class OrderStatusClient(
+    private val context: Context
+) {
+    private var remote: IOrderStatusService? = null
+    private var bound = false
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            remote = IOrderStatusService.Stub.asInterface(binder)
+            bound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            remote = null
+            bound = false
+        }
+
+        override fun onBindingDied(name: ComponentName) {
+            remote = null
+            bound = false
+            // Rebind according to lifecycle and retry policy.
+        }
+    }
+
+    fun bind(): Boolean {
+        val intent = Intent("com.example.orderipc.ORDER_STATUS")
+            .setPackage("com.example.operations")
+
+        return context.bindService(
+            intent,
+            connection,
+            Context.BIND_AUTO_CREATE
+        )
+    }
+
+    fun unbind() {
+        if (bound) {
+            context.unbindService(connection)
+            bound = false
+            remote = null
+        }
+    }
+
+    suspend fun status(orderId: String): OrderStatus =
+        withContext(Dispatchers.IO) {
+            val service = remote
+                ?: error("Order service is not connected")
+
+            try {
+                service.getStatus(orderId)
+            } catch (dead: DeadObjectException) {
+                remote = null
+                bound = false
+                throw OrderServiceUnavailable(dead)
+            } catch (remoteError: RemoteException) {
+                throw OrderServiceUnavailable(remoteError)
+            }
+        }
+}
+```
+
+## Why each client decision exists
+
+| Decision | Reason |
+|---|---|
+| Explicit package on Intent | Prevents an unintended app from satisfying an implicit service request |
+| Lifecycle-controlled bind/unbind | Connection lifetime should match actual need |
+| No `!!` on remote | Connection can disappear |
+| Call off main thread | Synchronous server latency would block UI |
+| Catch transport failure | Remote process can die before or during a call |
+| Do not blindly retry | The operation may have partially succeeded |
+
+## Read versus write retries
+
+Repeating `getStatus()` is naturally safer because it is a read. Repeating `chargeCard()` after a dead connection can charge twice unless the protocol uses an idempotency key and the server stores the operation result.
+
+```aidl
+ChargeResult charge(String operationId, String orderId, long amountMinor);
+```
+
+The client can safely retry the same `operationId`; the server returns the already-recorded outcome instead of executing payment twice.
+
+## Contract evolution
+
+AIDL is a public protocol once another released app depends on it.
+
+### ❌ Avoid
+
+- renaming or removing existing methods;
+- changing the meaning of an existing field;
+- reusing a numeric state code for another meaning;
+- assuming both apps update at the same time.
+
+### ✅ Prefer
+
+- additive compatible changes;
+- defaults for newly added data;
+- explicit interface version/capability methods when needed;
+- unknown-value handling;
+- mixed-version tests: old client/new server and new client/old server.
+
+## When this example would be overengineering
+
+If both “apps” are actually modules in one application process, use a Kotlin interface:
+
+```kotlin
+interface OrderStatusRepository {
+    suspend fun getStatus(orderId: String): OrderStatus
+}
+```
+
+Constructor injection provides testability without process, serialization, signing, lifecycle, and compatibility costs.
+
+<Admonition type="tip" title="Interview-ready answer">
+For an AIDL service I define a small versioned contract, implement the generated Stub, expose it from a bound Service, protect exported access, validate every argument, and make the implementation thread-safe. The client binds with an explicit target, converts `IBinder` using `Stub.asInterface`, calls synchronous methods off the main thread, handles dead bindings and `RemoteException`, and retries writes only with protocol-level idempotency.
+</Admonition>
+
+## Exercises
+
+1. Why is `setPackage()` important on the client Intent?
+2. Why can the server repository be called concurrently?
+3. Design an idempotent `submitInvoice` AIDL method.
+4. Write tests for old-client/new-server compatibility.
+

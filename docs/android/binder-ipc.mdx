@@ -1,57 +1,193 @@
 ---
 id: binder-ipc
-title: Binder and Android IPC
+title: Binder IPC — why Android needs it
 ---
 import Admonition from '@theme/Admonition';
 
-# Binder and Android IPC
+# Binder IPC — why Android needs it
 
-Binder is Android's primary inter-process communication mechanism. It lets a client call a remote service through generated or framework proxy objects.
+## Begin with the problem
+
+Android normally runs applications and important system services in different Linux processes. Different processes do not share ordinary Kotlin objects or memory.
+
+Suppose a shopping app wants to post a notification:
+
+```kotlin
+notificationManager.notify(42, notification)
+```
+
+The application process cannot directly modify the notification shade. Android’s notification service owns that device-wide responsibility in another process. The two processes need a controlled communication mechanism.
+
+**Binder is Android’s primary inter-process communication mechanism.** It lets code in one process request a method-like operation from an object hosted in another process.
+
+:::warning Android-only chapter
+Binder, `Parcel`, `Service`, and AIDL require Android. These examples intentionally do not link to Kotlin Playground.
+:::
+
+## Local call versus Binder call
+
+### Local Kotlin call
+
+```kotlin
+val total = priceCalculator.total(cart)
+```
+
+The caller and `priceCalculator` normally share one heap. The program can pass a direct reference to `cart`.
+
+### Remote Binder call
+
+```kotlin
+val status = remoteOrderService.status("ORD-42")
+```
+
+If `remoteOrderService` lives in another process, the `cart`-style direct reference cannot cross the boundary. Arguments must be copied into a transport representation, sent through the Binder driver, reconstructed in the server process, and the result must travel back.
+
+The syntax looks similar. The cost and failure model are not.
+
+## The five participants
 
 ```text
-Client call → proxy → Binder driver → remote Binder thread → service implementation
+CLIENT PROCESS                                      SERVER PROCESS
+
+Client code                                          Service implementation
+    │                                                       ▲
+    ▼                                                       │
+Proxy ── writes arguments ──► Parcel      Parcel ──► Stub/onTransact
+    │                              │        ▲                │
+    └──────────────────────────────▼────────┘                │
+                         Binder kernel driver                │
 ```
 
-## AIDL mental model
+| Participant | Job |
+|---|---|
+| Client | Calls the interface |
+| Proxy | Converts the call into a Binder transaction |
+| Parcel | Compact container carrying arguments or a reply |
+| Binder driver | Routes the transaction between processes |
+| Stub/node | Decodes the transaction and calls server code |
 
-An AIDL interface defines callable methods and parcelable data. Build tools generate a client proxy and server stub. Arguments are marshalled into a Parcel, copied across the boundary, and unmarshalled remotely.
+The official [AOSP Binder overview](https://source.android.com/docs/core/architecture/ipc/binder-overview) describes the client endpoint as a proxy and the server endpoint as a Binder node. AIDL generates much of the proxy/stub transport code for application developers.
 
-## Practical constraints
+## Why not use sockets for everything?
 
-- IPC is slower than a local call.
-- Arguments must be serializable/parcelable in supported forms.
-- Transactions have size limits; large bitmaps/lists should not be placed in Bundles or Binder calls.
-- The remote process may die; calls can fail.
-- Service code runs on Binder threads, not automatically on the main thread.
-- Caller identity and permissions must be validated for exported services.
+Sockets can communicate between processes, but Binder is integrated with Android’s object, identity, lifecycle, and permission model.
 
-<div className="practice-bad">
+Binder provides useful platform behaviour such as:
 
-**✕ Send a large image through an Intent extra**
+- routing method-like transactions;
+- transporting the caller’s UID/PID to the server;
+- passing Binder object references;
+- detecting a dead remote process;
+- integrating with Android system services and AIDL;
+- kernel-mediated transaction delivery.
+
+This does not make Binder appropriate for bulk data. Use files, shared memory, pipes, databases, or streaming APIs when the payload demands them. Binder is excellent for **control messages and bounded structured data**.
+
+## Where an app developer meets Binder
+
+You use Binder even if you never write AIDL:
+
+- framework managers talk to system services;
+- an Activity launch is coordinated with system services;
+- Bundles and saved-state data can cross Binder-backed boundaries;
+- `ContentResolver` can communicate with another process’s provider;
+- `PendingIntent` represents a system-held capability;
+- bound services can expose an `IBinder` interface.
+
+## One-line call, ten-step journey
+
+For a synchronous call such as `remote.status("ORD-42")`:
+
+1. Client code calls a generated proxy.
+2. The proxy creates a request Parcel.
+3. It writes an interface token, method identifier, and arguments.
+4. The proxy calls `transact()` on `IBinder`.
+5. The Binder kernel driver finds the process hosting the target node.
+6. The transaction is copied to the server process.
+7. A server Binder thread receives it.
+8. The Stub validates/decodes it and invokes `status("ORD-42")`.
+9. The result or supported exception is written to a reply Parcel.
+10. The reply returns through the driver; the proxy decodes and returns it.
+
+While steps 5–9 execute, the calling thread normally waits. Calling a slow synchronous Binder method from the main thread can therefore freeze UI.
+
+## Binder is not the same as a Service
+
+| Concept | Meaning |
+|---|---|
+| `Service` | Android application component with started/bound lifecycle |
+| Binder | IPC/RPC mechanism used to communicate across processes |
+| AIDL | Language used to define a Binder interface and generate transport code |
+| Bound service | A Service that returns an `IBinder` to connected clients |
+
+A Service does not automatically create a background thread. A bound Service can be in the same process, in which case Binder may optimize to a local interface, or in another process, which requires IPC.
+
+## When should an ordinary app use AIDL?
+
+Usually, it should not.
+
+Use AIDL when a genuine process boundary exists, such as:
+
+- a device/OEM integration exposes a remote service;
+- two separately installed apps need a stable IPC contract;
+- a deliberate isolated process hosts risky or specialized work;
+- a platform-level component must support concurrent remote clients.
+
+Do not add another process and AIDL merely to “make architecture cleaner.” Interfaces between modules in the same process should normally be Kotlin interfaces with constructor injection.
+
+## Decision table
+
+| Need | Better starting point |
+|---|---|
+| Call a class in the same process | Kotlin interface/direct call |
+| Screen-bound asynchronous work | Lifecycle-aware coroutine |
+| Durable deferred work | WorkManager |
+| Sequential message-based IPC | Messenger may be sufficient |
+| Concurrent typed cross-process API | AIDL/Binder |
+| Share structured data with other apps | ContentProvider |
+| Transfer a large file | `content://` URI/FileProvider/stream |
+
+## Practical mistakes
+
+### ❌ Avoid: pretending a remote object is an ordinary repository
 
 ```kotlin
-intent.putExtra("bitmap", hugeBitmap)
+items.map { item -> remoteCatalog.price(item.id) }
 ```
-</div>
 
-<div className="practice-good">
+One list rendering can cause hundreds of synchronous transactions.
 
-**✓ Send an identifier or URI**
+### ✅ Prefer: design a coarse but bounded operation
 
 ```kotlin
-intent.putExtra("imageUri", imageUri.toString())
+val prices = remoteCatalog.prices(itemIds.take(100))
 ```
-</div>
 
-## Main-thread risk
+Batching reduces round trips, but “send everything” is also wrong because Binder payloads are bounded. Define a sensible maximum or use pagination/streaming.
 
-A synchronous Binder call can block while the remote process works. Repeated PackageManager, content-provider, or service calls on the main thread can contribute to jank or ANR.
+### ❌ Avoid: sending a bitmap through an Intent extra
 
-## Security scenario
+```kotlin
+intent.putExtra("receipt", receiptBitmap)
+```
 
-An exported service must not trust caller-supplied IDs or paths. Enforce manifest/runtime permissions, validate `Binder.getCallingUid()`, constrain inputs, and avoid confused-deputy behavior where your privileged app performs an action for an untrusted caller.
+### ✅ Prefer: send a URI or stable identifier
+
+```kotlin
+intent.putExtra("receiptUri", receiptUri.toString())
+```
+
+Grant URI permission if another app/process needs access, and stream the content.
 
 <Admonition type="tip" title="Interview-ready answer">
-Binder provides RPC-like IPC through proxies, stubs, Parcels, and the Binder driver. Calls have serialization, latency, transaction-size, threading, process-death, and security implications. Treat remote calls as unreliable boundaries, not ordinary local methods.
+Binder is Android’s primary IPC mechanism. A client calls a proxy, the proxy marshals arguments into a Parcel, the Binder kernel driver routes the transaction to a Binder thread in the server process, and a Stub unmarshals and invokes the implementation. Synchronous calls block for a reply, remote processes can die, payload capacity is limited, and incoming calls can be concurrent. I use Binder for small control messages and stable cross-process contracts, not bulk data or ordinary same-process layering.
 </Admonition>
+
+## Continue the chapter
+
+1. [Proxy, Stub, Parcel, and the complete call path](./binder-call-path)
+2. [Practical AIDL client and server](./aidl-practical)
+3. [Binder threading, reentrancy, and deadlocks](./binder-threading)
+4. [Failures, transaction limits, identity, and security](./binder-failures-security)
+5. [Binder interview questions and design exercises](./binder-interview)
 

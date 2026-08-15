@@ -1,0 +1,210 @@
+---
+id: binder-call-path
+title: Binder call path — Proxy, Parcel, driver, and Stub
+---
+import Admonition from '@theme/Admonition';
+
+# Binder call path — Proxy, Parcel, driver, and Stub
+
+## Scenario
+
+An enterprise has two installed apps:
+
+- **Sales app**: asks for an order’s shipping status.
+- **Operations app**: owns the authoritative on-device service.
+
+They agree on this conceptual interface:
+
+```kotlin
+interface OrderStatusApi {
+    fun getStatus(orderId: String): String
+}
+```
+
+A normal Kotlin interface defines the contract but cannot make memory cross processes. Binder supplies the transport; AIDL generates the plumbing.
+
+## The complete synchronous call
+
+```text
+Sales app / client process                         Operations / server process
+
+Main/worker thread                                 Binder thread
+       │                                                ▲
+       │ 1. getStatus("ORD-42")                         │ 7. onTransact(...)
+       ▼                                                │
+Generated Proxy                                        Generated Stub
+       │ 2. write request Parcel                        │ 8. read arguments
+       │ 3. transact(code, data, reply)                 │ 9. implementation call
+       ▼                                                │
+======================== Binder driver ================================
+       │ 4. locate target node                           │
+       │ 5. copy transaction                             │
+       │ 6. wake server Binder thread ───────────────────┘
+       │
+       ◄──────────── 10. reply Parcel: "SHIPPED" ─────────────
+       │ 11. Proxy reads reply
+       ▼
+Client receives "SHIPPED"
+```
+
+The caller blocks between steps 3 and 10 unless the method is `oneway`.
+
+## What the Proxy does
+
+Conceptually, generated Proxy code resembles this simplified example:
+
+```kotlin
+fun getStatus(orderId: String): String {
+    val data = Parcel.obtain()
+    val reply = Parcel.obtain()
+    try {
+        data.writeInterfaceToken(DESCRIPTOR)
+        data.writeString(orderId)
+        remote.transact(TRANSACTION_getStatus, data, reply, 0)
+        reply.readException()
+        return requireNotNull(reply.readString())
+    } finally {
+        reply.recycle()
+        data.recycle()
+    }
+}
+```
+
+This is explanatory pseudocode; use generated AIDL code rather than hand-writing routine proxy logic.
+
+Step by step:
+
+1. The interface token identifies the expected interface.
+2. Arguments are written in a defined order.
+3. A transaction code identifies the method.
+4. `transact()` submits the request.
+5. The reply is checked for a supported remote exception.
+6. The return value is read in the agreed order.
+7. Parcels are recycled.
+
+If client and server disagree about the contract or serialization order, decoding fails or produces incorrect data. This is why IPC contracts require version discipline.
+
+## What the Stub does
+
+Conceptually, server-side generated code performs the reverse:
+
+```kotlin
+override fun onTransact(
+    code: Int,
+    data: Parcel,
+    reply: Parcel?,
+    flags: Int
+): Boolean {
+    return when (code) {
+        TRANSACTION_getStatus -> {
+            data.enforceInterface(DESCRIPTOR)
+            val orderId = requireNotNull(data.readString())
+            val result = getStatus(orderId)
+            reply?.writeNoException()
+            reply?.writeString(result)
+            true
+        }
+        else -> super.onTransact(code, data, reply, flags)
+    }
+}
+```
+
+`enforceInterface` checks that the caller addressed the expected interface. It is not business authorization. The implementation must still validate input and caller permissions.
+
+## Parcel is transport data, not shared memory
+
+```kotlin
+val request = OrderRequest("ORD-42")
+remote.submit(request)
+request.orderId = "ORD-99"
+```
+
+The server does not observe later mutation of the client object. It received a reconstructed copy of the serialized values.
+
+### Direction keywords
+
+AIDL can describe parcelable parameters as `in`, `out`, or `inout`.
+
+| Direction | Data flow | Practical advice |
+|---|---|---|
+| `in` | Client to server | Best default for request data |
+| `out` | Server fills result object | Often clearer as a return value |
+| `inout` | Both directions | More copying and harder reasoning; avoid casually |
+
+## Local Binder optimization
+
+`Stub.asInterface(binder)` can return:
+
+- the local Stub implementation if client and service share a process; or
+- a Proxy if they are in different processes.
+
+This creates an important test trap: code can work in a same-process test but fail remotely because remote calls involve serialization, concurrent Binder threads, size limits, and process death.
+
+### ✅ Test the real boundary
+
+For an API intended for other processes, include instrumentation tests with the service genuinely configured in another process or another test application.
+
+## Synchronous versus `oneway`
+
+```aidl
+String getStatus(String orderId);       // synchronous
+oneway void reportSeen(String orderId); // asynchronous transaction
+```
+
+### Synchronous
+
+- Caller waits for completion and reply.
+- Can return a value or supported exception.
+- Slow server work blocks the caller.
+
+### `oneway`
+
+- Caller returns after the transaction is submitted to Binder.
+- No result is returned.
+- It does not mean the server completed the work.
+- Calls to the same Binder node are serialized, but may run on different server threads over time.
+- Backpressure and failure acknowledgement require explicit design.
+
+### ❌ Wrong interpretation
+
+```kotlin
+remote.reportSeen(orderId)
+showMessage("Server saved it")
+```
+
+Returning from a `oneway` call does not prove that the server processed or persisted the event.
+
+### ✅ Correct modelling
+
+If acknowledgement matters, design an explicit synchronous result, callback, durable shared state, or operation ID that the client can query.
+
+## Exception behaviour
+
+Do not assume arbitrary server exceptions retain their exact type and stack trace across the boundary. AIDL/Binder supports a constrained remote-exception model. Define expected business failures as explicit response data.
+
+```aidl
+parcelable StatusResult;
+StatusResult getStatus(String orderId);
+```
+
+```kotlin
+sealed interface StatusResult {
+    data class Found(val status: String) : StatusResult
+    data object NotFound : StatusResult
+    data object NotAuthorized : StatusResult
+}
+```
+
+The Kotlin sealed type is conceptual; the actual AIDL parcelable must use a cross-process-compatible representation. The lesson is to model expected outcomes as data and reserve exceptions for exceptional transport/programming failures.
+
+<Admonition type="tip" title="Interview-ready answer">
+A Binder Proxy converts a method call into a transaction code plus marshalled arguments. The kernel driver routes it to the process hosting the Binder node, a Binder thread invokes the Stub, and the Stub decodes the Parcel and calls the implementation. A synchronous proxy waits for the reply; `oneway` only means the caller does not wait for server completion. Data is copied/reconstructed, so object identity and later mutation do not cross the process boundary.
+</Admonition>
+
+## Exercises
+
+1. Why can `Stub.asInterface()` hide remote-only bugs during testing?
+2. What is wrong with interpreting `oneway` as “successfully saved”?
+3. Why is `inout` more expensive and harder to reason about than `in`?
+4. Draw the request and reply path for `getStatus()` without looking above.
+
