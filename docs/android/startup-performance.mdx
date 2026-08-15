@@ -1,0 +1,160 @@
+---
+id: startup-performance
+title: Startup performance — TTID, TTFD, and measurement
+---
+import Admonition from '@theme/Admonition';
+
+# Startup performance — TTID, TTFD, and measurement
+
+## Practical goal
+
+Startup optimization is not “make `Application.onCreate()` short” and it is not “hide loading behind a splash screen.” The goal is to show trustworthy UI quickly and make the critical user journey usable.
+
+```text
+Tap ───────────── first meaningful frame ───────────── usable critical content
+      TTID                                      TTFD
+```
+
+## A realistic slow-start example
+
+```kotlin
+class ShopApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        database.openAndMigrate()
+        remoteConfig.fetchBlocking()
+        analytics.uploadPendingEvents()
+        imageLoader.preloadCatalog()
+    }
+}
+```
+
+### Why it is slow
+
+All four operations execute before the first Activity can draw:
+
+- database open/migration can perform disk I/O;
+- blocking network has unpredictable latency;
+- analytics upload is not required for first frame;
+- catalog preloading allocates and performs work before demand.
+
+### ✅ Better ownership
+
+```kotlin
+class ShopApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // Configure only lightweight process-wide primitives.
+    }
+}
+```
+
+- Open/load data when the relevant repository is first used.
+- Schedule durable analytics upload with appropriate background work.
+- Read cached remote configuration and refresh asynchronously.
+- Load images when UI requests them.
+- Make critical dependencies lazy but predictable; random lazy work on first tap can merely move jank later.
+
+## Measure release-like builds
+
+Debug builds have debugger, tracing, compilation, and library behaviour that differs from production. Startup decisions must be based on repeatable release-like measurement.
+
+Use:
+
+- Macrobenchmark for repeatable startup measurement;
+- Perfetto/system traces for the critical path;
+- Android vitals/Play Console for real-user distributions;
+- `reportFullyDrawn()` integration for meaningful full-display timing;
+- Baseline Profile comparisons under controlled compilation modes.
+
+### ❌ Avoid stopwatch optimization
+
+```text
+“It feels faster on my already-warm flagship phone.”
+```
+
+### ✅ Prefer evidence
+
+Measure cold starts across representative device classes, multiple iterations, realistic account/data states, and statistically useful percentiles. Compare the same build and environment before/after.
+
+## Starting window and splash screen
+
+Android shows a starting window while the app prepares its first frame. A consistent SplashScreen theme prevents an ugly blank/flash, but does not reduce actual work.
+
+### ❌ Avoid artificial delay
+
+```kotlin
+delay(2_000) // Keep logo visible for branding.
+```
+
+### ✅ Prefer
+
+Exit the splash when the first meaningful UI can render. Do not wait for noncritical network calls. Show cached content, skeletons, or an honest loading state.
+
+## Critical path analysis
+
+Ask of every startup operation:
+
+1. Must it run in this process?
+2. Must it run before the first frame?
+3. Must it run on the main thread?
+4. Can it use cached/durable state?
+5. Can initialization be removed or feature-scoped?
+6. What happens if it fails?
+
+Only genuinely critical work belongs on the startup path.
+
+## Main-thread disk I/O
+
+Disk reads can be fast in one run due to cache and slow in another. StrictMode in development can reveal accidental main-thread disk/network operations, but tracing and benchmarks prove their user impact.
+
+## Dependency injection startup trap
+
+Creating a DI container is not automatically expensive; eagerly constructing every dependency can be.
+
+### ❌ Avoid eager graph traversal
+
+```kotlin
+val appComponent = createComponent().also {
+    it.database()
+    it.networkClient()
+    it.videoEngine()
+}
+```
+
+### ✅ Prefer feature-scoped creation
+
+Construct shared lightweight configuration early and expensive feature objects only when their feature begins. Confirm improvements with traces because excessive indirection can also add complexity.
+
+## TTID versus TTFD failure
+
+An app displays an empty shell in 200 ms but blocks interaction for four seconds while loading required data.
+
+- TTID looks excellent.
+- TTFD and user experience are poor.
+
+Report “fully drawn” when the critical experience is ready, not immediately after drawing decorative chrome.
+
+## Baseline Profiles are not a substitute for architecture
+
+Profiles let ART precompile important paths and can improve startup/critical journeys from first use. They cannot repair blocking network calls, unnecessary SDKs, oversized object graphs, or bad database design.
+
+Correct order:
+
+1. Measure.
+2. Remove/defer unnecessary work.
+3. Fix blocking and architecture problems.
+4. Generate profiles from representative critical journeys.
+5. Benchmark with and without the profile.
+6. Regenerate and verify for releases.
+
+<Admonition type="tip" title="Interview-ready answer">
+I optimize startup using TTID and TTFD, not visual guesses. I trace a release-like cold start, identify main-thread critical-path work, remove or defer nonessential initialization, render useful cached state, and benchmark representative devices. Splash screens hide transitions but do not make work faster. Baseline Profiles improve execution of important paths, but only after the startup architecture is sound.
+</Admonition>
+
+## Exercises
+
+1. Classify analytics upload, database migration, theme loading, and remote config as critical or deferrable—with assumptions.
+2. Explain a case where TTID improves but TTFD becomes worse.
+3. Design a Macrobenchmark matrix for signed-in and signed-out cold starts.
+

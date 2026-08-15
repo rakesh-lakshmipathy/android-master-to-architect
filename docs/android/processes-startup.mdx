@@ -1,70 +1,164 @@
 ---
 id: processes-startup
-title: Processes, startup, and process death
+title: App processes and startup — overview
 ---
 import Admonition from '@theme/Admonition';
 
-# Processes, app startup, and process death
+# App processes and startup — overview
 
-Android controls process lifetime. The user does not need to swipe an app away before Android may kill its background process to reclaim memory.
+## The most important rule
 
-## Cold, warm, and hot startup
+**Android owns your application process.** It creates the process when an app component needs to run and may remove a background process when the device needs resources.
 
-- **Cold:** no app process; Android creates the process, Application, Activity, and first frame.
-- **Warm:** process exists, but Activity must be created.
-- **Hot:** Activity/process already exist and return to foreground.
-
-## Cold-start flow
+Your application therefore has no permanent, app-controlled `main()` process. An Activity, Service, Receiver, or Provider can be the reason Android starts it.
 
 ```text
-Launcher tap
-→ system resolves launch intent
-→ process forked from Zygote
-→ Application created
-→ providers initialized
-→ Activity created
-→ first frame drawn
+Installed application ≠ running process
+
+The app can be installed for months while its process is created and killed many times.
 ```
 
-Every eager SDK, content provider, dependency graph, disk read, and class load before the first frame can increase startup time.
+## What a process contains
 
-## Process death is not lifecycle destruction
+A running app process contains:
 
-Android can kill the process without calling final cleanup callbacks. In-memory singletons, static fields, ViewModels, and coroutines disappear.
+- its own virtual address space and managed heap;
+- ART runtime state;
+- a main thread and any worker threads;
+- loaded application and library classes;
+- static fields, Kotlin `object` instances, and dependency graph objects;
+- live Android component instances.
 
-<div className="practice-bad">
+When the process dies, **all of those in-memory objects disappear together**.
 
-**✕ Keep essential state only in memory**
+## Process lifetime and component lifetime differ
 
-```kotlin
-object CheckoutSession { var orderId: String? = null }
+```text
+Process created
+  ├─ Application created
+  ├─ Activity A created
+  ├─ Activity B created
+  ├─ Activity A destroyed
+  └─ process later killed
 ```
-</div>
 
-<div className="practice-good">
+Destroying one Activity does not imply process death. Process death destroys every object in the process, even if a final callback such as `onDestroy()` was never delivered.
 
-**✓ Persist durable state and save small UI state**
+## Startup states
+
+Android’s [startup documentation](https://developer.android.com/topic/performance/vitals/launch-time) distinguishes three useful states:
+
+| State | What is already available? | Work typically required |
+|---|---|---|
+| Cold | No app process | Create process, Application, Activity, UI, first frame |
+| Warm | Some process/task state may exist, Activity needs creation | Recreate Activity and UI |
+| Hot | Process and Activity remain | Bring existing Activity forward |
+
+These are performance categories, not guarantees about your exact object graph. Optimize and test cold start because it includes the most work.
+
+## Simplified cold-start path
+
+```text
+User taps icon / notification / deep link
+              ↓
+System resolves component and task
+              ↓
+App process requested from Zygote
+              ↓
+Main thread and runtime prepared
+              ↓
+Application object created
+              ↓
+App ContentProviders initialized
+              ↓
+Entry Activity created
+              ↓
+First frame drawn (TTID)
+              ↓
+Critical content becomes usable (TTFD)
+```
+
+This ordering explains why an SDK initialized by a ContentProvider can delay startup even when you never called it from `Application.onCreate()`.
+
+## TTID and TTFD
+
+- **Time to initial display (TTID):** time until the first frame appears.
+- **Time to full display (TTFD):** time until the experience is meaningfully ready for interaction.
+
+A fast splash/empty frame can improve TTID while data remains unusable for seconds. Measure both. Product quality is not achieved by gaming the first-frame metric.
+
+## Real scenario: notification tap after process death
+
+The user receives an order notification, leaves the phone overnight, and taps it in the morning. The process no longer exists.
+
+### ❌ Fragile design
 
 ```kotlin
-class CheckoutViewModel(private val savedState: SavedStateHandle) {
-    var orderId: String?
-        get() = savedState["orderId"]
-        set(value) { savedState["orderId"] = value }
+object SelectedOrder {
+    lateinit var order: Order
+}
+
+class OrderActivity : AppCompatActivity() {
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        render(SelectedOrder.order)
+    }
 }
 ```
-</div>
 
-SavedStateHandle is for small restorable state, not large datasets. Durable business data belongs in Room, DataStore, files, or a server.
+The singleton is a new empty instance in the new process. Accessing `order` crashes.
+
+### ✅ Process-safe entry point
+
+```kotlin
+class OrderActivity : AppCompatActivity() {
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+
+        val orderId = intent.getStringExtra("orderId")
+            ?.takeIf { it.matches(Regex("ORD-[0-9]+")) }
+            ?: return finish()
+
+        viewModel.load(orderId)
+    }
+}
+```
+
+The Intent carries a small stable identifier. The ViewModel asks a repository to reload durable truth.
+
+## What belongs where?
+
+| State | Example | Appropriate home |
+|---|---|---|
+| Ephemeral UI | Expanded card, selected tab | `rememberSaveable`/SavedStateHandle when restoration matters |
+| Screen state | Loading/error/content derived for UI | ViewModel, reconstructed from saved/durable inputs |
+| Durable local business data | Draft order, downloaded messages | Room/DataStore/file according to structure |
+| Server authority | Payment result, inventory | Backend plus local synchronized representation |
+| Process cache | Decoded image, computed lookup | Memory cache; correctness cannot depend on survival |
 
 ## Multiple processes
 
-Declaring `android:process` creates another process with a separate heap and singleton instances. It adds IPC, initialization, debugging, and consistency costs. Use only for a measured requirement such as isolation—not as a casual performance trick.
+Manifest `android:process` can place a component in another process. That process has another heap, Application initialization, singleton set, threads, and failure lifetime.
 
-## Practical testing
+### ❌ Incorrect assumption
 
-Use developer options such as “Don't keep activities” to expose lifecycle assumptions, but remember it destroys Activities, not necessarily the whole process. Test real process recreation by stopping the process and restoring navigation/state through an appropriate test strategy.
+```kotlin
+object LoginSession { var token: String? = null }
+```
+
+Two processes have two `LoginSession` objects.
+
+### ✅ Architectural rule
+
+Use multiple processes only for a concrete isolation or integration requirement. Define process-safe storage/IPC and ensure libraries do not initialize incorrectly in every process.
 
 <Admonition type="tip" title="Interview-ready answer">
-Android owns process lifetime. Process death removes all in-memory state and may happen without cleanup callbacks. Restore small UI state, persist durable data, and keep startup work minimal. Cold startup includes process creation; warm and hot starts reuse more existing state.
+Android creates an application process when a component needs to run and can later kill a background process without final cleanup callbacks. Cold startup creates the process, Application, component, UI, and first frame; warm and hot starts reuse progressively more state. I treat all in-memory objects as disposable, pass stable IDs into entry points, save only small restorable UI state, persist durable business data, and keep eager startup work minimal.
 </Admonition>
+
+## Continue
+
+1. [Zygote and app-process creation](./zygote-process-creation)
+2. [Startup performance, TTID, and TTFD](./startup-performance)
+3. [Process death and state restoration](./process-death-state)
 

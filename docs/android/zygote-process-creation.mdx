@@ -1,0 +1,112 @@
+---
+id: zygote-process-creation
+title: Zygote and app-process creation
+---
+import Admonition from '@theme/Admonition';
+
+# Zygote and app-process creation
+
+## Why Android does not start every app from zero
+
+Starting a runtime and loading common framework classes separately for every app would waste startup time and memory. Android starts a prepared process called **Zygote**, then forks application processes from it.
+
+The official [AOSP Zygote documentation](https://source.android.com/docs/core/runtime/zygote) describes Zygote as the root of system and app processes for the matching ABI.
+
+```text
+init
+  └─ Zygote (runtime + common framework state prepared)
+       ├─ system_server
+       ├─ shopping app process
+       ├─ maps app process
+       └─ music app process
+```
+
+`fork()` creates a child process initially based on the parent’s memory image. Clean, unchanged pages can be shared using copy-on-write behaviour. Each app is then specialized with its own UID, security policy, process name, runtime state, and application code.
+
+## Simplified launch sequence
+
+Suppose an Activity must run but its process does not exist:
+
+1. Activity/task management determines the target package/component.
+2. System server requests creation of an app process.
+3. A request reaches the appropriate Zygote.
+4. Zygote forks a child process.
+5. The child is specialized for the app’s UID, groups, capabilities, SELinux context, ABI, and runtime configuration.
+6. Android creates the app main thread and binds application information.
+7. Loaded APK/code/resources become available.
+8. `Application` and providers are initialized.
+9. The requested component is created and receives lifecycle callbacks.
+
+This is intentionally simplified: platform details evolve. The durable app-developer lesson is that cold start contains significant OS and runtime work before your own screen code begins.
+
+## What fork does not mean
+
+### ❌ Incorrect idea
+
+“All Android apps share the same heap because they come from Zygote.”
+
+### ✅ Correct idea
+
+They begin from a common prepared ancestor and may share unchanged memory pages, but each application process has an isolated virtual address space, UID, heap evolution, threads, and objects.
+
+## `Application.onCreate()` is not a universal app entry point
+
+```kotlin
+class ShopApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        analytics.initialize()
+    }
+}
+```
+
+It runs when that application process is created. Consequences:
+
+- It can run because a provider, receiver, service, notification tap, or Activity caused process creation.
+- In a multi-process app, it can run in each process.
+- Heavy work delays whichever component is waiting.
+- It can run many times across the installed lifetime because processes die and restart.
+
+### ✅ Guard process-specific initialization
+
+If a library should initialize only in the main process, detect the current process using an appropriate supported API/design and document why. Prefer removing unnecessary extra processes and making initialization lazy rather than spreading fragile name checks everywhere.
+
+## ContentProviders can start before Application work finishes
+
+App ContentProviders are created during process initialization before normal component use. Libraries sometimes use manifest-registered providers for automatic initialization.
+
+### Practical consequence
+
+Your `Application.onCreate()` looks small, but cold startup is still slow. The merged manifest reveals several startup providers from SDK dependencies.
+
+### Investigation
+
+1. Inspect the merged manifest, not only your source manifest.
+2. Trace startup with Perfetto/Android Studio.
+3. Identify which provider or initializer blocks the main thread.
+4. Disable automatic initialization where supported.
+5. Initialize only when the feature is actually needed.
+
+## Fork safety explains Zygote discipline
+
+The platform carefully controls state and file descriptors inherited across fork. Application developers normally do not modify Zygote, but understanding the boundary explains why app processes start from a prepared runtime rather than through your own executable `main()`.
+
+## Interview follow-ups
+
+**Does Zygote make every cold start cheap?** No. Forking reduces setup cost, but package loading, class initialization, providers, dependency graphs, resources, Activity/UI creation, disk I/O, and first rendering still cost time.
+
+**Can an app request to live forever?** No. Component state affects process importance, but Android retains final authority and background-execution rules apply.
+
+**Is system_server an ordinary third-party app?** No. It is a privileged platform process hosting many Java framework services, created as part of system startup.
+
+<Admonition type="tip" title="Interview-ready answer">
+Zygote is a pre-initialized Android process from which app processes are forked. This avoids repeating runtime/framework setup and allows unchanged memory pages to be shared copy-on-write. The child is then specialized with the app’s UID and security/runtime configuration. Apps remain isolated; they do not share mutable heaps. After specialization Android initializes the application and starts the requested component.
+</Admonition>
+
+## Exercises
+
+1. Why can a BroadcastReceiver cause `Application.onCreate()`?
+2. Why can a library ContentProvider slow Activity startup?
+3. Explain copy-on-write without saying that apps share Kotlin objects.
+4. What breaks when initialization assumes only one app process?
+

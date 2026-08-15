@@ -1,0 +1,156 @@
+---
+id: process-death-state
+title: Process death and state restoration
+---
+import Admonition from '@theme/Admonition';
+
+# Process death and state restoration
+
+## Rotation is not process death
+
+| Event | Activity instance | Process | ViewModel | Static/singleton memory |
+|---|---|---|---|---|
+| Configuration recreation | Recreated | Usually survives | Usually survives | Survives |
+| System process death | Gone | Gone | Gone | Gone |
+| Back/finish | Destination removed intentionally | May survive | Cleared for destination | Survives while process does |
+
+A feature that survives rotation can still fail after process death because its ViewModel and singletons survived the rotation test.
+
+## Three categories of state
+
+### 1. Restorable UI state
+
+Small values needed to reconstruct what the user was looking at:
+
+- search query;
+- selected tab;
+- draft field text;
+- stable item ID;
+- navigation destination/arguments.
+
+Use `rememberSaveable`, `SavedStateHandle`, or the saved-instance-state mechanism as appropriate.
+
+### 2. Durable business state
+
+Data whose loss changes correctness or user work:
+
+- checkout draft;
+- offline message;
+- completed sync marker;
+- downloaded document metadata.
+
+Persist it transactionally in Room, DataStore, a file, or backend according to the model.
+
+### 3. Recomputable/cache state
+
+- formatted strings;
+- decoded images;
+- filtered list derived from durable inputs.
+
+Recreate it. Do not waste saved-state space on large derived objects.
+
+## Practical checkout design
+
+```kotlin
+class CheckoutViewModel(
+    private val savedState: SavedStateHandle,
+    private val repository: CheckoutRepository
+) : ViewModel() {
+
+    private val orderId: String = requireNotNull(savedState["orderId"])
+
+    val uiState: StateFlow<CheckoutUiState> =
+        repository.observeDraft(orderId)
+            .map(::toUiState)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = CheckoutUiState.Loading
+            )
+
+    fun selectDelivery(optionId: String) {
+        savedState["selectedDeliveryId"] = optionId
+        viewModelScope.launch {
+            repository.updateDelivery(orderId, optionId)
+        }
+    }
+}
+```
+
+### Step by step after process death
+
+1. Android recreates the navigation/activity entry with saved `orderId`.
+2. A new process, repository, and ViewModel are created.
+3. The ViewModel reads the small stable identifier.
+4. Repository observes the durable checkout draft.
+5. UI state is reconstructed.
+
+The ViewModel does not survive. The **reconstruction recipe** survives.
+
+## SavedStateHandle is not a database
+
+### ❌ Avoid
+
+```kotlin
+savedState["catalog"] = catalogWithTenThousandProducts
+```
+
+Saved state is eventually transported through Bundle/Binder-related mechanisms and must remain small. Large graphs risk transaction-size failure and slow serialization.
+
+### ✅ Prefer
+
+```kotlin
+savedState["categoryId"] = categoryId
+```
+
+Reload/persist the catalog through the data layer.
+
+## `onDestroy()` is not guaranteed
+
+### ❌ Avoid delayed essential saving
+
+```kotlin
+override fun onDestroy() {
+    repository.saveDraft(editor.text.toString())
+    super.onDestroy()
+}
+```
+
+The process can disappear without this callback, and `onDestroy()` also occurs for reasons unrelated to permanent exit.
+
+### ✅ Prefer continuous/event-based persistence
+
+Save when the user commits a meaningful change, or debounce draft persistence while editing. Use database transactions where several fields must remain consistent.
+
+## Process-death testing
+
+“Don’t keep activities” tests frequent Activity destruction, not the complete loss of every process object.
+
+A useful manual scenario:
+
+1. Navigate deep into a feature and enter state.
+2. Put the app in background.
+3. Terminate the process using an appropriate development/test method without clearing app data or task intent.
+4. Return through Recents/deep link/notification.
+5. Verify restoration, missing-data handling, authentication, and stale state.
+
+Automated navigation and state-restoration tests should complement manual device testing.
+
+## Corner cases
+
+- Saved ID refers to a record deleted while process was gone → show unavailable state.
+- User signed out → route through authentication, not a crash.
+- App updated and schema changed → migrations and backward-compatible saved inputs matter.
+- Server state advanced → reload authoritative truth rather than trusting old parcelable.
+- Draft persistence failed → expose retry/error; do not imply it was saved.
+
+<Admonition type="tip" title="Interview-ready answer">
+ViewModel survives configuration recreation, not process death. I classify state as small restorable UI state, durable business state, or recomputable cache. SavedStateHandle keeps stable IDs and small UI values; repositories reload durable truth. I persist important user changes before final lifecycle callbacks because `onDestroy()` is not guaranteed, and I test actual process recreation rather than relying only on rotation or “Don’t keep activities.”
+</Admonition>
+
+## Exercises
+
+1. Classify a search query, shopping cart, bitmap, auth token, and selected product ID.
+2. Design restoration when a selected record was deleted remotely.
+3. Explain why a ViewModel-only cart passes rotation tests but loses orders in production.
+
