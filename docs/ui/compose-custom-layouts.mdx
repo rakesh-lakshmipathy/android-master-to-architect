@@ -1,0 +1,89 @@
+---
+id: compose-custom-layouts
+title: Advanced Compose layouts
+---
+import Admonition from '@theme/Admonition';
+
+# Advanced Compose layouts
+
+## Start with the cheapest abstraction
+
+Use `Row`, `Column`, `Box`, constraint-aware modifiers, or `FlowRow` before writing measurement code. Custom layout is justified when the product has a reusable placement rule that ordinary containers cannot express cleanly.
+
+The layout contract is:
+
+1. Parent gives constraints.
+2. Layout measures each child once.
+3. Layout chooses a legal size.
+4. Layout places measured children.
+
+```kotlin
+@Composable
+fun StaggeredColumn(content: @Composable () -> Unit) {
+    Layout(content = content) { measurables, constraints ->
+        val placeables = measurables.map { it.measure(constraints.copy(minHeight = 0)) }
+        val width = placeables.maxOfOrNull { it.width } ?: 0
+        val height = placeables.sumOf { it.height }
+
+        layout(
+            width = width.coerceIn(constraints.minWidth, constraints.maxWidth),
+            height = height.coerceIn(constraints.minHeight, constraints.maxHeight),
+        ) {
+            var y = 0
+            placeables.forEachIndexed { index, child ->
+                child.placeRelative(x = if (index % 2 == 0) 0 else 24.dp.roundToPx(), y = y)
+                y += child.height
+            }
+        }
+    }
+}
+```
+
+`placeRelative` respects RTL; `place` uses absolute coordinates. In production, the horizontal offset must participate in reported width and be clamped to avoid clipping.
+
+## Modifier layout versus `Layout`
+
+- `Modifier.layout` changes measurement/placement of one wrapped child.
+- `Layout` coordinates multiple children.
+- `SubcomposeLayout` composes children during measurement when later content depends on earlier measured results.
+
+`SubcomposeLayout` is powerful and expensive. Material components such as `BoxWithConstraints` and complex containers use this family of techniques. Do not use it merely to inspect screen width; prefer window/adaptive APIs or normal constraints.
+
+## Intrinsics are an exception, not a default
+
+Compose normally forbids measuring a child twice. Intrinsic measurement asks a child for a minimum/maximum size before regular measurement, such as making a divider match the tallest text row:
+
+```kotlin
+Row(Modifier.height(IntrinsicSize.Min)) {
+    Text(left, Modifier.weight(1f))
+    VerticalDivider(Modifier.fillMaxHeight())
+    Text(right, Modifier.weight(1f))
+}
+```
+
+Intrinsic queries add work and custom approximations can be wrong. Prefer a direct layout algorithm where possible.
+
+## Corner cases checklist
+
+- Unbounded constraints inside scroll containers
+- Empty content and zero sizes
+- RTL placement
+- Font scale and multi-line text
+- Minimum touch targets and semantics
+- Integer overflow when summing many child sizes
+- Alignment lines such as text baselines
+
+<Admonition type="warning" title="Common failure">
+Do not assume `maxWidth` is finite. A horizontally scrollable parent can pass an unbounded maximum. Design and test the contract for bounded and unbounded constraints.
+</Admonition>
+
+## Sources
+
+- [Custom layouts](https://developer.android.com/develop/ui/compose/layouts/custom)
+- [Intrinsic measurements](https://developer.android.com/develop/ui/compose/layouts/intrinsic-measurements)
+
+## Interview exercises
+
+1. Explain why measuring a child twice normally fails.
+2. Design a flow layout that supports RTL and long text.
+3. When is `SubcomposeLayout` justified?

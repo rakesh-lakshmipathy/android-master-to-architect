@@ -1,0 +1,87 @@
+---
+id: compose-animation
+title: Compose animation and transition design
+---
+import Admonition from '@theme/Admonition';
+
+# Compose animation and transition design
+
+## Choose by state relationship
+
+| Requirement | API |
+|---|---|
+| One value follows a target | `animate*AsState` |
+| Several coordinated values follow one state | `updateTransition` |
+| Enter/exit content | `AnimatedVisibility` |
+| Replace different content | `AnimatedContent` |
+| Gesture-controlled value or sequenced suspend work | `Animatable` |
+| Continuous decorative motion | `rememberInfiniteTransition` |
+| Item insertion/reorder | lazy item `animateItem` |
+
+```kotlin
+enum class CheckoutPhase { Editing, Validating, Paid }
+
+@Composable
+fun CheckoutCard(phase: CheckoutPhase) {
+    val transition = updateTransition(phase, label = "checkout")
+    val elevation by transition.animateDp(label = "elevation") {
+        if (it == CheckoutPhase.Paid) 2.dp else 8.dp
+    }
+    val alpha by transition.animateFloat(label = "contentAlpha") {
+        if (it == CheckoutPhase.Validating) 0.6f else 1f
+    }
+    Card(Modifier.alpha(alpha), elevation = CardDefaults.cardElevation(elevation)) { /* ... */ }
+}
+```
+
+One transition makes timing inspectable and keeps properties synchronized.
+
+## Gesture interruption requires ownership
+
+```kotlin
+val offset = remember { Animatable(0f) }
+val scope = rememberCoroutineScope()
+
+Modifier.draggable(
+    orientation = Orientation.Horizontal,
+    state = rememberDraggableState { delta ->
+        scope.launch { offset.snapTo(offset.value + delta) }
+    },
+    onDragStopped = {
+        scope.launch { offset.animateTo(if (offset.value > threshold) end else 0f) }
+    },
+)
+```
+
+Real code clamps bounds and avoids launching excessive coroutines per pointer delta. Consider `anchoredDraggable` for anchored components.
+
+## Motion is part of UX, not decoration
+
+- Preserve continuity: users should understand where content came from.
+- Avoid animating every change; motion competes for attention.
+- Respect reduced-motion/accessibility needs.
+- Prefer transform/draw changes over repeated expensive measurement when visually equivalent.
+- Test interruption: rapid taps, navigation during motion, new target mid-animation.
+
+❌ `LaunchedEffect(Unit)` starts an animation whose target later changes but never restarts.
+
+✅ Model target as state and use a target-based API, or key the effect by the true animation identity.
+
+## Shared transitions and navigation
+
+Shared elements require stable matching keys, defined clipping/resize behavior, and a fallback when source or destination disappears. Do not make correctness depend on animation completion.
+
+<Admonition type="tip" title="Architect takeaway">
+Specify the state machine first. Animation visualizes transitions; it should not become the source of business state.
+</Admonition>
+
+## Sources
+
+- [Choose an animation API](https://developer.android.com/develop/ui/compose/animation/choose-api)
+- [Animation quick guide](https://developer.android.com/develop/ui/compose/animation/quick-guide)
+
+## Interview exercises
+
+1. Choose APIs for a favorite icon, expanding card, pager transition, and swipe-to-dismiss.
+2. What happens when the target changes halfway through an animation?
+3. Explain why an infinite animation should stop when off-screen.

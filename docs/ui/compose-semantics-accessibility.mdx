@@ -1,0 +1,90 @@
+---
+id: compose-semantics-accessibility
+title: Compose semantics and accessibility
+---
+import Admonition from '@theme/Admonition';
+
+# Compose semantics and accessibility
+
+## Visual pixels are not meaning
+
+Compose creates a semantics tree alongside UI. TalkBack, Switch Access, autofill, and Compose tests consume meaning such as role, label, state, and actions.
+
+```kotlin
+@Composable
+fun FavoriteToggle(favorite: Boolean, onChange: (Boolean) -> Unit) {
+    IconToggleButton(
+        checked = favorite,
+        onCheckedChange = onChange,
+        modifier = Modifier.semantics {
+            stateDescription = if (favorite) "Saved" else "Not saved"
+        },
+    ) {
+        Icon(
+            imageVector = Icons.Default.Favorite,
+            contentDescription = null, // parent control already owns the meaning
+        )
+    }
+}
+```
+
+Adding the same description to both parent and icon can cause duplicate announcements.
+
+## Merge at the interaction boundary
+
+A clickable article row containing title, author, and image should often be one semantic action. `clickable` commonly merges descendants. A row containing separate Bookmark and Open actions should not hide both actions inside one merged node.
+
+Use `clearAndSetSemantics` only when replacing descendant meaning deliberately; careless clearing makes content invisible to assistive technology.
+
+## Custom controls must expose a complete contract
+
+```kotlin
+Modifier
+    .minimumInteractiveComponentSize()
+    .toggleable(
+        value = enabled,
+        role = Role.Switch,
+        onValueChange = onEnabledChange,
+    )
+```
+
+A canvas-drawn switch without role, state, action, focus, and adequate target is only a picture.
+
+## Test in layers
+
+1. Inspect merged and unmerged semantics trees.
+2. Assert roles/states/actions in Compose tests.
+3. Run automated accessibility checks.
+4. Manually use TalkBack, Switch Access, large font, display scaling, and keyboard navigation.
+5. Test errors and dynamic announcements, not only the happy path.
+
+```kotlin
+composeRule.onNode(
+    hasRole(Role.Switch) and hasStateDescription("Saved")
+).assertIsOn().performClick().assertIsOff()
+```
+
+Test IDs are sometimes useful, but user-visible semantics produce stronger tests and better accessibility simultaneously.
+
+## Frequent practical failures
+
+- ❌ Icon-only action says “button, unlabeled.”
+- ✅ Parent action has a localized purpose such as “Delete invoice.”
+- ❌ Every decorative divider/logo becomes a focus stop.
+- ✅ Decorative images use `contentDescription = null`.
+- ❌ Error is only red.
+- ✅ Error has text/icon semantics and an understandable recovery action.
+- ❌ Custom gesture has no keyboard/accessibility action.
+- ✅ Equivalent semantic action is exposed.
+
+## Sources
+
+- [Semantics](https://developer.android.com/develop/ui/compose/accessibility/semantics)
+- [Merging and clearing semantics](https://developer.android.com/develop/ui/compose/accessibility/merging-clearing)
+- [Accessibility testing](https://developer.android.com/develop/ui/compose/accessibility/testing)
+
+## Interview exercises
+
+1. Why are merged and unmerged semantics trees different?
+2. Fix a clickable card that contains an independent favorite button.
+3. Build a TalkBack test plan for checkout failure.

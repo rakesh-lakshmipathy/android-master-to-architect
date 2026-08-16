@@ -1,0 +1,78 @@
+---
+id: compose-performance
+title: Compose performance and measurement
+---
+import Admonition from '@theme/Admonition';
+
+# Compose performance and measurement
+
+## Diagnose the frame, not a guess
+
+A frame may spend time in composition, layout, drawing, image decoding, GC, binder calls, or unrelated main-thread work. “Too many recompositions” is not a diagnosis.
+
+Use a release-like build and a repeatable user journey. Debug builds distort Compose performance.
+
+## Place state reads in the latest phase
+
+```kotlin
+// May recompose as offset changes.
+Modifier.offset(x = offsetDp, y = 0.dp)
+
+// Lambda reads during placement and can avoid composition for each change.
+Modifier.offset { IntOffset(offsetPx(), 0) }
+```
+
+Similarly, a draw lambda can read rapidly changing visual state during drawing. This is useful only when semantics/layout do not depend on the same value.
+
+## Lazy list checklist
+
+- stable keys and `contentType`
+- no sorting/filtering inside `items`
+- expensive formatting moved out or remembered with correct keys
+- thumbnails sized before decode and cached by image library
+- nested same-direction scrolling avoided
+- item models immutable and callbacks stable enough for measured needs
+
+```kotlin
+val visibleProducts = remember(products, filter) {
+    products.filter(filter::accepts)
+}
+LazyColumn {
+    items(visibleProducts, key = Product::id, contentType = { "product" }) { ProductRow(it) }
+}
+```
+
+## Stability is not the first lever
+
+Strong skipping and compiler inference can reduce work, but annotation lies are dangerous. Before changing stability:
+
+1. Capture system trace or Macrobenchmark evidence.
+2. Inspect recomposition/high-cost scopes and compiler reports.
+3. Verify model mutation contracts.
+4. Make the smallest truthful change.
+5. compare distribution (median and tail), not one run.
+
+## Measure user outcomes
+
+- Macrobenchmark: startup, scroll, navigation journeys across process boundaries.
+- JankStats/system tracing: slow frames and causes.
+- Baseline Profiles: precompile critical paths.
+- Microbenchmark: isolated algorithm/layout work, not full-screen claims.
+
+Screenshot smoothness in an emulator is weak evidence. Benchmark representative release artifacts on physical devices, including lower-end hardware.
+
+<Admonition type="warning" title="Common failure">
+Moving all work to `Dispatchers.Default` does not make a screen fast. Results still arrive, allocation/GC remains, and unsafe parallelism may create races. Remove unnecessary work and assign thread ownership deliberately.
+</Admonition>
+
+## Sources
+
+- [Compose performance](https://developer.android.com/develop/ui/compose/performance)
+- [Performance best practices](https://developer.android.com/develop/ui/compose/performance/bestpractices)
+- [Stability](https://developer.android.com/develop/ui/compose/performance/stability)
+
+## Interview exercises
+
+1. Investigate a janky product list without assuming recomposition is the cause.
+2. Why are debug-build timings misleading?
+3. Distinguish Macrobenchmark, Microbenchmark, and Baseline Profiles.

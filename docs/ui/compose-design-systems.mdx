@@ -1,0 +1,89 @@
+---
+id: compose-design-systems
+title: Compose design systems and component APIs
+---
+import Admonition from '@theme/Admonition';
+
+# Compose design systems and component APIs
+
+## A design system is policy in code
+
+Tokens define semantic color, typography, shape, spacing, elevation, and motion. Components encode allowed product behavior and accessibility. A gallery of copied buttons is not a system.
+
+```kotlin
+@Immutable
+data class AppSpacing(val compact: Dp = 8.dp, val normal: Dp = 16.dp, val roomy: Dp = 24.dp)
+
+val LocalAppSpacing = staticCompositionLocalOf { AppSpacing() }
+
+@Composable
+fun AppTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalAppSpacing provides AppSpacing()) {
+        MaterialTheme(colorScheme = appColors(), typography = appTypography(), content = content)
+    }
+}
+```
+
+Use semantic names (`criticalContainer`, `onCriticalContainer`) rather than raw `red500`; semantics survive brand and dark-theme changes.
+
+## Component APIs should prevent invalid states
+
+❌ Boolean explosion permits contradictory states:
+
+```kotlin
+ActionButton(loading = true, enabled = true, destructive = true, secondary = true)
+```
+
+✅ Model a controlled state/variant:
+
+```kotlin
+enum class ActionStyle { Primary, Secondary, Destructive }
+
+@Composable
+fun AppActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    style: ActionStyle = ActionStyle.Primary,
+    state: ActionState = ActionState.Ready,
+    leadingIcon: (@Composable () -> Unit)? = null,
+)
+```
+
+The component decides enabled/loading semantics consistently.
+
+## Slots preserve composition
+
+Slots accept product content without forcing a giant configuration object:
+
+```kotlin
+@Composable
+fun AppCard(
+    title: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    supporting: (@Composable () -> Unit)? = null,
+    action: (@Composable () -> Unit)? = null,
+) { /* policy + layout */ }
+```
+
+Keep `modifier` near the start, apply it to the outermost node, provide sensible defaults, and avoid hidden navigation/network behavior.
+
+## Governance and evolution
+
+- Define owners and contribution review.
+- Version tokens/components and publish migration notes.
+- Test light/dark, dynamic color, large font, RTL, disabled/loading/error states.
+- Use screenshot tests for visual contract and semantics tests for behavior.
+- Track exceptions; repeated overrides indicate a missing token/variant.
+
+Do not wrap every Material component. Wrap where product policy, branding, analytics, or accessibility consistency is valuable; direct Material usage can remain for primitives with no product-specific contract.
+
+<Admonition type="tip" title="Architect takeaway">
+The design system is an internal platform. Its API compatibility and migration cost affect every feature team, so treat it like a product.
+</Admonition>
+
+## Interview exercises
+
+1. Design a button API for loading, icon, destructive, and disabled states.
+2. Decide which Material components your company should wrap.
+3. Plan a color-token migration across 30 feature modules.

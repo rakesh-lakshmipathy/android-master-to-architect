@@ -1,0 +1,82 @@
+---
+id: compose-testing-advanced
+title: Advanced Compose testing and interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Advanced Compose testing and interview lab
+
+## Test the contract at the right layer
+
+| Question | Test |
+|---|---|
+| Reducer maps event to state? | JVM unit test |
+| Composable exposes correct semantics? | Compose UI test |
+| Feature works with navigation/database? | integration test |
+| Pixel contract changed? | screenshot/golden test |
+| Critical journey is smooth? | Macrobenchmark |
+
+```kotlin
+@Test
+fun paying_disables_action_and_shows_progress() {
+    composeRule.setContent {
+        CheckoutContent(
+            state = readyState.copy(isPaying = true),
+            onEvent = {},
+        )
+    }
+
+    composeRule.onNodeWithText("Paying...").assertExists()
+    composeRule.onNodeWithRole(Role.Button).assertIsNotEnabled()
+}
+```
+
+Prefer semantic assertions. A test tag is appropriate when no stable user-facing semantic locator exists, but tags should not replace accessibility meaning.
+
+## Synchronization and clocks
+
+Compose tests wait for Compose idleness, but external executors, uncontrolled network calls, and custom clocks may not be known. Inject dispatchers/data sources and use deterministic fakes. For animations:
+
+```kotlin
+composeRule.mainClock.autoAdvance = false
+composeRule.mainClock.advanceTimeBy(300)
+```
+
+Assert meaningful intermediate/final states without sleeping.
+
+## Screenshot tests have a narrow purpose
+
+Goldens catch spacing, colors, clipping, and typography regressions. They do not prove interaction, accessibility, or business correctness. Control font, density, locale, theme, device dimensions, and rendering environment; review intentional baseline changes rather than blindly updating files.
+
+## Interview scenarios
+
+<details><summary><strong>A custom canvas control is invisible to tests. Why?</strong></summary><p>Pixels do not create semantics. Expose role, state, label, and actions through semantics, then test the user-facing contract.</p></details>
+
+<details><summary><strong>A test passes locally but flakes in CI after delay(1000). Fix?</strong></summary><p>Remove wall-clock guessing. Inject work, let Compose synchronization observe it, and control the test clock or await an explicit state/condition.</p></details>
+
+<details><summary><strong>Should every composable have a screenshot test?</strong></summary><p>No. Use screenshots for important visual contracts and representative state matrices. Use cheaper semantic/unit tests for behavior; otherwise maintenance noise overwhelms value.</p></details>
+
+## Advanced Compose review checklist
+
+- [ ] Custom layout handles constraints, RTL, font scale, and empty content.
+- [ ] Motion reflects a state transition and survives interruption.
+- [ ] Custom components expose full semantics.
+- [ ] Performance claims come from release-like measurement.
+- [ ] Design-system APIs prevent invalid combinations.
+- [ ] Navigation passes IDs and supports deep-link entry.
+- [ ] Tests cover behavior, accessibility, visuals, and performance at suitable layers.
+
+<Admonition type="tip" title="Architect answer pattern">
+Explain the requirement, lifetime/contract, chosen API, rejected alternatives, failure modes, and evidence. Naming a Compose API alone is not a design answer.
+</Admonition>
+
+## Exercises
+
+1. Create a test matrix for a payment button across state, theme, font scale, and RTL.
+2. Debug a flaky animation test without `Thread.sleep`.
+3. Review a custom layout for accessibility and benchmark coverage.
+
+## Sources
+
+- [Compose testing](https://developer.android.com/develop/ui/compose/testing)
+- [Testing semantics](https://developer.android.com/develop/ui/compose/testing/semantics)

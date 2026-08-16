@@ -1,0 +1,77 @@
+---
+id: compose-navigation-adaptive
+title: Compose navigation and adaptive structures
+---
+import Admonition from '@theme/Admonition';
+
+# Compose navigation and adaptive structures
+
+## Navigate with identifiers, not objects
+
+```kotlin
+@Serializable data class ProductDetails(val productId: String)
+
+composable<ProductDetails> { entry ->
+    val args = entry.toRoute<ProductDetails>()
+    ProductRoute(productId = args.productId)
+}
+```
+
+Reload authoritative product data from repository. Passing a whole mutable product duplicates/stales state and can exceed saved-state limits.
+
+## Separate route from content
+
+```kotlin
+@Composable
+fun ProductRoute(productId: String, vm: ProductViewModel = hiltViewModel()) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    ProductContent(state = state, onEvent = vm::onEvent)
+}
+```
+
+Navigation owns destination identity. Route wires lifecycle state. Content remains previewable/testable.
+
+## Adaptive navigation is one state, multiple arrangements
+
+Compact width may use a bottom navigation bar and one-pane detail. Expanded width may use a navigation rail and list-detail panes. Do not create unrelated phone/tablet business flows.
+
+```kotlin
+when (windowWidthSizeClass) {
+    WindowWidthSizeClass.Compact -> SinglePaneCatalog(state)
+    else -> ListDetailCatalog(state)
+}
+```
+
+The selected item ID remains shared state. Expanded UI may show list and detail simultaneously; compact UI may put details on the back stack. Define back behavior explicitly when layout changes at runtime.
+
+## Deep-link and restoration questions
+
+- Can a destination be created without its parent screens?
+- Are auth/entitlement checks centralized?
+- What if the referenced entity was deleted?
+- Does back return to a meaningful synthetic parent?
+- What state survives process death versus reloads?
+- Does resizing preserve selection and unsaved draft?
+
+## Avoid navigation side effects in content
+
+Content emits `ProductClicked(id)`. A route/controller maps that intent to navigation. This allows previews and tests to assert intent without constructing a real `NavController`.
+
+❌ Passing `NavController` through the entire component tree couples reusable UI to one navigation implementation.
+
+✅ Pass narrow lambdas or typed events at the boundary.
+
+<Admonition type="warning" title="Common failure">
+Do not key navigation to a transient event that may replay after recreation. Model important completion durably and acknowledge navigation consumption.
+</Admonition>
+
+## Sources
+
+- [Navigation with Compose](https://developer.android.com/develop/ui/compose/navigation)
+- [Adaptive layouts](https://developer.android.com/develop/ui/compose/layouts/adaptive)
+
+## Interview exercises
+
+1. Design back behavior for list-detail when a tablet folds to compact width.
+2. Explain why route arguments should be minimal.
+3. Test a deep link to deleted or unauthorized content.
