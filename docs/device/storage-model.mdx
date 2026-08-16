@@ -1,0 +1,79 @@
+---
+id: storage-model
+title: Android storage locations and scoped storage
+---
+
+# Android storage locations and scoped storage
+
+Choose storage by **ownership, visibility, lifetime, sensitivity, and expected sharing**—not by whichever path is easiest to obtain.
+
+| Location | Owner/visibility | Removed on uninstall? | Typical use |
+|---|---|---:|---|
+| internal files | this app | ✅ | private durable app files |
+| internal cache | this app | ✅; may be evicted earlier | regenerable responses/thumbnails |
+| no-backup files | this app | ✅ | device-local state that must not restore |
+| app-specific external | this app; physical shared volume | ✅ | large app-owned files; not inherently secret |
+| MediaStore shared collection | user/media ecosystem | usually ❌ | user-visible photos, audio, video |
+| SAF document URI | user-selected provider item/tree | provider-owned | open/create/manage chosen documents |
+
+“External” does not necessarily mean a removable SD card. Availability can change; check state and handle I/O failure.
+
+## App-private files
+
+```kotlin
+val file = File(context.filesDir, "accounts/$accountId/profile.json")
+file.parentFile?.mkdirs()
+file.writeText(serializedProfile)
+```
+
+Do not construct paths from raw user values. Map untrusted names to generated IDs and maintain display names as metadata.
+
+## Cache is not durable state
+
+```kotlin
+val cached = File(context.cacheDir, "images/$cacheKey.webp")
+```
+
+The system may delete cache under pressure. A cache miss must be recoverable. Never store the only copy of an unsent form or captured evidence in cache.
+
+## Backup semantics
+
+Cloud/device transfer can restore files and preferences onto a new installation. Exclude access tokens, installation IDs, device-bound encrypted blobs, caches, and server-recoverable large data according to a deliberate backup policy. Keystore keys may not restore with encrypted data, leaving unreadable files.
+
+## Scoped storage mental model
+
+Modern Android limits arbitrary filesystem access. Your app directly owns its private/app-specific locations, uses `MediaStore` for shared media, and uses the Storage Access Framework for user-selected documents. A content `Uri` is usually the durable capability—not a filesystem path.
+
+## Data lifecycle questions
+
+Before writing, answer:
+
+1. Who owns this content—the app or the user?
+2. Must other apps see it?
+3. Should it survive uninstall?
+4. Is it safe to back up/transfer?
+5. Can it be regenerated?
+6. Is it sensitive at rest?
+7. What deletes it, and how is partial cleanup retried?
+
+## Common mistakes
+
+- ❌ Save all downloads to shared storage.
+- ✅ Keep private temporary downloads app-owned; export only on explicit user action.
+- ❌ Assume internal storage is unlimited.
+- ✅ Check space, stream data, enforce quotas, and expose cleanup.
+- ❌ Save auth tokens in a backed-up preference/file.
+- ✅ Use appropriate secure storage and explicit backup exclusions.
+- ❌ Convert every `content://` URI to a “real path.”
+- ✅ Use `ContentResolver` streams and metadata APIs.
+
+## Sources
+
+- [Data and file storage overview](https://developer.android.com/training/data-storage)
+- [Scoped storage](https://developer.android.com/about/versions/11/privacy/storage)
+- [Back up user data](https://developer.android.com/identity/data/backup)
+
+## Interview question
+
+**Internal versus external storage?** Internal is app-private and reliably sandboxed; app-specific external is app-owned but volume availability and exposure characteristics differ. Neither phrase alone defines encryption, backup, or retention.
+

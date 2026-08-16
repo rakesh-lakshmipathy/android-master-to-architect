@@ -1,0 +1,63 @@
+---
+id: storage-media-interview
+title: Permissions, storage, and media interview lab
+---
+
+# Permissions, storage, and media interview lab
+
+## Case study: offline field inspection
+
+Inspectors capture photos/video, annotate PDFs, work offline, and sync later.
+
+1. Request camera/microphone only when capture begins; offer document/photo picker import and manual notes.
+2. Write new captures to app-owned partial files, finalize and hash, then atomically create Room attachment records.
+3. Keep originals app-private/encrypted if evidence is sensitive; export a copy only through explicit SAF/FileProvider flow.
+4. Stream previews and uploads; never load full videos into memory.
+5. Outbox references stable attachment IDs and uses durable WorkManager with idempotent server operations.
+6. Cache thumbnails separately with quota/eviction.
+7. Reconcile orphan files, missing provider URIs, incomplete rows, and ambiguous upload results.
+8. Retention policy coordinates server confirmation, local deletion, audit needs, and user/account removal.
+
+## Failure-injection matrix
+
+| Failure | Expected behavior |
+|---|---|
+| permission revoked between check and capture | catch failure, preserve draft, show contextual recovery |
+| disk full during video | stop/finalize if possible; mark failed; delete invalid partial |
+| process killed after file finalization before Room insert | startup orphan reconciliation |
+| SAF grant revoked | mark source unavailable; ask user to choose again |
+| 2 GB import with unknown size | enforce streaming byte/time quota |
+| headset disconnects | handle noisy event according to playback/recording policy |
+| upload retries after server accepted it | stable idempotency key and reconciliation |
+
+## Interview questions
+
+1. **Why not request storage permission to choose a photo?** The Photo Picker grants scoped access without broad library permission.
+2. **Files directory versus cache?** Files are durable app-owned content; cache is regenerable and evictable.
+3. **MediaStore versus SAF?** MediaStore addresses shared media collections; SAF lets the user choose documents/providers/locations.
+4. **Why use FileProvider?** It grants temporary `content://` access without exposing raw private paths or broad filesystem permissions.
+5. **Can a persisted URI grant last forever?** No. Provider/content may disappear and grants can be revoked; handle failures.
+6. **How do you prevent partial files appearing as complete?** Write to pending/temp state, validate, atomically publish, and reconcile after crashes.
+7. **Why close `ImageProxy`?** CameraX cannot recycle/advance buffers correctly; analysis can stall.
+8. **What owns background audio playback?** Usually a `MediaSessionService`; UI controls it through a `MediaController`.
+9. **What is audio focus?** Cooperative system arbitration for audible output, with gain/loss/ducking callbacks—not a guarantee no other audio exists.
+10. **What should happen after permission denial?** Degrade only the affected capability, explain in context, and respect the user’s choice.
+
+## Review checklist
+
+- [ ] Every permission has a feature owner, contextual request, and denial fallback.
+- [ ] A system picker replaces broad access wherever possible.
+- [ ] Each file location matches ownership, visibility, backup, and uninstall semantics.
+- [ ] Imports/downloads stream with byte, time, and storage limits.
+- [ ] Partial writes and process-death boundaries are recoverable.
+- [ ] URI grants are minimal and incoming content is untrusted.
+- [ ] Shared media is published only when complete.
+- [ ] Cache/retention/orphan cleanup policies are explicit.
+- [ ] Player/session/service ownership matches playback lifetime.
+- [ ] Capture and audio-focus interruption state machines are tested.
+
+## Exercises
+
+1. Threat-model a “share diagnosis PDF” feature, including chooser targets and lock-screen previews.
+2. Write tests for an import that reports no length, stalls, exceeds quota, and disappears mid-stream.
+3. Explain backup rules for encrypted drafts whose Keystore key cannot transfer to a new device.

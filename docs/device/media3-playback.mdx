@@ -1,0 +1,77 @@
+---
+id: media3-playback
+title: Media3 playback architecture
+---
+import Admonition from '@theme/Admonition';
+
+# Media3 playback architecture
+
+Jetpack Media3 supplies a consistent playback stack. `ExoPlayer` performs playback, `MediaSession` exposes it to system/external controllers, `MediaSessionService` owns background playback, and `MediaController` lets UI send commands.
+
+```text
+Compose/View UI -> MediaController
+                      ↓ commands/state
+              MediaSessionService
+                      ↓
+                 MediaSession
+                      ↓
+                   Player
+```
+
+## Keep the player out of composables
+
+```kotlin
+class PlaybackService : MediaSessionService() {
+    private lateinit var player: ExoPlayer
+    private lateinit var session: MediaSession
+
+    override fun onCreate() {
+        super.onCreate()
+        player = ExoPlayer.Builder(this).build()
+        session = MediaSession.Builder(this, player).build()
+    }
+
+    override fun onGetSession(
+        controllerInfo: MediaSession.ControllerInfo,
+    ): MediaSession = session
+
+    override fun onDestroy() {
+        session.release()
+        player.release()
+        super.onDestroy()
+    }
+}
+```
+
+For foreground-only video, an Activity/Fragment-scoped player may be enough. For music/podcast playback expected to continue with screen off or UI gone, a session service gives the correct ownership and system integration.
+
+## UI observes player state
+
+The UI should render controller state—current item, position, buffering, play state—and issue intents such as play/pause/seek. It should not own a parallel “isPlaying” boolean that drifts from the actual player.
+
+## Lifecycle decisions
+
+- Decide whether leaving a screen pauses video or only detaches its surface.
+- Release expensive resources when product playback ends.
+- Restore queue/item/position from durable state where expected; never assume the service lived forever.
+- Avoid polling position too frequently; update display at a reasonable cadence while playing.
+- Handle audio becoming noisy (headphones disconnected), interruptions, and playback errors explicitly.
+
+## Network and caching
+
+Streaming needs timeouts, retry policy, seek/range support, and clear errors. Media cache needs size limits and eviction. DRM, downloaded/offline media, and signed URLs introduce license/expiry/security lifecycles separate from the UI.
+
+<Admonition type="warning" title="A player is not application state">
+Persist business-relevant resume position and queue identity intentionally. Player memory can disappear with process death, and callbacks may arrive during lifecycle transitions.
+</Admonition>
+
+## Sources
+
+- [Introduction to Jetpack Media3](https://developer.android.com/media/media3)
+- [Background playback with a MediaSessionService](https://developer.android.com/media/media3/session/background-playback)
+- [ExoPlayer](https://developer.android.com/media/media3/exoplayer)
+
+## Exercise
+
+Design a podcast player with queue restoration, offline episodes, 30-second skip, Bluetooth controls, process-death recovery, and expired download licenses. Identify service, session, controller, database, and cache ownership.
+

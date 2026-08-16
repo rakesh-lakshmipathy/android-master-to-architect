@@ -1,0 +1,95 @@
+---
+id: permissions
+title: Runtime permissions and capability-based UX
+---
+import Admonition from '@theme/Admonition';
+
+# Runtime permissions and capability-based UX
+
+A permission is a revocable lease to use a protected capability. It is not a one-time onboarding checkbox and must not become your domain state.
+
+## First ask: can the feature avoid the permission?
+
+| Need | Lower-access option |
+|---|---|
+| User chooses one photo | system Photo Picker |
+| User creates/opens a document | Storage Access Framework |
+| Take a photo using another camera app | camera capture intent where suitable |
+| Pick a contact | system picker/contract where supported |
+| Approximate nearby results | coarse location or user-entered place |
+
+Avoiding broad access reduces user friction, privacy risk, policy work, and denial states.
+
+## Ask in context
+
+```kotlin
+val cameraPermission = registerForActivityResult(
+    ActivityResultContracts.RequestPermission()
+) { granted ->
+    if (granted) openScanner()
+    else showScannerWithoutCameraFallback()
+}
+
+fun onScanReceiptClicked() {
+    when {
+        ContextCompat.checkSelfPermission(
+            this, Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED -> openScanner()
+
+        ActivityCompat.shouldShowRequestPermissionRationale(
+            this, Manifest.permission.CAMERA
+        ) -> showCameraRationale()
+
+        else -> cameraPermission.launch(Manifest.permission.CAMERA)
+    }
+}
+```
+
+The rationale explains the feature benefit before requesting; it must not imitate or pressure the system dialog.
+
+## Model capability, not dialog history
+
+```kotlin
+sealed interface CameraCapability {
+    data object Available : CameraCapability
+    data object Requestable : CameraCapability
+    data object Unavailable : CameraCapability
+    data object OpenSettings : CameraCapability
+}
+```
+
+`shouldShowRequestPermissionRationale == false` is ambiguous: first request and a fixed denial can both produce it. Track whether your app has requested before only to choose respectful UX—always use the system permission check as current truth.
+
+## Denial and revocation
+
+- A user can deny once, deny repeatedly, choose “only this time,” downgrade precise location, revoke in Settings, or have permissions auto-reset.
+- Recheck immediately before protected work; do not cache `granted = true` forever.
+- Catch `SecurityException` around races where permission changes between check and use.
+- Keep unrelated app features functional.
+- Offer Settings only after the user asks for the blocked capability and a dialog can no longer appear; never nag on every launch.
+
+<Admonition type="warning" title="Permission groups are not an API contract">
+Request individual permissions your code needs. Do not assume granting one permission automatically grants every permission that happens to be displayed in the same group.
+</Admonition>
+
+## ✅ / ❌
+
+- ❌ Request camera, microphone, contacts, and location at startup.
+- ✅ Request one capability when the user invokes its feature.
+- ❌ Disable the whole app after microphone denial.
+- ✅ Preserve text input and explain voice input is unavailable.
+- ❌ Treat “precise location requested” as “precise granted.”
+- ✅ Inspect actual grants and support approximate results.
+- ❌ Send the user to Settings after the first denial.
+- ✅ Respect denial; surface Settings recovery only when appropriate.
+
+## Sources
+
+- [Request runtime permissions](https://developer.android.com/training/permissions/requesting)
+- [Minimize permission requests](https://developer.android.com/privacy-and-security/minimize-permission-requests)
+- [App permissions best practices](https://developer.android.com/training/permissions/usage-notes)
+
+## Exercise
+
+Design a receipt-expense app with camera scanning, gallery selection, and manual entry. Identify which flows need permissions, which use system pickers, and every denial fallback.
+

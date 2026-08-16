@@ -1,0 +1,111 @@
+---
+id: shared-content
+title: MediaStore, Storage Access Framework, and FileProvider
+---
+import Admonition from '@theme/Admonition';
+
+# MediaStore, Storage Access Framework, and FileProvider
+
+These APIs solve different sharing problems:
+
+- `MediaStore`: publish/query user media in shared collections.
+- Storage Access Framework (SAF): let the user choose a document/provider destination.
+- `FileProvider`: temporarily share an app-owned file with another app.
+
+## Write user-visible media atomically
+
+```kotlin
+val values = ContentValues().apply {
+    put(MediaStore.Images.Media.DISPLAY_NAME, "receipt-$receiptId.jpg")
+    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ExpenseBook")
+    put(MediaStore.Images.Media.IS_PENDING, 1)
+}
+
+val uri = resolver.insert(
+    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+    values,
+) ?: error("Cannot create media row")
+
+try {
+    resolver.openOutputStream(uri, "w")!!.use { output ->
+        source.inputStream().use { input -> input.copyTo(output) }
+    }
+    values.clear()
+    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+    resolver.update(uri, values, null, null)
+} catch (t: Throwable) {
+    resolver.delete(uri, null, null)
+    throw t
+}
+```
+
+`IS_PENDING` prevents other apps from observing a half-written media item on supported versions.
+
+## User-selected documents with SAF
+
+```kotlin
+val openDocument = registerForActivityResult(
+    ActivityResultContracts.OpenDocument()
+) { uri ->
+    if (uri != null) importDocument(uri)
+}
+
+openDocument.launch(arrayOf("application/pdf"))
+```
+
+If access must survive process restart, request persistable URI permission when the contract/provider permits it. Persist the URI string, not an invented path. Access can still disappear if the provider removes the document or grant.
+
+## Share an app-private file
+
+```xml
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="${applicationId}.files"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths" />
+</provider>
+```
+
+```kotlin
+val uri = FileProvider.getUriForFile(
+    context,
+    "${context.packageName}.files",
+    reportFile,
+)
+val share = Intent(Intent.ACTION_SEND).apply {
+    type = "application/pdf"
+    putExtra(Intent.EXTRA_STREAM, uri)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}
+context.startActivity(Intent.createChooser(share, "Share report"))
+```
+
+Configure only the narrow directories that should ever be shareable. Never expose the filesystem root or broad sensitive directory.
+
+<Admonition type="danger" title="A URI grant is capability access">
+Validate incoming URI scheme and MIME/content; grant only read or write access required; avoid long-lived grants unless the product needs them; never assume a display name is a safe filename.
+</Admonition>
+
+## Corner cases
+
+- Provider reports no size or misleading MIME type.
+- Input is non-seekable and cannot be reopened.
+- User revokes a persisted grant.
+- Target app ignores URI permissions or lacks a handler.
+- Insert succeeds but writing fails due to storage pressure.
+- Malicious document is a decompression bomb or oversized despite extension.
+
+## Sources
+
+- [Access media files from shared storage](https://developer.android.com/training/data-storage/shared/media)
+- [Storage Access Framework](https://developer.android.com/guide/topics/providers/document-provider)
+- [FileProvider](https://developer.android.com/reference/androidx/core/content/FileProvider)
+
+## Exercise
+
+Implement “Export monthly report” in two modes: save to a user-chosen location and share a temporary PDF. Define ownership, grants, cancellation, cleanup, and error recovery.
+

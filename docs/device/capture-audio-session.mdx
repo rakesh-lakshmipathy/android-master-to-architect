@@ -1,0 +1,85 @@
+---
+id: capture-audio-session
+title: Media capture, audio focus, and media sessions
+---
+import Admonition from '@theme/Admonition';
+
+# Media capture, audio focus, and media sessions
+
+Media features coordinate scarce hardware, lifecycle, privacy, output files, and other apps. A successful API call is only one part of correctness.
+
+## CameraX use cases
+
+- `Preview`: camera frames displayed to the user.
+- `ImageCapture`: high-quality still capture.
+- `ImageAnalysis`: frames delivered to analysis code.
+- `VideoCapture`: encoded recording pipeline.
+
+Bind compatible use cases to a lifecycle owner. Hardware capability affects which combinations, resolutions, frame rates, and concurrent cameras are available.
+
+```kotlin
+cameraProvider.bindToLifecycle(
+    lifecycleOwner,
+    CameraSelector.DEFAULT_BACK_CAMERA,
+    preview,
+    imageCapture,
+    imageAnalysis,
+)
+```
+
+Analysis must release each frame:
+
+```kotlin
+imageAnalysis.setAnalyzer(executor) { imageProxy ->
+    try {
+        barcodeScanner.process(imageProxy)
+    } finally {
+        imageProxy.close() // otherwise pipeline stalls
+    }
+}
+```
+
+Choose a backpressure strategy. If analysis is slower than camera input, “keep only latest” suits scanning; blocking the producer may suit frame-complete scientific capture but raises latency.
+
+## Capture state machine
+
+```text
+Idle -> Preparing -> Recording -> Stopping -> Finalizing -> Ready
+                  ↘ Error       ↗
+```
+
+Handle permission revoked, app backgrounded, rotation, storage full, microphone unavailable, camera disconnected, and a zero-byte/partial result. Publish shared media only after finalization.
+
+## Audio focus
+
+Before audible playback, request focus with audio attributes describing content and usage. Respond to focus loss:
+
+- transient loss: pause, then optionally resume only if your policy/user intent permits;
+- ducking: lower volume when appropriate (not for spoken-word content where intelligibility suffers);
+- permanent loss: pause/stop and abandon focus;
+- delayed gain: remain paused until granted.
+
+Do not automatically resume after every transient loss if the user paused during interruption.
+
+## MediaSession is the external control contract
+
+A session exposes playback metadata, queue, commands, and state to lock screen, Bluetooth, Assistant, Android Auto, and other controllers. Validate custom commands/controller access; keep standard commands consistent with actual player capability.
+
+## Background behavior
+
+Background playback belongs in `MediaSessionService` with appropriate foreground behavior. Background capture is much more privacy-sensitive and restricted: start from an allowed user-visible flow, declare correct foreground-service type/permissions where applicable, show clear ongoing indication, and stop when the task ends.
+
+<Admonition type="danger" title="Never fake capture success">
+Camera/video callbacks can report asynchronous finalization errors. Confirm the output is finalized and readable before storing `READY` or showing “Saved.”
+</Admonition>
+
+## Sources
+
+- [CameraX architecture](https://developer.android.com/media/camera/camerax/architecture)
+- [Media3 sessions](https://developer.android.com/media/media3/session)
+- [Manage audio focus](https://developer.android.com/media/optimize/audio-focus)
+
+## Exercise
+
+Design a video-note recorder that supports rotation, 10-minute files, Bluetooth audio interruption, storage exhaustion, backgrounding, upload-after-capture, and deletion during upload.
+

@@ -1,0 +1,91 @@
+---
+id: file-io
+title: File I/O, streaming, large files, and cleanup
+---
+
+# File I/O, streaming, large files, and cleanup
+
+Large-file correctness is about bounded memory, cancellation, partial writes, integrity, and storage pressure—not just calling `copyTo`.
+
+## Never load an unknown file entirely
+
+```kotlin
+// ❌ A 1.5 GB file can crash the process.
+val bytes = resolver.openInputStream(uri)!!.readBytes()
+
+// ✅ Fixed-size buffer and cooperative cancellation.
+suspend fun copy(
+    input: InputStream,
+    output: OutputStream,
+    onProgress: (Long) -> Unit,
+) = withContext(Dispatchers.IO) {
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var copied = 0L
+    input.use { source ->
+        output.use { target ->
+            while (true) {
+                ensureActive()
+                val count = source.read(buffer)
+                if (count < 0) break
+                target.write(buffer, 0, count)
+                copied += count
+                onProgress(copied)
+            }
+            target.flush()
+        }
+    }
+}
+```
+
+Throttle UI progress updates; do not emit on every 8 KB chunk. A provider may not report total length, so support indeterminate progress.
+
+## Commit with a temporary file
+
+```kotlin
+val temp = File(target.parentFile, "${target.name}.partial-${UUID.randomUUID()}")
+try {
+    source.use { input -> temp.outputStream().use(input::copyTo) }
+    check(temp.length() > 0)
+    if (!temp.renameTo(target)) error("Atomic replacement unavailable")
+} finally {
+    temp.delete() // harmless after successful rename
+}
+```
+
+For stronger crash consistency, account for filesystem atomic-move/fsync behavior rather than assuming `renameTo` is universally durable. Store a state machine (`DOWNLOADING`, `READY`, `FAILED`) and reconcile orphan `.partial` files at startup.
+
+## Validate content defensively
+
+- Apply byte/count/time limits while streaming, even if metadata claims a small size.
+- Inspect file signatures where security matters; extension and MIME type are hints.
+- Decode images with size bounds/downsampling.
+- Guard archive extraction against path traversal, entry count, expanded size, and compression bombs.
+- Hash only when integrity/authenticity requirements justify it; a plain hash does not prove trusted origin.
+
+## Cleanup is a product feature
+
+Define quota, retention, ownership, last-access accounting, and what is safe to remove. Run cleanup durably and idempotently. Do not delete a file merely because a database query briefly failed.
+
+```text
+Room row references blob -> blob is live
+pending upload references blob -> blob is live
+no reference + older than grace period -> cleanup candidate
+```
+
+## Failure scenarios
+
+- Disk fills after 99%; remove partial output and preserve retry intent.
+- Process dies between file move and database commit; startup reconciliation repairs state.
+- Source disappears mid-read; surface “source unavailable,” not generic corruption.
+- Two workers download same asset; unique coordination or content-addressed paths prevent races.
+- User deletes shared media externally; treat URI as missing and update local state.
+
+## Sources
+
+- [App-specific files](https://developer.android.com/training/data-storage/app-specific)
+- [ContentResolver](https://developer.android.com/reference/android/content/ContentResolver)
+
+## Interview question
+
+**How do you download a 2 GB file safely?** Stream with bounded buffers, write to a partial destination, support cancellation/resume if protocol permits, enforce quota/integrity, atomically publish completion, and reconcile after crashes.
+
