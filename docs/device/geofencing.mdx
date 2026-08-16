@@ -1,0 +1,80 @@
+---
+id: geofencing
+title: Geofencing, battery trade-offs, and spoofing
+---
+import Admonition from '@theme/Admonition';
+
+# Geofencing, battery trade-offs, and spoofing
+
+A geofence asks the system to detect transitions around a circular region without your app continuously polling GPS. It is power-efficient but **best effort**, not a real-time security boundary.
+
+## Define product semantics
+
+```kotlin
+val geofence = Geofence.Builder()
+    .setRequestId("site:$siteId")
+    .setCircularRegion(latitude, longitude, 150f)
+    .setTransitionTypes(
+        Geofence.GEOFENCE_TRANSITION_ENTER or
+            Geofence.GEOFENCE_TRANSITION_DWELL or
+            Geofence.GEOFENCE_TRANSITION_EXIT
+    )
+    .setLoiteringDelay(2 * 60 * 1000)
+    .setNotificationResponsiveness(60_000)
+    .setExpirationDuration(7 * 24 * 60 * 60 * 1000L)
+    .build()
+```
+
+`notificationResponsiveness` is a best-effort latency hint. Radius must tolerate real positioning error; a 5-meter fence is generally unrealistic. `DWELL` reduces rapid enter/exit noise near a boundary.
+
+## Transition processing
+
+Use an explicit `PendingIntent` receiver/service target. In the receiver:
+
+1. Parse `GeofencingEvent`; reject errors.
+2. Validate transition type and request IDs against current durable registrations.
+3. Store event with idempotent identity/time.
+4. Post a user-visible result or enqueue longer work.
+5. Return quickly.
+
+Do not trust that every enter has an exit or that transitions arrive exactly once/in order.
+
+## Registration reconciliation
+
+Keep desired geofences in Room. Re-register when permission/settings/account/configuration changes and after relevant device events. Request IDs are stable domain identifiers; adding the same ID replaces its prior monitored definition.
+
+```text
+Room desired fences
+        ↓ reconcile
+System registered fences
+        ↓ best-effort transitions
+Durable event handler -> current business rule
+```
+
+## Why events are late or missing
+
+- location disabled or permission revoked;
+- approximate/background access limits;
+- Doze, device motion/state, connectivity, or vendor behavior;
+- radius smaller than available accuracy;
+- app/package force-stopped;
+- Play services unavailable/outdated;
+- device crosses quickly between observations.
+
+<Admonition type="danger" title="Not proof of physical presence">
+Geofence and device location can be mocked/spoofed and are probabilistic. Do not unlock doors, approve payroll, or authorize high-value transactions from a single geofence event.
+</Admonition>
+
+## Layered fraud/risk design
+
+For an attendance app, combine server time, device/app integrity signals where appropriate, prior trajectory/plausibility, Wi-Fi/BLE proximity with consent, account/device risk, and human review. Each signal has false positives and privacy cost. Never silently turn broad continuous surveillance into the default.
+
+## Sources
+
+- [Create and monitor geofences](https://developer.android.com/develop/sensors-and-location/location/geofencing)
+- [Geofence reference](https://developers.google.com/android/reference/com/google/android/gms/location/Geofence)
+
+## Exercise
+
+Design a warehouse arrival reminder and an employee attendance system. Explain why they require different reliability, anti-spoofing, consent, retention, and appeal processes.
+

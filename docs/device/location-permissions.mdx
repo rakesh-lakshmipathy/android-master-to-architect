@@ -1,0 +1,91 @@
+---
+id: location-permissions
+title: Location permission, precision, and background access
+---
+import Admonition from '@theme/Admonition';
+
+# Location permission, precision, and background access
+
+Location design starts with purpose: **why**, **when**, **how precise**, and **for how long**. Request the smallest capability that still makes the feature useful.
+
+## Capability levels
+
+| Product need | Likely access |
+|---|---|
+| Manually choose a city | no location permission |
+| “Stores near me” while screen is open | foreground approximate often sufficient |
+| Turn-by-turn navigation | foreground precise; foreground service while actively navigating |
+| Alert when arriving at a saved site while app is not visible | carefully justified background location/geofencing |
+
+`ACCESS_COARSE_LOCATION` represents approximate access. `ACCESS_FINE_LOCATION` allows precise access, but the user can still choose approximate. Your code must work from actual accuracy, not the permission name you requested.
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+```
+
+## Ask progressively
+
+1. Let the user enter/search an address without permission.
+2. When they tap **Use my location**, explain the result.
+3. Request foreground location.
+4. Support approximate results where possible.
+5. Ask for background access only when the user enables a feature that cannot work otherwise, following the platform’s version-specific flow.
+
+Background access is a separate, high-friction capability and Play policy concern. Foreground approximate + background permission still means approximate background location.
+
+## Permission is not device readiness
+
+Even after permission is granted:
+
+- device location may be disabled;
+- provider/services may be unavailable;
+- no fix may exist yet;
+- the fix may be stale or inaccurate;
+- airplane mode/building/terrain may reduce quality.
+
+Use the location settings APIs where appropriate to explain resolvable settings, and always provide manual/fallback behavior.
+
+## Model quality explicitly
+
+```kotlin
+data class LocationSample(
+    val latitude: Double,
+    val longitude: Double,
+    val accuracyMeters: Float,
+    val measuredAtElapsedRealtimeNanos: Long,
+)
+
+fun Location.isUsable(nowElapsedNanos: Long): Boolean {
+    val ageSeconds = (nowElapsedNanos - elapsedRealtimeNanos) / 1_000_000_000
+    return accuracy <= 100f && ageSeconds <= 30
+}
+```
+
+Use monotonic elapsed time to judge age within a boot session; wall clock can change.
+
+<Admonition type="warning" title="A coordinate is an estimate">
+Latitude/longitude without accuracy, timestamp, provider/context, and product acceptance criteria is not enough to decide “the user is here.”
+</Admonition>
+
+## ✅ / ❌
+
+- ❌ Require precise location to show regional weather.
+- ✅ Accept city selection or approximate access.
+- ❌ Request background access together with first foreground request.
+- ✅ Introduce it only when enabling a clear background feature.
+- ❌ Interpret permission granted as a fresh fix.
+- ✅ validate settings, age, and accuracy.
+- ❌ Block the whole app after denial.
+- ✅ keep search/manual entry available.
+
+## Sources
+
+- [Request location permissions](https://developer.android.com/develop/sensors-and-location/location/permissions)
+- [Request background location](https://developer.android.com/develop/sensors-and-location/location/permissions/background)
+- [Approximate location](https://developer.android.com/develop/sensors-and-location/location/permissions#approximate-request)
+
+## Exercise
+
+Design permissions for a weather app, ride-hailing app, and family safety app. Explain why each needs no, approximate, precise, or background access and its denial fallback.
+

@@ -1,0 +1,97 @@
+---
+id: location-requests
+title: Current and continuous location requests
+---
+
+# Current and continuous location requests
+
+“Where am I?” and “track my route” are different contracts.
+
+- Current location: one bounded answer with freshness/accuracy trade-offs.
+- Last location: cheap cached value that may be null or old.
+- Continuous updates: an ongoing stream consuming more power and requiring lifecycle ownership.
+
+## One current fix
+
+```kotlin
+suspend fun FusedLocationProviderClient.awaitCurrentLocation(
+    cancellationToken: CancellationToken,
+): Location? = getCurrentLocation(
+    CurrentLocationRequest.Builder()
+        .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+        .setDurationMillis(10_000)
+        .setMaxUpdateAgeMillis(15_000)
+        .build(),
+    cancellationToken,
+).await()
+```
+
+Set a bounded duration and decide whether a cached value up to a given age is acceptable. A food-delivery pickup pin may need tighter criteria than regional recommendations.
+
+## Continuous route tracking
+
+```kotlin
+val request = LocationRequest.Builder(
+    Priority.PRIORITY_HIGH_ACCURACY,
+    5_000L,
+)
+    .setMinUpdateIntervalMillis(2_000L)
+    .setMinUpdateDistanceMeters(10f)
+    .setMaxUpdateDelayMillis(15_000L)
+    .build()
+```
+
+The interval is a request, not a guarantee. Batching can reduce wakeups and may produce batches that must be ordered using location timestamps. Remove updates when ownership ends.
+
+```kotlin
+override fun onStop() {
+    fusedClient.removeLocationUpdates(callback)
+    super.onStop()
+}
+```
+
+For a user-started navigation/tracking session expected to continue in background, use the appropriate location foreground service and notification rather than leaving an Activity callback registered.
+
+## Battery versus accuracy
+
+| Choice | Accuracy/latency | Battery |
+|---|---|---|
+| passive/balanced, longer interval | lower/slower | lower |
+| high accuracy, short interval | higher/faster | higher |
+| min distance | removes unhelpful stationary callbacks | lower |
+| batching/max delay | delayed batches | lower wake cost |
+
+Select values from product needs. “High accuracy every second” is not a professional default.
+
+## Filtering and ordering
+
+- Reject impossible coordinate ranges and non-finite values.
+- Keep accuracy and time; do not average points blindly.
+- Sort/compare by measurement elapsed realtime, not callback arrival order.
+- A jump can be real (transport) or noise; use speed/accuracy/context rules and flag uncertainty.
+- Do not discard mock locations solely as “fraud”; emulators, accessibility/testing, and developer settings can produce them. Server-side risk decisions require multiple signals.
+
+## Error states are part of the API
+
+```kotlin
+sealed interface LocateResult {
+    data class Success(val sample: LocationSample) : LocateResult
+    data object PermissionMissing : LocateResult
+    data object SettingsDisabled : LocateResult
+    data object TimedOut : LocateResult
+    data object NoAcceptableFix : LocateResult
+}
+```
+
+Avoid one generic “location failed.” Each state has a different user action.
+
+## Sources
+
+- [Fused Location Provider API](https://developers.google.com/location-context/fused-location-provider)
+- [LocationRequest reference](https://developers.google.com/android/reference/com/google/android/gms/location/LocationRequest)
+- [Optimize location use for battery](https://developer.android.com/develop/sensors-and-location/location/battery)
+
+## Interview question
+
+**Why not use `lastLocation` for checkout delivery position?** It is cached, may be null/stale, and has no guarantee of current relevance. Validate age/accuracy or request a bounded current fix.
+

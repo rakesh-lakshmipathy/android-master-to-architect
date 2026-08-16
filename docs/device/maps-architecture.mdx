@@ -1,0 +1,99 @@
+---
+id: maps-architecture
+title: Maps, camera state, markers, clustering, and offline behavior
+---
+import Admonition from '@theme/Admonition';
+
+# Maps, camera state, markers, clustering, and offline behavior
+
+A map is a projection/rendering surface. Domain data should not become SDK marker objects in the ViewModel.
+
+```kotlin
+data class MapUiState(
+    val places: List<PlacePin>,
+    val selectedPlaceId: String?,
+    val viewportQuery: ViewportQuery?,
+    val isLoading: Boolean,
+    val error: MapError?,
+)
+
+data class PlacePin(
+    val id: String,
+    val latitude: Double,
+    val longitude: Double,
+    val category: PlaceCategory,
+)
+```
+
+The UI maps these models to markers/clusters. Keeping SDK types at the edge makes business logic testable and allows map-provider changes.
+
+## Camera ownership
+
+Distinguish:
+
+- initial camera: one-time default/restore;
+- user gesture: user owns camera until they request recenter;
+- programmatic event: “show selected delivery” animates deliberately;
+- saved camera: viewport/zoom restored across recreation when useful.
+
+```kotlin
+var hasUserMovedCamera by rememberSaveable { mutableStateOf(false) }
+
+GoogleMap(
+    cameraPositionState = cameraState,
+    onMapLoaded = { /* map tiles/rendering ready */ },
+    properties = mapProperties,
+    uiSettings = mapUiSettings,
+) { /* markers */ }
+```
+
+Do not continuously bind camera center to live location; it fights user panning. Offer a **recenter** control that returns ownership to tracking mode.
+
+## Viewport-driven loading
+
+When camera becomes idle:
+
+1. derive bounds and zoom bucket;
+2. debounce/deduplicate meaningful changes;
+3. cancel obsolete queries with `flatMapLatest`;
+4. request server data using bounded region/geohash/tile strategy;
+5. cache by query/version;
+6. ignore late results for old viewport identity.
+
+Fetching on every camera frame floods the backend and causes visual churn.
+
+## Markers and clustering
+
+Stable domain IDs preserve selection across re-render. For thousands of points, cluster by zoom to reduce overdraw and improve comprehension. The utility cluster manager separates algorithm from renderer. Keep expensive bitmap generation cached and avoid recreating marker icons every recomposition.
+
+Marker info windows are often snapshot-like, not arbitrary live Android layouts. Use a bottom sheet/detail panel for rich interactive content.
+
+## Offline expectations
+
+The Maps SDK’s base-map tile availability/caching is not the same as an app-controlled offline-map guarantee. Architect separately:
+
+- cached domain pins/routes and their freshness;
+- visible offline state and last-sync time;
+- queued edits;
+- behavior when base tiles are unavailable;
+- whether licensed offline map data/provider is required;
+- tile/storage quota, regional download, updates, and deletion.
+
+<Admonition type="warning" title="Never promise offline maps accidentally">
+Seeing previously cached tiles during a test does not prove contractual offline coverage. Verify provider licensing and explicit offline APIs before product commitment.
+</Admonition>
+
+## API-key and cost protection
+
+Restrict map keys by application ID/signing certificate and required APIs, keep server-only secrets off-device, monitor quotas/billing, and degrade gracefully on quota/network failures. An APK key cannot be made truly secret; restriction limits abuse.
+
+## Sources
+
+- [Maps SDK for Android](https://developers.google.com/maps/documentation/android-sdk)
+- [Marker clustering utility](https://developers.google.com/maps/documentation/android-sdk/utility/marker-clustering)
+- [Maps Compose](https://developers.google.com/maps/documentation/android-sdk/maps-compose)
+
+## Exercise
+
+Architect a screen displaying 50,000 delivery points with viewport queries, clustering, selection, live driver movement, rotation recovery, quota failure, and a user who pans away from the driver.
+

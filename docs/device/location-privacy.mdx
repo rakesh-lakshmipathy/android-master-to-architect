@@ -1,0 +1,78 @@
+---
+id: location-privacy
+title: Location privacy, retention, and security
+---
+
+# Location privacy, retention, and security
+
+Location can reveal home, workplace, religion, health visits, relationships, and routines. Treat it as high-impact data even when a legal regime does not label every coordinate identically.
+
+## Data minimization is architectural
+
+Ask at each boundary:
+
+- Can computation happen on-device?
+- Is a region/geohash enough instead of exact coordinates?
+- Is one current fix enough instead of continuous history?
+- Can identifiers be separated from trajectories?
+- How quickly can raw samples be aggregated/deleted?
+- Who can query/export this data?
+
+```kotlin
+data class StoredVisit(
+    val regionCell: String,      // reduced precision where sufficient
+    val startedAt: Instant,
+    val durationBucketMinutes: Int,
+)
+```
+
+Reducing precision is not automatically anonymous—repeated home/work patterns can re-identify people.
+
+## Retention policy must execute
+
+“Keep for 30 days” requires:
+
+1. timestamp and classification at ingestion;
+2. scheduled deletion/aggregation;
+3. deletion across primary DB, replicas, exports, analytics, caches, and device;
+4. legal/audit exceptions with access controls;
+5. observable cleanup failures and retry;
+6. account deletion/export workflow.
+
+## Transport, storage, and logs
+
+- Send over authenticated TLS endpoints.
+- Encrypt sensitive local/server stores according to threat model and manage keys separately.
+- Do not log raw coordinates, full routes, tokens, or App Link parameters.
+- Redact crash/analytics breadcrumbs and map screenshots where needed.
+- Enforce tenant/user authorization on every trajectory query.
+- Rate-limit and audit bulk/export access.
+
+## Consent and user control
+
+Explain purpose, frequency, foreground/background behavior, sharing, retention, and how to stop. A foreground-service notification is operational transparency, not consent by itself. Provide pause/delete/export controls appropriate to the product.
+
+## Threat scenarios
+
+- IDOR exposes another user’s trip by changing `tripId`.
+- Support tooling displays precise histories to overly broad roles.
+- Analytics SDK receives coordinates through generic screen properties.
+- Debug logs survive on managed devices.
+- Map snapshot embeds a home location and is shared publicly.
+- Account switch leaves the previous person’s last location on screen.
+- A malicious client uploads impossible routes; server trusts them for payment.
+
+## Mock locations and trust
+
+`Location.isMock` is a signal useful for testing/risk, not definitive proof of fraud. A compromised device can manipulate more than this flag, while legitimate test environments use mocks. Make high-impact decisions server-side using layered signals, explainability, and appeal paths.
+
+## Sources
+
+- [Location data access checklist](https://developer.android.com/develop/sensors-and-location/location/permissions#access-checklist)
+- [Android privacy best practices](https://developer.android.com/privacy-and-security/about)
+- [Google Play user data policy](https://support.google.com/googleplay/android-developer/answer/10144311)
+
+## Interview question
+
+**Is encryption enough to protect location history?** No. Minimize collection, restrict authorization, avoid logs/SDK leakage, enforce retention, secure keys, audit access, and design user controls. Encryption addresses only some storage/transport threats.
+

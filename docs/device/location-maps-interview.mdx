@@ -1,0 +1,69 @@
+---
+id: location-maps-interview
+title: Location and maps system-design interview
+---
+
+# Location and maps system-design interview
+
+## Case study: courier tracking
+
+Requirements: courier route recording, customer live map, intermittent connectivity, low battery impact, privacy, and delivery arrival alerts.
+
+1. Courier explicitly starts a delivery session while visible.
+2. Location foreground service owns updates and persistent notification.
+3. Request balances interval, minimum distance, batching, and accuracy by trip phase.
+4. Samples carry monotonic measurement time, accuracy, sequence, and trip ID.
+5. Room stores an outbox; uploader batches, retries idempotently, and preserves order.
+6. Server validates plausibility and authorization, then streams latest authorized state.
+7. Customer map separates camera tracking mode from user-pan mode and clusters nearby deliveries if needed.
+8. Arrival is not one coordinate: use dwell/radius/accuracy plus server/domain evidence.
+9. Raw history has strict retention; customer sees only necessary current state.
+10. Stop ends updates/service and reconciles remaining outbox work.
+
+## Failure-injection checklist
+
+- approximate rather than precise permission;
+- permission revoked during active trip;
+- device location disabled or no fix indoors;
+- batch delivered out of order after offline period;
+- process killed and service/session recreated;
+- duplicate sample upload;
+- user pans map while live driver updates arrive;
+- 50,000 markers and rapid viewport movement;
+- geofence enter delayed or missing;
+- mock/impossible trajectory;
+- API key quota exhausted;
+- account switch while a prior route is cached;
+- deletion job fails in one data replica.
+
+## Interview questions
+
+1. **Last location versus current location?** Cached cheap result versus a bounded attempt to obtain a sufficiently fresh result.
+2. **Does fine permission guarantee GPS-level accuracy?** No. User choice, hardware, environment, settings, and provider quality still govern the fix.
+3. **Why foreground service for active tracking?** It is ongoing, user-visible work expected beyond UI lifetime and must comply with location FGS restrictions.
+4. **Can a geofence trigger exactly at its boundary?** No. Position estimates and batched best-effort detection introduce uncertainty/latency.
+5. **How do you reduce battery use?** Lower priority/frequency, min distance, batching, bounded duration, remove updates, geofence/passive signals, and phase-aware requests.
+6. **How do you handle out-of-order locations?** Order by measurement timestamp/sequence, preserve idempotent identities, and define late-event policy.
+7. **Why not move camera on every location?** It steals control from a user who is exploring the map. Model tracking versus free-pan mode.
+8. **How do you render many markers?** Viewport queries, clustering, stable IDs, cached icons, diffing, and server/geospatial indexing.
+9. **Does `isMock` prove fraud?** No. It is one risk signal with false-positive/evasion limits.
+10. **What does privacy-by-design add beyond permission?** Minimization, purpose limitation, retention, authorization, logging controls, transparency, deletion/export, and audits.
+
+## Review checklist
+
+- [ ] Feature works or degrades safely with no/approximate permission.
+- [ ] Freshness and accuracy acceptance rules are explicit.
+- [ ] Continuous requests have a clear lifecycle owner and stop path.
+- [ ] Background access/FGS has visible user value and policy justification.
+- [ ] Geofences are treated as delayed/duplicate/missing best-effort signals.
+- [ ] Location events retain measurement time and idempotent identity.
+- [ ] Map camera ownership and viewport fetching are modeled.
+- [ ] Large datasets cluster/query rather than render blindly.
+- [ ] Offline and API quota behavior are explicit.
+- [ ] Collection, logs, authorization, retention, export, and deletion are reviewed.
+
+## Exercises
+
+1. Choose request settings for navigation, nearby stores, weather, fitness, and emergency sharing.
+2. Draw courier upload reconciliation after 45 minutes offline and clock changes.
+3. Threat-model an attendance app that pays employees based on geofence transitions.
