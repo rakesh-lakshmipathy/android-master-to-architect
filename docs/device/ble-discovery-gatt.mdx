@@ -1,0 +1,98 @@
+---
+id: ble-discovery-gatt
+title: BLE scanning, advertising, and GATT
+---
+import Admonition from '@theme/Admonition';
+
+# BLE scanning, advertising, and GATT
+
+Bluetooth Low Energy separates two role pairs:
+
+- **central / peripheral:** who discovers and initiates a connection versus who advertises;
+- **GATT client / server:** who requests attribute operations versus who exposes services.
+
+An Android phone commonly acts as central + GATT client; a heart-rate sensor acts as peripheral + GATT server. Roles are independent, so do not use them interchangeably.
+
+## Permission and capability first
+
+On recent Android versions, scanning, advertising, and connecting use Nearby Devices runtime permissions (`BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`). Older versions have different Bluetooth/location requirements. Declare only operations the feature performs and centralize version-specific policy.
+
+```kotlin
+val manager = context.getSystemService(BluetoothManager::class.java)
+val adapter = manager.adapter
+
+val capability = when {
+    adapter == null -> BleCapability.Unsupported
+    !adapter.isEnabled -> BleCapability.Disabled
+    !permissions.canScan -> BleCapability.PermissionMissing
+    else -> BleCapability.Ready
+}
+```
+
+Permission granted does not mean Bluetooth is enabled or the hardware supports advertising/PHY/features.
+
+## Scan narrowly and briefly
+
+```kotlin
+val filter = ScanFilter.Builder()
+    .setServiceUuid(ParcelUuid(HEART_RATE_SERVICE_UUID))
+    .build()
+
+val settings = ScanSettings.Builder()
+    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+    .build()
+
+scanner.startScan(listOf(filter), settings, callback)
+```
+
+Stop after a bounded window or once the selected device is found. Low-latency scanning costs power; use balanced/low-power mode for background-friendly discovery when product semantics allow it.
+
+Device addresses are not durable universal product identity. Address randomization and pairing/replacement can invalidate assumptions. Prefer an authenticated application-level device ID exposed after connecting.
+
+## Advertising
+
+Advertising publishes small discovery payloads; size, connectability, PHY, and extended-advertising support vary. Keep essential service identity in the primary packet and expect advertising to fail when unsupported, Bluetooth is off, permission is missing, or resources are exhausted.
+
+## GATT discovery model
+
+```text
+connect
+  ↓
+discover services
+  ↓
+service UUID
+  ↓
+characteristic UUID: read / write / notify / indicate
+  ↓
+descriptor (for example CCCD subscription configuration)
+```
+
+Characteristic properties describe supported operations; permissions/security on the peripheral may still require pairing/authentication.
+
+To receive characteristic changes, enable local notification routing **and** write the Client Characteristic Configuration Descriptor as required by the peripheral/protocol. Calling only the local toggle is a common incomplete implementation.
+
+<Admonition type="warning" title="BLE bytes need a protocol">
+Define byte order, scaling, signedness, version, length, checksum/authentication, fragmentation, and error responses. UUIDs alone do not make payloads self-describing.
+</Admonition>
+
+## Practical mistakes
+
+- ❌ Scan continuously with no service filter.
+- ✅ Filter, time-bound, stop, and explain discovery state.
+- ❌ Treat display name or MAC address as trusted identity.
+- ✅ authenticate an application-level identity/ownership.
+- ❌ Assume a characteristic exists because one device firmware has it.
+- ✅ discover and validate required/optional protocol capabilities.
+- ❌ Parse bytes with implicit platform endianness.
+- ✅ specify and test the wire format.
+
+## Sources
+
+- [BLE overview](https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview)
+- [Bluetooth permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)
+- [Find BLE devices](https://developer.android.com/develop/connectivity/bluetooth/ble/find-ble-devices)
+
+## Exercise
+
+Define scan filters and a versioned GATT protocol for a thermometer that advertises model/battery hints and exposes current/history measurements after authenticated connection.
+

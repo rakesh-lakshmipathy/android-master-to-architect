@@ -1,0 +1,86 @@
+---
+id: sensors
+title: Sensors, sampling, coordinates, batching, and battery
+---
+import Admonition from '@theme/Admonition';
+
+# Sensors, sampling, coordinates, batching, and battery
+
+Android sensors include physical sensors (accelerometer, gyroscope, magnetometer, pressure) and composite/software sensors (gravity, linear acceleration, rotation vector). Availability, range, resolution, power, and quality vary by device.
+
+## Discover; never assume
+
+```kotlin
+val manager = context.getSystemService(SensorManager::class.java)
+val accelerometer = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    ?: return SensorCapability.Unavailable
+
+val metadata = SensorMetadata(
+    resolution = accelerometer.resolution,
+    maxRange = accelerometer.maximumRange,
+    powerMilliAmps = accelerometer.power,
+    minDelayMicros = accelerometer.minDelay,
+)
+```
+
+Manifest `<uses-feature required="false">` can advertise optional capability while allowing installation on unsupported devices.
+
+## Sampling is a request
+
+```kotlin
+manager.registerListener(
+    listener,
+    accelerometer,
+    20_000,   // desired sampling period: 50 Hz
+    500_000,  // maximum report latency: allow batching
+)
+```
+
+Delivery rate may differ. Use `SensorEvent.timestamp` for actual sample timing; do not assume constant intervals or use callback arrival wall clock. Very high rates can require specific permission and materially increase power/CPU.
+
+Batching lets hardware collect samples and wake the application less often. It increases latency but can save battery. A step-history recorder may batch; an interactive game cannot tolerate the same delay.
+
+## Coordinate system
+
+Most motion sensors use device-natural coordinates:
+
+- +X toward the device’s right;
+- +Y toward the natural-orientation top;
+- +Z outward from the screen.
+
+Axes do **not** automatically rotate when display orientation changes, and a tablet’s natural orientation may be landscape. Use display rotation and `SensorManager.remapCoordinateSystem` when mapping readings to UI coordinates.
+
+## Raw acceleration is not movement alone
+
+Accelerometer includes gravity. For motion acceleration, use the linear-acceleration sensor where available or filter/fuse signals deliberately.
+
+```kotlin
+// Simplified low-pass gravity estimate—not production sensor fusion.
+gravity[i] = alpha * gravity[i] + (1 - alpha) * event.values[i]
+linear[i] = event.values[i] - gravity[i]
+```
+
+Filters introduce lag and depend on sample rate. Orientation from accelerometer/magnetometer is affected by magnetic interference and motion; rotation vector is often a better fused signal.
+
+## Lifecycle and threading
+
+Register only while the owning feature needs samples and unregister symmetrically. Copy values needed beyond callback because event objects/arrays are framework-managed. Move heavy processing off callback threads using a bounded queue and defined overflow strategy.
+
+## Accuracy and calibration
+
+Watch accuracy changes but do not pretend a status value is a calibrated guarantee. Define product thresholds, smoothing, warm-up, outlier handling, and user calibration guidance. Test walking, vehicles, vibration, different mounting orientations, screen rotation, and low-power modes.
+
+<Admonition type="warning" title="Sensor-derived facts are probabilistic">
+“Phone moved,” “user fell,” or “device faces north” are classification decisions with false positives/negatives. Preserve confidence and design confirmation/escalation appropriate to harm.
+</Admonition>
+
+## Sources
+
+- [Sensors overview](https://developer.android.com/develop/sensors-and-location/sensors/sensors_overview)
+- [Motion sensors](https://developer.android.com/develop/sensors-and-location/sensors/sensors_motion)
+- [SensorManager reference](https://developer.android.com/reference/android/hardware/SensorManager)
+
+## Exercise
+
+Design a fall detector: sensor choices, sampling/batching, feature extraction, false-positive confirmation, background lifetime, battery budget, privacy, and emergency failure behavior.
+

@@ -1,0 +1,95 @@
+---
+id: ble-connections
+title: BLE connection state, operations, MTU, and device quirks
+---
+
+# BLE connection state, operations, MTU, and device quirks
+
+BLE APIs are callback-driven, asynchronous, and device/firmware-sensitive. Reliability comes from an explicit serialized state machine—not from retrying random calls.
+
+```text
+Idle -> Scanning -> Connecting -> Discovering -> Authenticating -> Ready
+          |             |              |              |           |
+          └──────── Failure / Timeout / Disconnect ────────────────┘
+                                  ↓ policy
+                          Backoff -> Reconnect
+```
+
+## Serialize GATT operations
+
+Many Android BLE stacks/peripherals effectively support one outstanding GATT operation at a time. Queue reads, writes, descriptor writes, and MTU requests; start the next only when the matching callback completes or times out.
+
+```kotlin
+sealed interface GattOperation {
+    data class Read(val characteristic: UUID) : GattOperation
+    data class Write(val characteristic: UUID, val bytes: ByteArray) : GattOperation
+    data class Subscribe(val characteristic: UUID) : GattOperation
+}
+
+data class InFlight(
+    val operationId: Long,
+    val operation: GattOperation,
+    val startedAt: Instant,
+)
+```
+
+Correlate callbacks with expected operation/state. Ignore or diagnose stale callbacks after reconnect rather than completing the wrong continuation.
+
+## Connection lifecycle
+
+- Keep one owner for `BluetoothGatt`; close it on terminal disconnect/replacement.
+- Put timeouts around connect, discovery, pairing/auth, and every operation.
+- Rediscover services after a new connection; caches/firmware may change.
+- Distinguish expected user disconnect, link loss, unsupported protocol, auth failure, and stack error.
+- Do not immediately reconnect forever. Use bounded exponential backoff with jitter and user-visible recovery.
+
+## MTU and fragmentation
+
+The negotiated ATT MTU is not equal to arbitrary application payload size. Attribute protocol overhead reduces usable bytes; write type and device capabilities matter. Design application framing and acknowledgements rather than assuming a requested large MTU will be granted.
+
+```text
+frame: version | messageId | fragmentIndex | fragmentCount | payload | integrity
+```
+
+Support duplicate/lost fragments and connection interruption. Never concatenate unbounded data based only on a peripheral-provided length.
+
+## Notifications are not durable delivery
+
+Notifications can be lost when disconnected and do not necessarily provide application-level acknowledgement. Indications add protocol acknowledgement but still do not replace domain persistence. For medical/industrial history, expose sequence numbers and a “read missing range” command.
+
+## Concurrency ownership
+
+Use one serialized actor/queue for connection state and commands. Convert callbacks to a controlled Flow cautiously:
+
+- `StateFlow` for current connection state;
+- bounded event stream for measurements;
+- do not let slow collectors block BLE callback threads;
+- define overflow policy; for measurements, dropping may be unacceptable;
+- cancellation removes callbacks/closes connection according to ownership.
+
+## Quirk strategy
+
+Device quirks should be evidence-based and scoped by model/firmware/protocol version, with telemetry and retirement criteria. Avoid blanket sleep delays. Prefer protocol handshakes, explicit callbacks, and capability discovery.
+
+## Test matrix
+
+- Bluetooth toggled off during each state;
+- permission revoked;
+- peripheral leaves range mid-write;
+- service missing/firmware upgraded;
+- operation callback never arrives;
+- rapid connect/disconnect taps;
+- two clients try to own the device;
+- small/large MTU and fragmented response;
+- duplicate/out-of-order application packets;
+- process death and app relaunch.
+
+## Sources
+
+- [Connect to a GATT server](https://developer.android.com/develop/connectivity/bluetooth/ble/connect-gatt-server)
+- [Transfer BLE data](https://developer.android.com/develop/connectivity/bluetooth/ble/transfer-ble-data)
+
+## Interview question
+
+**Why queue GATT operations?** Overlapping operations are poorly supported and callbacks lack a rich transaction identity. Serialization gives deterministic state, timeout, cancellation, and retry behavior.
+

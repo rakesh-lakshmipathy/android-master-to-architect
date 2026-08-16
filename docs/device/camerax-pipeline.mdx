@@ -1,0 +1,94 @@
+---
+id: camerax-pipeline
+title: CameraX lifecycle, capture, analysis, rotation, and backpressure
+---
+import Admonition from '@theme/Admonition';
+
+# CameraX lifecycle, capture, analysis, rotation, and backpressure
+
+CameraX models camera work as use cases:
+
+- `Preview` supplies a display surface;
+- `ImageCapture` produces a still image;
+- `ImageAnalysis` exposes CPU-readable frames;
+- `VideoCapture` records encoded media.
+
+Bind only a hardware-supported combination to a `LifecycleOwner`.
+
+```kotlin
+val preview = Preview.Builder().build().also {
+    it.surfaceProvider = previewView.surfaceProvider
+}
+val capture = ImageCapture.Builder().build()
+val analysis = ImageAnalysis.Builder()
+    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+    .build()
+
+cameraProvider.unbindAll()
+cameraProvider.bindToLifecycle(
+    lifecycleOwner,
+    CameraSelector.DEFAULT_BACK_CAMERA,
+    preview,
+    capture,
+    analysis,
+)
+```
+
+## Backpressure is a product decision
+
+`KEEP_ONLY_LATEST` drops intermediate frames while analysis is busy—good for barcode scanning where only the newest view matters. `BLOCK_PRODUCER` queues up to configured depth and can block other bound use cases, including preview—appropriate only when every frame matters and processing keeps up.
+
+```kotlin
+analysis.setAnalyzer(executor) { image ->
+    try {
+        scanner.process(
+            image = image,
+            rotationDegrees = image.imageInfo.rotationDegrees,
+        )
+    } finally {
+        image.close() // mandatory, including errors
+    }
+}
+```
+
+Do not retain `ImageProxy` beyond its processing ownership. Copy only necessary bounded data if downstream work outlives the callback.
+
+## Rotation has three meanings
+
+- device/display rotation;
+- use-case target rotation;
+- buffer rotation metadata (`rotationDegrees`).
+
+Update target rotation when needed, including orientation-locked/multi-display cases. Use image metadata/EXIF when displaying saved output; do not blindly rotate pixels twice.
+
+## Coordinate transforms
+
+Analysis coordinates may differ from `PreviewView` because of rotation, crop, aspect ratio, and scale type. Overlaying a detected barcode rectangle requires the camera transformation/mapping to preview coordinates—not simply multiplying by view width/height.
+
+## Capture state
+
+```text
+Unbound -> Binding -> Ready -> Capturing -> Saving -> Saved
+                         ↘ Error / PermissionLost / CameraUnavailable
+```
+
+Disable duplicate capture while an operation is in flight or assign operation identity. Capture callbacks can arrive after UI navigation; keep file/domain persistence outside a destroyed screen and avoid leaking Activity references.
+
+## Device variation
+
+Front/back/external lenses, flash, focus, zoom, resolution, concurrent use-case combinations, extensions, and camera availability differ. Query `CameraInfo`/capabilities, catch bind errors, select fallbacks, and test real low/mid/high-tier hardware.
+
+<Admonition type="danger" title="Preview success does not mean saved success">
+Storage exhaustion, provider failure, process death, or asynchronous capture error can occur after the shutter UI. Mark content ready only from the final save callback and validate durable output.
+</Admonition>
+
+## Sources
+
+- [CameraX architecture](https://developer.android.com/media/camera/camerax/architecture)
+- [Image analysis](https://developer.android.com/media/camera/camerax/analyze)
+- [CameraX rotation](https://developer.android.com/media/camera/camerax/orientation-rotation)
+
+## Exercise
+
+Build a document scanner design with preview, edge analysis, capture, perspective correction, rotation, low-light fallback, retake, process death during saving, and upload outbox integration.
+

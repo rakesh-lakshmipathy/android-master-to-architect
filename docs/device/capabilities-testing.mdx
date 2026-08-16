@@ -1,0 +1,91 @@
+---
+id: capabilities-testing
+title: Capability detection, degradation, and hardware testing
+---
+
+# Capability detection, degradation, and hardware testing
+
+Android’s API level says which framework contract may exist. It does not prove a particular device has NFC, BLE advertising, a gyroscope, a back camera, Google Play services, a desired camera combination, or healthy hardware.
+
+## Capability layers
+
+```text
+API available?
+  ↓
+hardware feature present?
+  ↓
+service/provider available and enabled?
+  ↓
+permission granted?
+  ↓
+specific operation/configuration supported?
+  ↓
+resource currently available?
+```
+
+Model the result so UI can explain the actual recovery:
+
+```kotlin
+sealed interface HardwareCapability {
+    data object Ready : HardwareCapability
+    data object Unsupported : HardwareCapability
+    data object PermissionRequired : HardwareCapability
+    data object Disabled : HardwareCapability
+    data class Busy(val retryable: Boolean) : HardwareCapability
+    data class Degraded(val limitations: Set<Limitation>) : HardwareCapability
+}
+```
+
+## Manifest filtering versus runtime choice
+
+```xml
+<uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+<uses-feature android:name="android.hardware.nfc" android:required="false" />
+<uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+<uses-feature android:name="android.hardware.camera.any" android:required="false" />
+```
+
+Set `required="true"` only if the whole app is unusable without it. Otherwise keep installation broad and disable/replace the specific feature.
+
+## Graceful alternatives
+
+- BLE device setup: manual code/QR onboarding, later retry, supported-device list.
+- NFC tag: QR/barcode/manual identifier.
+- absent gyroscope: lower-quality accelerometer experience or hide feature.
+- camera unavailable: import from picker or manual entry.
+- unsupported multi-use-case camera combination: reduce analysis resolution/unbind optional use case.
+
+Do not display “permission denied” when hardware is absent or Bluetooth is simply off—users cannot fix the wrong diagnosis.
+
+## Test pyramid for hardware integrations
+
+### Pure protocol tests
+
+Test byte encoders/parsers, fragmentation, state reducers, filters, coordinate transforms, NDEF/APDU parsers, timeouts, and retry policy with deterministic inputs.
+
+### Adapter tests with fakes
+
+Wrap framework APIs behind narrow interfaces. Replay callbacks: success, error, stale callback, no callback, disconnect, duplicate event, permission loss.
+
+### Emulator/simulator where meaningful
+
+Useful for camera virtual scenes and sensor injection, but does not reproduce vendor Bluetooth stacks, RF conditions, NFC antenna behavior, camera quality, or power accurately.
+
+### Real-device lab
+
+Maintain a risk-based matrix across API levels, vendors, chipsets, RAM tiers, orientations, firmware/peripherals, and permission states. Automate long-run soak tests and capture sanitized diagnostics.
+
+## Observability without leaking data
+
+Record operation/state/error codes, duration, device/app/firmware compatibility metadata, retry counts, and queue depth. Avoid raw scanned device names/addresses, NFC payloads, sensor histories, images, or secrets. Provide an explicit user-consented diagnostic export when support needs more.
+
+## Sources
+
+- [Declare hardware features](https://developer.android.com/guide/topics/manifest/uses-feature-element)
+- [PackageManager system features](https://developer.android.com/reference/android/content/pm/PackageManager)
+- [Test CameraX](https://developer.android.com/media/camera/camerax/testing)
+
+## Interview question
+
+**Why is an API-level check insufficient?** Platform version, hardware presence, enabled state, permission, operation-specific support, and current resource availability are independent gates.
+

@@ -1,0 +1,68 @@
+---
+id: hardware-interview
+title: BLE, NFC, sensors, and camera interview lab
+---
+
+# BLE, NFC, sensors, and camera interview lab
+
+## Case study: connected medical monitor
+
+Requirements: pair to a BLE monitor, receive measurements, scan an NFC patient badge, detect device motion, capture wound photos, and work offline.
+
+1. Capability coordinator separates unsupported, disabled, permission-required, busy, and ready states.
+2. BLE scan is filtered/bounded; connection actor serializes GATT operations and authenticates device protocol identity.
+3. Measurement frames contain version, sequence, device ID, timestamp semantics, scale, and integrity/authentication; missing ranges are reconciled.
+4. NFC badge input is untrusted; server/local authorized patient mapping—not tag UID alone—selects patient.
+5. Sensor motion uses actual event timestamps and confidence; it annotates quality rather than silently discarding clinical data.
+6. CameraX analysis uses latest-frame backpressure; capture writes partial output, finalizes, then creates durable attachment/outbox.
+7. Room owns session/measurement/attachment truth; hardware callbacks become idempotent events.
+8. Logs contain state/error codes, never patient values, badge payloads, images, or device secrets.
+
+## Failure-injection checklist
+
+- Nearby permission denied/revoked and Bluetooth toggled off;
+- peripheral disappears during service discovery;
+- GATT callback never arrives or arrives after reconnect;
+- MTU smaller than expected and fragments duplicate;
+- firmware changes characteristic layout/version;
+- tag removed mid-read/write or malicious oversized NDEF record;
+- sensor absent, batches late, axes rotate relative to UI;
+- analyzer throws without closing frame;
+- camera combination unsupported or device becomes busy;
+- disk fills after photo capture;
+- process dies at every transition;
+- two screens attempt to own the same hardware session.
+
+## Interview questions
+
+1. **BLE central versus GATT client?** Discovery/connection role versus attribute protocol role; often paired but conceptually independent.
+2. **Why discover services after connection?** GATT capabilities are negotiated/discovered and can vary by device/firmware; assumptions are brittle.
+3. **How do you make GATT reliable?** Explicit state machine, serialized operations, callback correlation, timeouts, close/reconnect policy, protocol sequencing, and real-device tests.
+4. **Does larger MTU mean a write can contain that many app bytes?** No. Protocol overhead and operation/device limits reduce payload; negotiate and frame/fragment.
+5. **Are BLE notifications guaranteed?** No. Add application sequence/reconciliation for durable data.
+6. **Is an NFC tag UID a secure employee identity?** No. Use authenticated protocols/server authorization and threat-appropriate credentials.
+7. **Reader mode versus NDEF intent dispatch?** Reader mode gives a foreground Activity direct controlled tag callbacks; intent dispatch routes discovered tags through Android filters.
+8. **Why use sensor event timestamps?** Callback timing/batching varies; event timestamp represents measurement time on a monotonic clock.
+9. **Why can sensor axes appear wrong after rotation?** Axes follow device natural orientation, not current display orientation; remap coordinates.
+10. **`KEEP_ONLY_LATEST` versus `BLOCK_PRODUCER`?** Drop stale analysis frames for low latency versus preserve a bounded sequence at risk of blocking all camera use cases.
+11. **Why close `ImageProxy` in `finally`?** Every path must release camera buffers or the pipeline stalls.
+12. **How do you support fragmented Android hardware?** Multi-layer capability detection, graceful alternatives, protocol fakes, and a risk-based real-device matrix.
+
+## Review checklist
+
+- [ ] Version-specific permissions and runtime capability states are centralized.
+- [ ] Hardware session has exactly one lifecycle owner.
+- [ ] Every callback operation has identity, timeout, cancellation, and stale-event policy.
+- [ ] Binary/NDEF/APDU input is bounded and treated as untrusted.
+- [ ] BLE protocol specifies versioning, fragmentation, ordering, and authentication.
+- [ ] Sensor timing/coordinates/accuracy are handled explicitly.
+- [ ] Camera backpressure, rotation, transforms, and buffer closure are correct.
+- [ ] Unsupported/busy/disabled states have distinct UI and alternatives.
+- [ ] Real-device and failure-injection coverage matches product risk.
+- [ ] Diagnostics are useful without leaking sensitive hardware/user data.
+
+## Exercises
+
+1. Write a pure reducer for the BLE connection state machine and test stale callbacks.
+2. Fuzz NDEF and BLE frame parsers with length, encoding, and fragmentation errors.
+3. Build a device matrix for a barcode-scanning + BLE warehouse app and justify each tier.
