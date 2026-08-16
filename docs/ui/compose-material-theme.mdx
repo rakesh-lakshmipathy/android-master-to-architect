@@ -1,0 +1,110 @@
+---
+id: compose-material-theme
+title: Material 3 themes and design-system components
+---
+import Admonition from '@theme/Admonition';
+
+# Material 3 themes and design-system components
+
+## Theme supplies semantic design values
+
+```kotlin
+@Composable
+fun AppTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    MaterialTheme(
+        colorScheme = if (darkTheme) DarkColors else LightColors,
+        typography = AppTypography,
+        shapes = AppShapes,
+        content = content
+    )
+}
+```
+
+Components consume roles such as `primary`, `surface`, and `onSurface` rather than literal hex colors.
+
+## Semantic role pairing
+
+```kotlin
+Surface(color = MaterialTheme.colorScheme.errorContainer) {
+    Text(
+        text = stringResource(R.string.payment_failed),
+        color = MaterialTheme.colorScheme.onErrorContainer
+    )
+}
+```
+
+Container/on-container pair is designed for readable foreground/background. Still verify contrast for custom brand schemes and states.
+
+## Design system layer
+
+An enterprise app should not call raw Material buttons with arbitrary padding/colors across 200 screens.
+
+```kotlin
+@Composable
+fun AppPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    loading: Boolean = false
+) { /* Material implementation + semantics */ }
+```
+
+The wrapper encodes product tokens, loading behavior, touch target, analytics semantics, accessibility, and migration boundary. Avoid wrapping every primitive without added policy; that creates useless indirection.
+
+## Slots instead of configuration explosion
+
+```kotlin
+@Composable
+fun AppCard(
+    title: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) { ... }
+```
+
+Slots allow structured customization. Too many booleans (`showIcon`, `red`, `compact`, `outlined`) create invalid combinations.
+
+## Dynamic color
+
+Dynamic color can derive scheme from device/user personalization on supported versions. Product/security/brand requirements may need controlled opt-in/fallback. Never assume dynamic colors meet custom contrast without testing.
+
+## Typography
+
+Theme typography defines roles—not one fixed size for every screen. Text still respects font scaling. Test line height, truncation, locale, bold text preference, and compact windows.
+
+## Shapes and elevation
+
+Use semantic component hierarchy rather than shadows as decoration everywhere. Tonal elevation/color behavior differs by Material version/theme; verify light/dark and performance.
+
+## UI states
+
+Design-system components must cover:
+
+- enabled/disabled;
+- pressed/focused/hovered;
+- loading;
+- error/success;
+- selected;
+- keyboard/D-pad focus;
+- high font scale/RTL;
+- content description/state semantics.
+
+## Preview matrix
+
+Preview components under light/dark, locale, font scale, compact/expanded, and all interaction states. Screenshot tests catch visual regression; semantics/UI tests catch behavior.
+
+<Admonition type="tip" title="Interview-ready answer">
+MaterialTheme provides semantic color, typography, and shape roles. A product design system builds intentional reusable components and tokens above Material, using slots to customize structure and preventing invalid boolean combinations. I pair foreground/container roles, test contrast and dynamic-color fallbacks, support all interaction/accessibility states, and use preview/screenshot/semantics tests rather than assuming the theme guarantees correctness.
+</Admonition>
+
+## Exercises
+
+1. Design API for button with icon/loading without invalid states.
+2. Audit semantic color pairs in an error card.
+3. Decide which Material primitives need product wrappers and why.
+

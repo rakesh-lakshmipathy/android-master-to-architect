@@ -1,0 +1,146 @@
+---
+id: compose-modifiers-layout
+title: Compose Modifiers, constraints, layout, and drawing
+---
+import Admonition from '@theme/Admonition';
+
+# Compose Modifiers, constraints, layout, and drawing
+
+## Modifier order changes meaning
+
+Each modifier wraps what follows. Compare:
+
+```kotlin
+Modifier
+    .padding(16.dp)
+    .background(Color.Blue)
+```
+
+The padding is outside; background paints only the inner padded-down node.
+
+```kotlin
+Modifier
+    .background(Color.Blue)
+    .padding(16.dp)
+```
+
+Background wraps first and includes the padded area.
+
+## Click target order
+
+```kotlin
+Modifier
+    .clickable(onClick = onClick)
+    .padding(16.dp)
+```
+
+Padding is inside clickable wrapper, enlarging click target.
+
+```kotlin
+Modifier
+    .padding(16.dp)
+    .clickable(onClick = onClick)
+```
+
+Padding is outside clickable region.
+
+Never treat Modifier as an unordered property bag.
+
+## Parent constraints flow down; sizes flow up
+
+```text
+Parent supplies min/max width/height
+           ↓
+Modifier chain transforms constraints
+           ↓
+Child chooses allowed size
+           ↑
+Parent places child
+```
+
+`size(100.dp)` is a preferred size constrained by parent. `requiredSize` can force measurement beyond incoming constraints, while parent may place/clip representation in surprising ways. Use required constraints sparingly.
+
+## Fill and wrap
+
+- `fillMaxWidth()` chooses maximum allowed width.
+- `wrapContentSize()` affects alignment/constraint handling around content.
+- `weight()` is parent-scope data in Row/Column.
+- `matchParentSize()` is Box-scope behavior.
+
+Scope-specific modifiers work only where parent data is understood.
+
+## Row and Column measurement
+
+```kotlin
+Row(Modifier.fillMaxWidth()) {
+    Text(
+        text = title,
+        modifier = Modifier.weight(1f),
+        maxLines = 2
+    )
+    Text(price)
+}
+```
+
+Weight gives remaining horizontal space to title while price measures according to its content. Test large price/locale/font; constraints can still become impossible and require product policy.
+
+## BoxWithConstraints
+
+```kotlin
+BoxWithConstraints {
+    if (maxWidth < 600.dp) CompactCheckout() else ExpandedCheckout()
+}
+```
+
+Use when child composition genuinely changes based on local constraints. Do not scatter arbitrary breakpoints in every component; centralize adaptive strategy/design tokens.
+
+## Drawing
+
+```kotlin
+Canvas(Modifier.size(120.dp)) {
+    drawArc(
+        color = Color.Green,
+        startAngle = -90f,
+        sweepAngle = progress * 360f,
+        useCenter = false,
+        style = Stroke(width = 8.dp.toPx())
+    )
+}
+```
+
+DrawScope dimensions are pixels and adapt to measured size. Cache expensive Path/text measurement with appropriate draw cache APIs when measured. Expose semantics for visual data.
+
+## Graphics transformations do not change layout
+
+`graphicsLayer { scaleX = ... }`, offset/draw transforms can change visual appearance without telling siblings they need different space. For layout-changing animation, use layout-aware APIs; for visual transform, prevent overlap/accessibility mismatch.
+
+## Modifier reuse
+
+Reusable immutable Modifier chains can reduce repeated allocation in hot paths and keep consistent semantics, but do not share scope-specific modifiers outside their receiver or hide dynamic behavior in global constants.
+
+## Common mistakes
+
+### ❌ `fillMaxSize()` everywhere
+
+Children consume all available space and overlap/push siblings unexpectedly.
+
+### ✅ Apply only where parent contract requires it
+
+### ❌ Fixed heights around scalable text
+
+### ✅ `heightIn(min=...)`, padding, wrapping, and tests
+
+### ❌ Pointer input before semantics/clickable without reason
+
+### ✅ Higher-level accessible gesture modifiers where possible
+
+<Admonition type="tip" title="Interview-ready answer">
+Modifiers are ordered wrapper nodes, so padding/background/clickable order changes size, drawing, hit target, and semantics. Parents send constraints down, children choose an allowed size, and parents place them. I use scope modifiers intentionally, avoid fixed text heights/fill-everything, distinguish visual transforms from layout, and expose accessibility semantics for custom drawing/input.
+</Admonition>
+
+## Exercises
+
+1. Draw bounds for padding→background versus background→padding.
+2. Explain why two chained `size` modifiers do not simply let the last win.
+3. Design a price row for long title, huge font, and narrow width.
+

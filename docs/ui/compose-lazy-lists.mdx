@@ -1,0 +1,113 @@
+---
+id: compose-lazy-lists
+title: Compose lazy lists, grids, keys, and item state
+---
+import Admonition from '@theme/Admonition';
+
+# Compose lazy lists, grids, keys, and item state
+
+## Lazy layouts compose visible content on demand
+
+```kotlin
+LazyColumn(
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+) {
+    items(
+        items = orders,
+        key = { order -> order.id },
+        contentType = { "order" }
+    ) { order ->
+        OrderRow(order, onClick = { onOrderClick(order.id) })
+    }
+}
+```
+
+Use regular Column for small non-scrolling content. LazyColumn/LazyRow/grids suit large or unknown collections.
+
+## Stable keys preserve logical identity
+
+Default positional identity breaks remembered item state when insertion/reordering occurs.
+
+```kotlin
+items(messages, key = { it.id }) { message ->
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    MessageRow(message, expanded, { expanded = !expanded })
+}
+```
+
+With a unique saveable-compatible key, remembered/saveable state can move with the message. Prefer hoisting meaningful state by ID rather than hiding business state inside rows.
+
+### ❌ Non-unique key
+
+```kotlin
+key = { it.type }
+```
+
+Multiple rows share type, causing identity collision/state corruption.
+
+## `contentType`
+
+Content type helps lazy layout reuse composition structure among compatible items. Use stable categories such as header/article/ad—not a unique ID that defeats grouping.
+
+## Grid adaptability
+
+```kotlin
+LazyVerticalGrid(
+    columns = GridCells.Adaptive(minSize = 160.dp)
+) { ... }
+```
+
+Adaptive columns respond to available width. Item design still must handle exact resulting width, large text, and landscape/fold/window resizing.
+
+## Sticky headers
+
+Experimental APIs/version may change; pin/version and test. Header keys/types should be stable, and accessibility heading semantics/read order need validation.
+
+## Scroll state
+
+```kotlin
+val listState = rememberLazyListState()
+LazyColumn(state = listState) { ... }
+```
+
+Navigation/saveability can restore position, but data reorder/deletion may make numeric index point to another item. For durable return-to-item semantics, preserve stable anchor ID plus offset and reconcile after data arrives.
+
+## Scroll-derived UI
+
+```kotlin
+val showTopButton by remember {
+    derivedStateOf { listState.firstVisibleItemIndex > 0 }
+}
+```
+
+This avoids recomposing readers for every pixel when only threshold change matters. Analytics of scroll transitions belongs in `snapshotFlow`/effect (Chapter 15), not direct composition side effects.
+
+## Nested scrolling
+
+Avoid a LazyColumn inside a vertically scrollable parent with unbounded height. It creates constraint/measurement problems and defeats one scroll owner. Put header/items/footer in one Lazy DSL or provide bounded nested region with clear gesture/semantics.
+
+## Item animation and identity
+
+Animation requires stable keys to know which logical item moved. New random IDs on each refresh turn updates into remove/add and destroy state.
+
+## Performance
+
+- immutable/stable item models;
+- do expensive mapping outside item composition;
+- size images to display;
+- avoid observing global rapidly changing state in every row;
+- use Paging for unbounded data;
+- benchmark release-like scrolling;
+- use content types and keys accurately;
+- avoid zero-sized placeholders that cause excessive composition/load loops.
+
+<Admonition type="tip" title="Interview-ready answer">
+Compose lazy layouts compose and place only needed items. Stable unique keys keep composition/saveable state and animations attached to logical entities across reordering; content types identify structurally reusable categories. I avoid same-direction unbounded nested scrolling, preserve semantic anchors when data changes, derive threshold UI with `derivedStateOf`, and page/benchmark large datasets.
+</Admonition>
+
+## Exercises
+
+1. Design keys/types for date headers, messages, ads, and typing row.
+2. Explain why restored index can point to wrong item after sync.
+3. Refactor scrollable Column containing LazyColumn into one owner.
+

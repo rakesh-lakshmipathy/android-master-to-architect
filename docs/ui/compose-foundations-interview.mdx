@@ -1,0 +1,77 @@
+---
+id: compose-foundations-interview
+title: Compose foundations interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# Compose foundations interview scenarios
+
+## Quick answers
+
+<details><summary><strong>Composition versus recomposition?</strong></summary><p>Initial composition creates the UI description; recomposition reruns invalidated scopes to update it when observed inputs change. Compose may skip/cancel work, so composables are side-effect free.</p></details>
+
+<details><summary><strong>What does remember survive?</strong></summary><p>Recomposition while the call remains at matching composition identity. It does not automatically survive removal, navigation, configuration/process death; rememberSaveable adds supported saved-state restoration.</p></details>
+
+<details><summary><strong>Why does Modifier order matter?</strong></summary><p>Each modifier wraps the following chain, changing constraints, drawing, hit area, input, and semantics in order.</p></details>
+
+<details><summary><strong>Why stable lazy keys?</strong></summary><p>They attach composition/saveable state and item movement to logical entities rather than positions during insertion/reordering.</p></details>
+
+## Scenario 1: API called repeatedly
+
+Composable calls `viewModel.load(id)` in body.
+
+**Fix:** ViewModel initialization/explicit event or keyed effect; body only describes UI from state.
+
+## Scenario 2: checkbox jumps rows
+
+Lazy list uses positions and local remembered checkbox state; server inserts item at top.
+
+**Fix:** stable unique key, hoist meaningful selection by ID, immutable list.
+
+## Scenario 3: padding does not click
+
+Padding placed before clickable, so it is outside hit target.
+
+**Fix:** place clickable before inner padding when entire padded region should activate; verify semantics/touch target.
+
+## Scenario 4: hybrid Fragment leaks
+
+ComposeView composition disposal does not match Fragment view lifecycle.
+
+**Fix:** appropriate `ViewCompositionStrategy`, no old View/context retention, lifecycle-aware effects/collection.
+
+## Scenario 5: UI does not update
+
+State contains MutableList mutated in place.
+
+**Fix:** observable snapshot collection or immutable state replacement; do not hide mutation behind stable reference.
+
+## Architect exercise: migration
+
+Migrate a five-year XML checkout to Compose while shipping weekly.
+
+Address:
+
+1. route/content state-event split;
+2. design-system parity and screenshot baseline;
+3. ComposeView/AndroidView lifecycle boundaries;
+4. accessibility/focus/IME parity;
+5. navigation/process restoration;
+6. performance baseline/Macrobenchmark;
+7. staged feature flag and rollback;
+8. test ownership and removal of dual state.
+
+## Mastery checklist
+
+- [ ] I explain declarative state→UI and recomposition.
+- [ ] I keep composable bodies repeatable/side-effect free.
+- [ ] I use composition identity, remember, and keys correctly.
+- [ ] I reason through modifier constraints/order.
+- [ ] I build semantic Material/design-system components.
+- [ ] I key lazy items and manage scroll/item state.
+- [ ] I design input/focus/IME and hybrid lifecycles.
+
+<Admonition type="tip" title="Architect takeaway">
+Compose removes imperative widget synchronization, not state/lifecycle architecture. Robust Compose UI still requires explicit source of truth, stable identity, repeatable functions, constraint reasoning, semantic components, accessibility, and migration ownership.
+</Admonition>
+

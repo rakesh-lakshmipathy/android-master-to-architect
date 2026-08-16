@@ -1,0 +1,183 @@
+---
+id: compose-foundations
+title: Jetpack Compose foundations — declarative UI
+---
+import Admonition from '@theme/Admonition';
+
+# Jetpack Compose foundations — declarative UI
+
+## Declarative means state describes UI
+
+In Views, code often finds widgets and mutates them:
+
+```kotlin
+progressBar.isVisible = state.loading
+errorText.isVisible = state.error != null
+errorText.text = state.error
+```
+
+In Compose, a function describes what should exist for the current state:
+
+```kotlin
+@Composable
+fun CheckoutScreen(state: CheckoutUiState) {
+    when {
+        state.loading -> CircularProgressIndicator()
+        state.error != null -> ErrorMessage(state.error)
+        else -> OrderSummary(state.order)
+    }
+}
+```
+
+State changes; Compose reruns relevant composable scopes and updates the UI tree. You do not manually keep dozens of widget setters synchronized.
+
+:::warning Android-only chapter
+Compose runtime/UI/Material examples require an Android Compose project and cannot run in Kotlin Playground.
+:::
+
+## Composition and recomposition
+
+- **Initial composition:** Compose runs composables and creates a Composition describing UI.
+- **Recomposition:** Compose reruns scopes whose observed inputs may have changed and applies differences.
+
+Recomposition is not “redraw the entire screen” and not “recreate every Android View.” Compose can skip unchanged work and rerun smaller scopes.
+
+```text
+State write
+   ↓
+Compose invalidates reading scope
+   ↓
+Recomposition calculates desired changes
+   ↓
+Composition updated
+   ↓
+layout/draw phases run only where required
+```
+
+## Composables must be repeatable
+
+The official [Compose mental model](https://developer.android.com/develop/ui/compose/mental-model) explains that recomposition can be skipped, run often, run in different order, or be cancelled.
+
+### ❌ Side effect in composition
+
+```kotlin
+@Composable
+fun ReceiptScreen(viewModel: ReceiptViewModel) {
+    viewModel.loadReceipt() // Can run repeatedly or from discarded composition.
+    Text("Loading")
+}
+```
+
+### ✅ Event/effect ownership
+
+Loading belongs in ViewModel initialization, an explicit user event, or a correctly keyed effect discussed in Chapter 15.
+
+```kotlin
+@Composable
+fun ReceiptScreen(
+    state: ReceiptUiState,
+    onRetry: () -> Unit
+) {
+    // Pure description from parameters.
+}
+```
+
+## Stateless and stateful APIs
+
+A reusable component should usually expose value and events:
+
+```kotlin
+@Composable
+fun QuantityPicker(
+    quantity: Int,
+    onQuantityChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier) {
+        Button(onClick = { onQuantityChange(quantity - 1) }) { Text("−") }
+        Text(quantity.toString())
+        Button(onClick = { onQuantityChange(quantity + 1) }) { Text("+") }
+    }
+}
+```
+
+The parent owns source of truth. This supports previews, tests, process reconstruction, and unidirectional flow.
+
+## UI function API design
+
+Good composable APIs:
+
+- accept immutable/observable values rather than repositories;
+- emit intent callbacks rather than mutate globals;
+- accept `modifier: Modifier = Modifier` for caller layout/semantics;
+- make required/optional slots clear;
+- avoid Activity/NavController/ViewModel in leaf components;
+- use semantic names (`onCheckout`, not `callback`).
+
+## Compose phases
+
+```text
+Composition: what UI nodes should exist?
+Layout:      what size and position?
+Drawing:     what pixels/content to render?
+```
+
+Reading rapidly changing state in composition can recompose; reading it only in layout/draw APIs where possible can defer work to a later phase. This is an advanced optimization—first build correct state boundaries and measure.
+
+## Preview is not a runtime test
+
+```kotlin
+@Preview
+@Composable
+private fun CheckoutPreview() {
+    AppTheme {
+        CheckoutScreen(state = sampleCheckoutState)
+    }
+}
+```
+
+Previews improve component iteration and state coverage but do not prove navigation, lifecycle, performance, accessibility services, or device integration.
+
+## Practical mistakes
+
+### ❌ Pass ViewModel into every child
+
+This hides dependencies/state and makes previews/tests/navigation scope harder.
+
+### ✅ Screen route owns ViewModel; content receives state/events
+
+```kotlin
+@Composable
+fun CheckoutRoute(viewModel: CheckoutViewModel) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    CheckoutScreen(state, viewModel::submit)
+}
+```
+
+### ❌ Build state from unrelated booleans
+
+`loading=true`, `error!=null`, and `content!=null` can conflict.
+
+### ✅ Model mutually exclusive screen states
+
+```kotlin
+sealed interface CheckoutUiState {
+    data object Loading : CheckoutUiState
+    data class Content(val order: OrderUi) : CheckoutUiState
+    data class Error(val type: ErrorType) : CheckoutUiState
+}
+```
+
+<Admonition type="tip" title="Interview-ready answer">
+Compose is declarative: state is input to composable functions that describe UI. Initial composition creates the Composition; recomposition reruns invalidated scopes and can skip/cancel work. Therefore composables must be fast, repeatable, and side-effect free. I hoist source of truth, pass immutable state and intent callbacks, keep ViewModels at route boundaries, and model impossible UI-state combinations out of the type system.
+</Admonition>
+
+## Continue
+
+1. [Composition identity, recomposition, and skipping](./compose-recomposition)
+2. [Modifiers, constraints, layout, and drawing](./compose-modifiers-layout)
+3. [Material 3 themes and design-system components](./compose-material-theme)
+4. [Lazy lists, grids, keys, and item state](./compose-lazy-lists)
+5. [Input, focus, keyboard, forms, and View interoperability](./compose-input-interop)
+6. [Compose foundations interview scenarios](./compose-foundations-interview)
+

@@ -1,0 +1,144 @@
+---
+id: compose-recomposition
+title: Composition identity, recomposition, and skipping
+---
+import Admonition from '@theme/Admonition';
+
+# Composition identity, recomposition, and skipping
+
+## Call position gives identity
+
+Compose remembers where a composable call occurs in the call tree. When calls move/reorder, stable keys help Compose keep remembered state/effects with the correct logical item.
+
+```kotlin
+@Composable
+fun Users(users: List<User>) {
+    Column {
+        users.forEach { user ->
+            key(user.id) {
+                UserRow(user)
+            }
+        }
+    }
+}
+```
+
+Without keys, inserting at the beginning can make positional identity shift, associating remembered state/effects with the wrong user.
+
+## What triggers recomposition
+
+Compose tracks observable snapshot state reads. When a read value changes, relevant reading scopes are invalidated.
+
+```kotlin
+@Composable
+fun Counter() {
+    var count by remember { mutableIntStateOf(0) }
+    Button(onClick = { count++ }) {
+        Text("Count: $count")
+    }
+}
+```
+
+The Text/button content scope reads `count`; writing schedules recomposition. Plain mutable variables do not notify Compose.
+
+## `remember` lifetime
+
+`remember` stores a value in the Composition while that call remains at the same identity.
+
+```kotlin
+val formatter = remember(locale) {
+    NumberFormat.getCurrencyInstance(locale)
+}
+```
+
+Changing `locale` forgets/recalculates this value. Removing the composable from Composition forgets it. Process death also removes it.
+
+Do not use `remember` as durable business storage.
+
+## Skipping
+
+Compose may skip a composable when inputs are considered unchanged/stable and no observed state invalidated it.
+
+### ❌ Depend on execution count
+
+```kotlin
+@Composable
+fun TrackingCard() {
+    analytics.cardRendered() // Not guaranteed once; may run many or zero later times.
+    Card { ... }
+}
+```
+
+### ✅ Effects/events for external work
+
+Use a dedicated effect with clear key/lifecycle or user event—not composition execution itself.
+
+## Stability in practical language
+
+Compose needs to reason whether a value can change without notification.
+
+- primitive/immutable values are easy to reason about;
+- mutable collections/objects can change internally while reference stays same;
+- snapshot state types notify Compose;
+- compiler stability inference/annotations influence skip eligibility.
+
+### ❌ Mutable model hidden inside same reference
+
+```kotlin
+class CartUiState(val items: MutableList<Item>)
+```
+
+Mutating `items` may neither change parameter reference nor notify snapshot observers.
+
+### ✅ Immutable state replacement
+
+```kotlin
+data class CartUiState(val items: ImmutableList<Item>)
+```
+
+Or use `List<Item>` with architecture enforcing immutability and new instance on change; persistent immutable collections can provide stronger guarantees.
+
+## Lambda allocations are not the first problem
+
+```kotlin
+OrderRow(order) { onOrderClick(order.id) }
+```
+
+Correctness/readability comes first. If unstable captured lambdas block skipping in a measured hot path, use method references, stable event objects, or `remember`/updated-state patterns appropriately. Avoid wrapping every lambda blindly.
+
+## Recomposition counters can mislead
+
+Frequent recomposition is not automatically slow; expensive work during it is. Conversely, zero recomposition can hide stale UI from unobservable mutation. Use compiler reports/tracing/layout inspector/benchmark evidence and optimize actual frame time.
+
+## Derived computation
+
+Cheap filtering can happen directly. Expensive repeatedly recomputed sorting should be moved/remembered/derived according to inputs and architecture.
+
+```kotlin
+val visibleOrders = remember(orders, query) {
+    orders.filter { it.matches(query) }
+}
+```
+
+If `orders` is mutated in place, keys do not change and result becomes stale—another reason for immutable snapshots.
+
+## Conditional calls
+
+```kotlin
+if (state.showBanner) {
+    Banner()
+}
+```
+
+When false, Banner leaves Composition; its remembered state/effects are disposed. If state must survive hiding, hoist it or use a container/persistence policy intentionally.
+
+<Admonition type="tip" title="Interview-ready answer">
+Compose tracks call-site identity and observable state reads. State writes invalidate readers; recomposition reruns relevant scopes and may skip unchanged stable inputs. `remember` survives recomposition only while the call remains in the Composition with matching keys—it does not survive removal or process death. I use immutable state snapshots and stable keys so UI identity/state follow logical entities, and optimize expensive recomposition only with measurement.
+</Admonition>
+
+## Exercises
+
+1. Predict remembered state after inserting a row without/with keys.
+2. Explain why mutating `MutableList` can show stale UI.
+3. Decide whether formatting/filtering belongs direct, remember, derived state, or ViewModel.
+
