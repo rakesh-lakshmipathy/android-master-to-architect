@@ -1,0 +1,87 @@
+---
+id: anr-main-thread
+title: ANRs, main-thread blocking, StrictMode, and watchdogs
+---
+import Admonition from '@theme/Admonition';
+
+# ANRs, main-thread blocking, StrictMode, and watchdogs
+
+An ANR occurs when Android determines a component is unresponsive within a context-specific timeout. The main thread may be executing slow work, blocked on a lock/Binder/I/O, starved of CPU, or waiting on another thread.
+
+## Common causes
+
+```text
+main thread
+  ├─ disk/network/database/blocking future
+  ├─ huge JSON/image/layout/composition loop
+  ├─ synchronized(lock) held by background thread
+  ├─ Binder call -> slow system/other process
+  ├─ thread join / CountDownLatch / runBlocking
+  └─ CPU starvation / GC / thermal contention
+```
+
+“Move it to background” is incomplete if main thread immediately waits for that background result.
+
+## Diagnose from evidence
+
+1. Group production ANRs by signature/version/device/entry point.
+2. Inspect main-thread stack and all relevant threads—owner of a lock may be elsewhere.
+3. Capture Perfetto/system trace around reproduction.
+4. Distinguish executing versus runnable-starved versus sleeping/blocked.
+5. Map to component timeout: input dispatch, broadcast, service start/execution, content provider, startup.
+6. Add bounded trace markers and reproduce release-like.
+
+Stack at watchdog snapshot can be after root cause; repeated samples/traces improve confidence.
+
+## Main-safe design
+
+```kotlin
+suspend fun loadInvoice(id: String): Invoice = withContext(Dispatchers.IO) {
+    dao.invoice(id) ?: api.invoice(id).also(dao::upsert)
+}
+```
+
+Dispatchers are not magic: limit parallelism, avoid blocking Default, make locks short, move parsing/crypto to appropriate bounded workers, support cancellation, and never hold locks across network/I/O/callbacks.
+
+## StrictMode
+
+```kotlin
+if (BuildConfig.DEBUG) {
+    StrictMode.setThreadPolicy(
+        StrictMode.ThreadPolicy.Builder()
+            .detectAll()
+            .penaltyLog()
+            .build()
+    )
+    StrictMode.setVmPolicy(
+        StrictMode.VmPolicy.Builder()
+            .detectLeakedClosableObjects()
+            .penaltyLog()
+            .build()
+    )
+}
+```
+
+Tune policies and false-positive handling. StrictMode catches categories, not all ANR causes, and debug timing differs from release.
+
+## Broadcast/service rules
+
+`BroadcastReceiver.onReceive` and service lifecycle callbacks must return quickly. Use `goAsync()` only with a bounded finish discipline; schedule durable long work appropriately. A foreground service must promote promptly; expensive initialization before promotion can cause failure/ANR.
+
+## Custom watchdog caveat
+
+A main-looper watchdog may detect stalls and collect breadcrumbs, but can misclassify debugger pauses, CPU starvation, or OEM behavior. It must not crash production blindly or log sensitive stacks/data. Android vitals/traces remain authoritative evidence.
+
+<Admonition type="danger" title="Timeout is not cancellation">
+If UI times out while a worker continues holding a lock or making a mutation, retries can duplicate work. Define cancellation/idempotency and release resources at every boundary.
+</Admonition>
+
+## Sources
+
+- [Diagnose and fix ANRs](https://developer.android.com/topic/performance/anrs/diagnose-and-fix-anrs)
+- [Keep your app responsive](https://developer.android.com/topic/performance/vitals/anr)
+
+## Exercise
+
+Diagnose three traces: main-thread Room migration, main waiting for a lock held by network thread, and main runnable but CPU-starved. Propose a distinct fix/test for each.
+

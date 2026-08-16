@@ -1,0 +1,70 @@
+---
+id: measurement
+title: Performance budgets and measurement
+---
+import Admonition from '@theme/Admonition';
+
+# Performance budgets and measurement
+
+Performance is user-visible latency, responsiveness, stability, resource use, and efficiency under real constraints. “Feels slow on my phone” starts an investigation; it is not a measurement.
+
+## Define the journey and metric
+
+| Journey | User metric | Supporting resources |
+|---|---|---|
+| cold launch to usable home | TTID, TTFD, p50/p95/p99 | CPU, disk, GC, class loading |
+| search typing to results | input-to-render latency | network, parsing, DB, recomposition |
+| feed scroll | slow/frozen frames, frame timing | CPU/GPU, allocations, image decode |
+| photo upload | completion/time/failure | bytes, radio wakeups, disk, battery |
+| 30-minute call | thermal/battery/memory slope | codecs, network, wake locks |
+
+Define device tier, OS, dataset size, network condition, power/thermal state, build variant, compilation mode, and starting state. An average hides the users harmed by the tail; track percentiles and failure/timeout rate.
+
+## Budgets before optimization
+
+```text
+search interaction budget: 400 ms p95
+  debounce:      100 ms
+  API/network:   180 ms
+  parse/map:      30 ms
+  DB transaction: 40 ms
+  UI render:      50 ms
+```
+
+The numbers are product-specific. A budget forces trade-offs and ownership. If network already consumes the entire target, shaving 2 ms from Kotlin mapping is noise.
+
+## Measure release-like behavior
+
+- Use non-debuggable/profileable release-like builds with shrinking/optimization where relevant.
+- Use representative physical devices, especially low/mid tiers; emulators are useful for correctness, not end-user numbers.
+- Warm up where the experiment requires it and state compilation/cache conditions.
+- Run enough iterations; report distribution and variance, not the best run.
+- Change one hypothesis at a time and compare traces.
+- Avoid profiler overhead when collecting benchmark numbers; use tracing/benchmark modes designed for measurement.
+
+## End-to-end versus component benchmarks
+
+- Macrobenchmark: startup, scroll, animation, multi-screen journey.
+- Microbenchmark: a hot pure function/algorithm/serialization operation.
+- Production telemetry/vitals: real devices, distributions, regressions and reach.
+- Profiler/Perfetto: explains *why* a measured problem occurs.
+
+Passing a microbenchmark cannot prove the app launch is fast. A production alert cannot identify the blocking function without diagnostic evidence.
+
+## Regression gates
+
+Keep stable journey scenarios, device/lab policy, baseline history, allowable variance, and trace artifacts. Gate meaningful regressions with statistical/noise awareness rather than a brittle single-run threshold. Compare APK size/startup/jank/memory/network/battery as relevant to a change.
+
+<Admonition type="warning" title="Do not optimize proxy metrics blindly">
+Lower CPU can increase latency; caching reduces network but increases memory/disk/staleness; more parallelism may improve one request while causing thermal throttling. Optimize the user journey within resource constraints.
+</Admonition>
+
+## Sources
+
+- [Overview of measuring app performance](https://developer.android.com/topic/performance/measuring-performance)
+- [Inspect performance](https://developer.android.com/topic/performance/inspecting-overview)
+
+## Exercise
+
+Create budgets and a reproducible benchmark protocol for cold launch, search, feed scroll, checkout, and one-hour background sync. Include p95 target, device tier, data/network state, and diagnostic tool.
+

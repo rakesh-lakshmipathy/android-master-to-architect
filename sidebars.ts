@@ -532,7 +532,31 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Parts VIII-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part VIII - Performance, Reliability, and Quality',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'Performance and Memory',
+          collapsed: true,
+          items: [
+            'performance/measurement',
+            'performance/profiling-tools',
+            'performance/memory-leaks',
+            'performance/bitmaps-large-objects',
+            'performance/startup',
+            'performance/anr-main-thread',
+            'performance/jank-compose',
+            'performance/battery-power',
+            'performance/performance-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Parts IX-X - Android to Architect', items: ['roadmap']},
   ],
 };
 

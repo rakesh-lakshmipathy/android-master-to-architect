@@ -1,0 +1,85 @@
+---
+id: jank-compose
+title: Jank, Compose, overdraw, and list performance
+---
+import Admonition from '@theme/Admonition';
+
+# Jank, Compose, overdraw, and list performance
+
+At 60 Hz a frame has about 16.7 ms; at 120 Hz about 8.3 ms. Application, RenderThread, GPU, scheduling, and system work share the pipeline. A missed deadline produces visible jank even if average FPS looks acceptable.
+
+## Compose phases
+
+```text
+state change -> composition -> layout (measure/place) -> draw
+```
+
+Read state in the latest necessary phase. If a value only affects drawing, avoid triggering composition/layout. Use derived state to reduce meaningful changes, not to wrap every expression.
+
+```kotlin
+val showTopButton by remember {
+    derivedStateOf { listState.firstVisibleItemIndex > 0 }
+}
+```
+
+## Stability and recomposition
+
+- Pass immutable/stable models where the compiler/runtime can reason correctly.
+- Avoid recreating collections/lambdas/formatters in hot composables when it causes work.
+- Use `remember` for expensive composition-local calculation tied to correct keys.
+- Move sorting/filtering/JSON/image work out of composition.
+- Do not mutate plain collections inside state and expect observation.
+- Measure before adding annotations; falsely declaring unstable mutable data stable causes stale UI bugs.
+
+## Lazy lists
+
+```kotlin
+LazyColumn {
+    items(
+        items = messages,
+        key = { it.id },
+        contentType = { it.type },
+    ) { message -> MessageRow(message) }
+}
+```
+
+Stable keys preserve identity/state across moves. `contentType` improves compatible reuse. Avoid nested same-direction unbounded scrolling, expensive item measurement, per-item synchronous image decode, and rebuilding the full list for tiny updates.
+
+## Jank sources beyond recomposition
+
+- main-thread image decode/serialization/database;
+- blocking Binder/locks;
+- shader compilation or first-use code paths;
+- excessive measure/layout due to intrinsic sizing/nesting;
+- overdraw and complex clipping/shadows/transparency;
+- large bitmap upload to GPU;
+- allocation/GC bursts;
+- RenderThread/GPU fence contention;
+- background CPU stealing time.
+
+## Measure
+
+Use Macrobenchmark `FrameTimingMetric`, JankStats in production diagnostics, composition tracing, Layout Inspector/recomposition counts carefully, and Perfetto frame timelines. Recomposition count alone is not a performance verdict: cheap recomposition may be fine; one expensive layout can be bad.
+
+## Overdraw
+
+Avoid drawing opaque full-screen backgrounds over another opaque background, redundant containers, and invisible layers. But do not flatten UI at the cost of correctness/accessibility without measuring GPU/render impact.
+
+## Animation
+
+Prefer transformations the rendering pipeline can handle efficiently; avoid causing full-tree layout each frame. Test interruption, simultaneous animations, large font, low-end/high-refresh devices, and first-run shader/code compilation.
+
+<Admonition type="warning" title="Skipping can hide stale data if contracts are false">
+Compose optimization depends on state/stability semantics. Never mark mutable objects stable merely to suppress recomposition. Fix state ownership and immutability first.
+</Admonition>
+
+## Sources
+
+- [Jetpack Compose performance](https://developer.android.com/develop/ui/compose/performance)
+- [Slow rendering and jank](https://developer.android.com/topic/performance/vitals/render)
+- [JankStats](https://developer.android.com/topic/performance/jankstats)
+
+## Exercise
+
+Benchmark a 5,000-row mixed feed with images, updates, scrolling, and navigation back. Find jank in traces, then compare stable keys/content types, image sizing, preprocessing, and Baseline Profile.
+

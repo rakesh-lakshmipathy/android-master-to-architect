@@ -1,0 +1,92 @@
+---
+id: profiling-tools
+title: Profilers, Perfetto, tracing, and benchmarks
+---
+import Admonition from '@theme/Admonition';
+
+# Profilers, Perfetto, tracing, and benchmarks
+
+Choose the tool from the question:
+
+| Question | Tool/evidence |
+|---|---|
+| Why did the whole device/app miss frames? | Perfetto/system trace |
+| Which app methods consume CPU? | sampled call stack / CPU profiler |
+| What retains this Activity? | heap dump + LeakCanary trace |
+| How many bytes/requests? | Network Inspector + server/client metrics |
+| Is startup/scroll getting slower? | Macrobenchmark metrics + traces |
+| Is this parser implementation faster? | Microbenchmark |
+
+## Add meaningful trace sections
+
+```kotlin
+inline fun <T> traced(name: String, block: () -> T): T {
+    Trace.beginSection(name.take(127))
+    return try { block() } finally { Trace.endSection() }
+}
+
+val model = traced("Checkout/map-response") {
+    response.toDomain()
+}
+```
+
+Names should describe bounded product work without personal data or unbounded IDs. Trace asynchronous work with appropriate async/coroutine instrumentation so cause spans threads.
+
+## Read a system trace methodically
+
+1. Find the user-visible interval/benchmark marker.
+2. Inspect main-thread runnable/running/sleeping/blocked state.
+3. Locate `Choreographer#doFrame` or startup slices.
+4. Check scheduling delay: ready but not running implies CPU contention/priority.
+5. Check Binder calls, locks, I/O, GC, compilation, image decode, RenderThread/GPU fences.
+6. Follow worker threads and system services—not only app method duration.
+7. Form a hypothesis, change, rerun the same experiment.
+
+Long wall time may be network wait, lock contention, scheduler delay, Binder/service work, or CPU. A method list without thread state can mislead.
+
+## Macrobenchmark example
+
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class StartupBenchmark {
+    @get:Rule val benchmarkRule = MacrobenchmarkRule()
+
+    @Test fun coldStartup() = benchmarkRule.measureRepeated(
+        packageName = "com.example.app",
+        metrics = listOf(StartupTimingMetric()),
+        iterations = 10,
+        startupMode = StartupMode.COLD,
+        compilationMode = CompilationMode.Partial(
+            baselineProfileMode = BaselineProfileMode.Require,
+        ),
+        setupBlock = { pressHome() },
+    ) {
+        startActivityAndWait()
+    }
+}
+```
+
+Benchmark a release-like target. Capture startup state correctly and avoid setup work inside measured blocks unless it is part of user journey.
+
+## Profiling hazards
+
+- Debugger/method instrumentation changes timing.
+- First run includes class loading/compilation/cache misses; that may be desired for cold scenarios but must be named.
+- Thermal throttling/low battery/background apps distort results.
+- Heap dumps cause pauses and show a snapshot, not every lifetime bug.
+- Allocations are not automatically bad; retained/unbounded/high-frequency allocation is the concern.
+
+<Admonition type="tip" title="A trace is a timeline, not a verdict">
+Correlate it with journey metrics, source, device state, and repeated measurements. One colorful slice is not proof of root cause.
+</Admonition>
+
+## Sources
+
+- [Perfetto tracing](https://developer.android.com/tools/perfetto)
+- [Macrobenchmark overview](https://developer.android.com/topic/performance/benchmarking/macrobenchmark-overview)
+- [Microbenchmark overview](https://developer.android.com/topic/performance/benchmarking/microbenchmark-overview)
+
+## Exercise
+
+Capture a slow launch trace, label main-thread disk I/O and scheduling delay separately, add two custom trace sections, then verify the fix with the same Macrobenchmark configuration.
+

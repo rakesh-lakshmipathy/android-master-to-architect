@@ -1,0 +1,72 @@
+---
+id: performance-interview
+title: Performance system-design and interview lab
+---
+
+# Performance system-design and interview lab
+
+## Case study: slow commerce home screen
+
+Symptoms: p95 cold TTID 3.2 s, TTFD 7 s, feed jank, memory grows after navigation, battery complaints.
+
+1. Define release-like low/mid/high device scenarios, cold/warm states, data/network fixtures, and budgets.
+2. Macrobenchmark launcher/deep-link startup and feed scroll; retain metrics/traces.
+3. Perfetto shows main-thread SDK ContentProvider initialization, synchronous preferences/Room, first-composition sorting, image decode, and CPU contention.
+4. Move only first-frame dependencies to startup; lazy/feature-init others; use App Startup for ordering, not heavy execution.
+5. Show cached/skeleton UI, fetch asynchronously, report fully drawn when meaningful content is usable.
+6. Size images to targets, bound cache, use stable list keys/content types, preprocess models outside composition.
+7. LeakCanary shows repository listener retaining destroyed Fragment; unregister at view lifecycle.
+8. Generate Baseline Profile for startup/feed/checkout, then measure correct compilation mode.
+9. Batch telemetry/sync, remove polling, bound retries, and phase location/sensors.
+10. Add CI performance comparison and production vitals by version/device tier; roll back regressions.
+
+## Failure-injection matrix
+
+- 100k-row database and migration after update;
+- no network, slow TLS/DNS, huge/malformed response;
+- low-memory process kill and restore;
+- repeated rotate/navigate/logout 30 times;
+- 4k images in fast scroll;
+- lock held by worker while main waits;
+- foreground service starts during cold launch;
+- 120 Hz display and low-end GPU;
+- thermal throttling after 30-minute call;
+- connectivity returns and 1,000 jobs retry;
+- profile missing/stale after code changes;
+- debug profiler appears fast/slow differently than release benchmark.
+
+## Interview questions
+
+1. **How start a performance problem?** Define user journey, metric/percentile, budget, environment, reproduction, and release-like baseline before profiling.
+2. **Profiler versus benchmark?** Profiler diagnoses behavior with overhead; benchmark repeatedly measures a controlled scenario and detects change.
+3. **Perfetto advantage?** System-wide timeline shows scheduling, Binder, kernel, other processes, RenderThread/GPU—not only app methods.
+4. **Leak versus high allocation?** Leak retains objects past lifetime and grows retained heap; allocation churn may collect but cause GC pauses.
+5. **Why not `largeHeap` for OOM?** It masks working-set/leak/cache problems, increases GC/system pressure, and is no substitute for bounded memory.
+6. **Bitmap memory calculation?** Width × height × bytes per pixel plus copies/caches/transform intermediates.
+7. **Cold/warm/hot startup?** New process, existing process/recreated Activity, and existing Activity brought foreground.
+8. **TTID versus TTFD?** First displayed frame versus meaningfully usable fully drawn state.
+9. **What do Baseline Profiles fix?** Install-time compilation of covered hot paths; not I/O/network/locks/oversized UI.
+10. **Why can background thread still cause ANR?** Main may wait on its lock/result or be CPU-starved; Binder/system dependencies also block.
+11. **How diagnose ANR?** Main/all-thread stacks + trace + component context + thread state + production clustering.
+12. **What causes Compose jank?** Expensive composition/layout/draw, unstable state/churn, main work, images, allocation/GC, GPU/RenderThread and scheduling.
+13. **Recomposition count sufficient?** No; cost and missed frames matter. Cheap recomposition can be fine.
+14. **Why does batching save battery?** Fewer CPU/radio wakeups, longer low-power intervals, at cost of latency.
+
+## Review checklist
+
+- [ ] Critical journeys have percentile budgets, representative fixtures/devices, release-like benchmarks, and owners.
+- [ ] Traces and production vitals verify root cause and reach.
+- [ ] Memory tests cover lifecycle repetition, caches, native/graphics resources, and low-memory handling.
+- [ ] Images decode at target size and large payloads stream rather than live in state/Binder.
+- [ ] Startup work is dependency-classified; TTID/TTFD and every entry point are measured.
+- [ ] Main thread has no blocking I/O/waits/long locks; ANR clusters have regression tests.
+- [ ] Compose/list/frame metrics and GPU/render evidence guide UI optimization.
+- [ ] Background work, network, location, sensors, wake locks, retries, and thermal sessions have energy budgets.
+- [ ] Baseline Profiles cover real journeys and are regenerated/measured.
+- [ ] CI and release dashboards detect regressions with rollback/ownership.
+
+## Exercises
+
+1. Create a Macrobenchmark suite for cold startup, feed scroll, and checkout.
+2. Diagnose a heap dump retaining five destroyed Activities and prove the fix with repeated lifecycle runs.
+3. Produce a one-page performance report: metric distribution, trace evidence, hypothesis, change, risk, and before/after verification.

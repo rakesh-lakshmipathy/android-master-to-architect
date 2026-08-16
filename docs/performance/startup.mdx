@@ -1,0 +1,87 @@
+---
+id: startup
+title: Startup, lazy initialization, and Baseline Profiles
+---
+import Admonition from '@theme/Admonition';
+
+# Startup, lazy initialization, and Baseline Profiles
+
+## Cold, warm, and hot
+
+- Cold: no process; create process/Application/Activity/UI and first frame.
+- Warm: process exists but Activity/UI must be recreated.
+- Hot: Activity/task brought forward with most state alive.
+
+Measure each separately. Cold start reveals initialization/class loading/disk/compilation costs; optimizing only hot starts hides the expensive path.
+
+## TTID versus TTFD
+
+- Time to initial display (TTID): first frame communicates launch progress.
+- Time to full display (TTFD): content is meaningfully ready/interactive; report with `reportFullyDrawn`/Compose support according to actual readiness.
+
+Do not game TTID with an empty frame while blocking interaction indefinitely. Optimize both and define what “fully ready” means per entry point (launcher, deep link, notification).
+
+## Startup dependency graph
+
+```text
+must before first frame: theme, minimal DI graph, session routing, initial UI
+after first frame: analytics upload, remote config refresh, cache cleanup
+on feature use: camera/ML/maps/database subgraph
+background/durable: sync, log upload
+```
+
+Inspect manifest ContentProviders and SDK initializers—they can run before `Application.onCreate`. App Startup can consolidate initializer ordering, but does not make heavy work free. Lazy initialization must be thread-safe and should not move a giant pause to the user’s first tap.
+
+## Avoid main-thread startup work
+
+- no blocking network;
+- avoid large database reads/migrations on first visible path where possible;
+- avoid synchronous SharedPreferences/file deserialization of large state;
+- do not decode large bitmaps or initialize unused SDKs;
+- keep first composition/layout/draw bounded;
+- use splash/startup UI that matches eventual content and avoids double splash.
+
+## Baseline Profiles
+
+Baseline Profiles let ART precompile code paths for startup and important journeys at install time. Generate them from representative Macrobenchmark journeys, ship through profile installer/build pipeline, and measure with appropriate compilation modes.
+
+```kotlin
+@Test
+fun generate() = baselineProfileRule.collect(
+    packageName = "com.example.app",
+    includeInStartupProfile = true,
+) {
+    pressHome()
+    startActivityAndWait()
+    device.findObject(By.text("Orders")).click()
+    device.waitForIdle()
+}
+```
+
+Profiles do not fix disk I/O, network wait, oversized UI, locks, or bad architecture. They reduce interpretation/JIT cost for covered code. Regenerate and benchmark after meaningful route/library changes.
+
+## Startup correctness corner cases
+
+- encrypted storage unavailable/key invalidated;
+- Room migration after update;
+- deep link requires feature/session not initialized;
+- process restored with old SavedState;
+- remote config offline;
+- low storage/low-end device;
+- multiple processes initialize SDK twice;
+- user unlock state/direct boot.
+
+<Admonition type="tip" title="Defer by user value">
+Ask whether work is needed for the first frame, first interaction, this feature, or eventually. Move it to the latest safe boundary and make that boundary observable/testable.
+</Admonition>
+
+## Sources
+
+- [App startup time](https://developer.android.com/topic/performance/vitals/launch-time)
+- [App Startup](https://developer.android.com/topic/libraries/app-startup)
+- [Baseline Profiles overview](https://developer.android.com/topic/performance/baselineprofiles/overview)
+
+## Exercise
+
+Draw the startup dependency graph for a 30-SDK app. Classify each initializer, remove automatic ones where possible, and measure launcher plus cold deep-link TTID/TTFD before and after.
+

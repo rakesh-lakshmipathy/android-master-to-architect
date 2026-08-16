@@ -1,0 +1,82 @@
+---
+id: memory-leaks
+title: Memory, GC pressure, leaks, and retained objects
+---
+import Admonition from '@theme/Admonition';
+
+# Memory, GC pressure, leaks, and retained objects
+
+An object is a leak when it remains reachable longer than intended. High memory can also come from legitimate caches, bursts, native buffers, graphics, threads, or fragmentation. Diagnose retention paths and growth behavior.
+
+## Reachability model
+
+```text
+GC root (static/thread/JNI)
+  -> singleton repository
+  -> listener
+  -> Fragment view binding
+  -> destroyed View tree / Activity
+```
+
+The fix is to break the inappropriate ownership edge, not call `System.gc()`.
+
+## Common Android leaks
+
+- singleton holds Activity/View/Context instead of application context;
+- callback/listener/observer is never unregistered;
+- coroutine/Flow outlives screen and captures UI;
+- Fragment keeps binding after `onDestroyView`;
+- non-static inner class/runnable captures Activity;
+- adapter/drawable/animation/window/dialog retained;
+- WebView/player/camera/sensor/BLE resources not released;
+- unbounded cache/map/event queue/bitmap pool;
+- JNI/native allocation retains Java owner or vice versa.
+
+```kotlin
+private var _binding: FragmentOrdersBinding? = null
+private val binding get() = requireNotNull(_binding)
+
+override fun onDestroyView() {
+    recyclerView.adapter = null
+    _binding = null
+    super.onDestroyView()
+}
+```
+
+## GC pressure versus leak
+
+Allocating thousands of short-lived objects per frame can trigger frequent GC pauses without long-term heap growth. A leak shows retained heap/object count rising across repeated lifecycle cycles and not returning near baseline.
+
+Test loop:
+
+1. open/close feature 20 times;
+2. force realistic idle/GC only for diagnosis;
+3. compare retained Activities/views/heap dominators;
+4. inspect LeakCanary path and heap dump;
+5. fix owner/lifetime and repeat.
+
+## Cache design
+
+Every cache needs maximum size, cost metric (bytes, not just item count), eviction policy, invalidation, memory-pressure response, and source-of-truth fallback. `LruCache` item sizing should reflect actual bytes. Avoid caching objects already held by image/network/database libraries.
+
+## Memory classes and pressure
+
+Do not size usage to `largeHeap`; it postpones failure and harms system multitasking. Respond to relevant `onTrimMemory` levels by releasing regenerable caches, but preserve correctness. The OS may kill the process without callbacks; durable state remains separate.
+
+## Native/graphics memory
+
+Java heap can look stable while bitmaps, codec buffers, RenderThread resources, database mappings, or JNI allocations grow. Use process-wide memory evidence/Perfetto/native tools and release lifecycle resources.
+
+<Admonition type="warning" title="WeakReference is rarely the ownership fix">
+It can hide an unclear lifetime and disappear unpredictably. Model owner/unregister/cancel/release first; use weak references only when their semantics truly match a non-owning relationship.
+</Admonition>
+
+## Sources
+
+- [Manage app memory](https://developer.android.com/topic/performance/memory)
+- [LeakCanary fundamentals](https://square.github.io/leakcanary/fundamentals-how-leakcanary-works/)
+
+## Exercise
+
+Create leak tests for Fragment recreation, navigation, logout, and a 30-minute media session. For each suspected leak, identify GC root, retained path, intended owner, and release event.
+

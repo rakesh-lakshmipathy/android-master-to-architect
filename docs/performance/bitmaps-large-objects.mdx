@@ -1,0 +1,80 @@
+---
+id: bitmaps-large-objects
+title: Bitmaps, images, and large objects
+---
+
+# Bitmaps, images, and large objects
+
+Compressed file size is not display memory. A 4000 × 3000 `ARGB_8888` bitmap is roughly:
+
+```text
+4000 × 3000 × 4 bytes ≈ 48 MB
+```
+
+Decoding several such images can exhaust memory even when each JPEG is only 2 MB.
+
+## Decode for the display target
+
+Image loading libraries provide pooling, sampling, lifecycle cancellation, disk/memory caches, EXIF handling, and transformations. Supply requested dimensions/content scale rather than decoding the original into a 96 dp thumbnail.
+
+```kotlin
+AsyncImage(
+    model = ImageRequest.Builder(LocalContext.current)
+        .data(photo.url)
+        .size(256, 256)
+        .crossfade(true)
+        .build(),
+    contentDescription = photo.description,
+)
+```
+
+Exact APIs depend on library/version; the principle is target-sized decoding.
+
+## Pixel formats and fidelity
+
+`ARGB_8888` is commonly 4 bytes/pixel. Lower precision formats may reduce memory but can degrade gradients/transparency/color and are not universally appropriate. Hardware bitmaps can reduce Java heap/copy cost but have mutability/software-rendering/readback limitations. Measure the real pipeline.
+
+## Lists and cancellation
+
+- Stable keys prevent wrong-image reuse/state churn.
+- Cancel off-screen requests with lifecycle/list ownership.
+- Avoid unique transformed bitmap variants per scroll position.
+- Preload only a bounded near-future window.
+- Do not retain Activity through image callbacks/targets.
+- Placeholder/error sizes should avoid layout jumps.
+
+## Large binary data
+
+Never put bitmaps/byte arrays in `Bundle`, SavedStateHandle, Intent, WorkManager `Data`, Room row blobs by default, or a global StateFlow. Persist/stream them and pass stable URI/ID. Binder transaction limits and memory copies can crash or stall the app.
+
+## Processing pipeline
+
+```text
+content URI/file -> metadata bounds -> sampled decode/stream
+                 -> transform one bounded region
+                 -> encode to partial file
+                 -> validate -> atomically publish
+```
+
+For upload, stream encoded file rather than decode to bitmap unless transformation is needed. For region/zoom viewers, use tiled/region decoding. Guard pixel dimensions against decompression bombs before allocation.
+
+## Mistakes
+
+- ❌ `BitmapFactory.decodeStream()` original for a tiny avatar.
+- ✅ inspect bounds and request/downsample to display size.
+- ❌ convert image to Base64 String and keep it in state.
+- ✅ store file/URI and stream it.
+- ❌ fix OOM only by adding `largeHeap=true`.
+- ✅ measure retention/decoded sizes/cache and reduce peak working set.
+- ❌ recycle a bitmap still used by UI/library.
+- ✅ let correct owner/library manage lifecycle.
+
+## Sources
+
+- [Manage memory: image handling](https://developer.android.com/topic/performance/memory#images)
+- [Loading large bitmaps efficiently](https://developer.android.com/topic/performance/graphics/load-bitmap)
+
+## Interview question
+
+**Why can a 500 KB photo cause OOM?** Encoded size does not determine decoded memory; pixel dimensions × bytes per pixel plus copies/caches/transforms determine peak working set.
+

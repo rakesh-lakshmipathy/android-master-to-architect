@@ -1,0 +1,77 @@
+---
+id: battery-power
+title: Battery, wake locks, and power-aware scheduling
+---
+
+# Battery, wake locks, and power-aware scheduling
+
+Battery cost is driven by keeping CPU awake, radios active, sensors/GPS/camera, screen/GPU, high-frequency callbacks, and thermal work. Optimize the system behavior, not only method CPU time.
+
+## Radio tail and batching
+
+Ten tiny network calls spread across minutes can cost more than one batch because the radio repeatedly wakes/remains in a high-power state. Batch deferrable telemetry/sync, compress appropriately, cache, use server push rather than polling, and avoid retries that synchronize across devices (add jitter).
+
+## Scheduler owns wakefulness where possible
+
+WorkManager/JobScheduler/DownloadManager manage wake locks for scheduled execution. Prefer them to manually holding a partial wake lock.
+
+If a direct wake lock is genuinely necessary:
+
+```kotlin
+val wakeLock = powerManager.newWakeLock(
+    PowerManager.PARTIAL_WAKE_LOCK,
+    "expense:receipt-upload",
+).apply { setReferenceCounted(false) }
+
+try {
+    wakeLock.acquire(2 * 60_000L) // timeout safety
+    performBoundedOperation()
+} finally {
+    if (wakeLock.isHeld) wakeLock.release()
+}
+```
+
+Use a developer-readable tag, shortest scope, timeout, and `finally`. Never use it to fight Doze for routine polling.
+
+## Location/sensors
+
+- request only while feature needs it;
+- lower priority/frequency and add minimum distance;
+- batch samples for delayed processing;
+- use geofence/passive/current location rather than continuous GPS where suitable;
+- unregister every listener/callback;
+- adapt trip/foreground/background phases.
+
+## Background work
+
+Use constraints (network, charging, battery not low) only when product permits, unique work to deduplicate, exponential backoff + jitter, bounded retries, and idempotency. A periodic schedule is not an exact timer. Respect standby/restricted state and user battery choices.
+
+## Measure power
+
+Establish a repeatable long-running scenario and compare battery historian/system traces/power rails where available, wake locks, jobs/alarms, network bytes/wakeups, sensor duration, CPU, thermal throttling, and vitals. Battery percentage from one uncontrolled run is noisy.
+
+## Thermal behavior
+
+Sustained CPU/GPU/camera/network can heat devices and throttle, increasing latency and energy. Test long sessions, not only 30-second benchmarks. Degrade frame rate/quality/model frequency when product allows and surface essential state.
+
+## Common mistakes
+
+- ❌ poll every minute for updates.
+- ✅ push signal + reconcile, or batch durable sync.
+- ❌ retry all failed jobs immediately on connectivity return.
+- ✅ constraints, exponential backoff, jitter, and server load policy.
+- ❌ leave high-accuracy location active while screen is hidden.
+- ✅ phase-aware ownership/foreground service only for explicit ongoing task.
+- ❌ acquire indefinite wake lock in service.
+- ✅ let scheduler own it or use bounded `try/finally` lock.
+
+## Sources
+
+- [Choose the right API to keep device awake](https://developer.android.com/develop/background-work/background-tasks/awake)
+- [Optimize for battery life](https://developer.android.com/topic/performance/power)
+- [Background optimization](https://developer.android.com/topic/performance/background-optimization)
+
+## Interview question
+
+**Why does batching save battery?** It reduces wakeups and lets CPU/radios remain in low-power states longer, trading latency for energy efficiency.
+
