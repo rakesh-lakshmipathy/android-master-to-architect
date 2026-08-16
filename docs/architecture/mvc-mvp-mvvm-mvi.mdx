@@ -1,0 +1,89 @@
+---
+id: mvc-mvp-mvvm-mvi
+title: MVC, MVP, MVVM, and MVI compared
+---
+import Admonition from '@theme/Admonition';
+
+# MVC, MVP, MVVM, and MVI compared
+
+Pattern labels vary between teams. In interviews and design reviews, explain ownership and arrows rather than relying on the acronym.
+
+## Comparison
+
+| Pattern | UI talks to | UI receives | Typical strength | Typical failure |
+|---|---|---|---|---|
+| MVC | controller/model | model + controller updates | simple separation | Activity becomes controller + view |
+| MVP | presenter | imperative view calls | unit-testable presenter | huge view interface, lifecycle attachment |
+| MVVM | ViewModel | observable UI state | lifecycle fit and declarative binding | god ViewModel, duplicated events/state |
+| MVI/reducer UDF | intent dispatcher/reducer | immutable state | explicit transitions and replayability | ceremony, giant state/reducer |
+
+## MVP example
+
+```kotlin
+interface LoginView {
+    fun showLoading(show: Boolean)
+    fun showError(message: UiText)
+    fun openHome()
+}
+```
+
+Presenter must attach/detach safely; async callbacks after detach are a classic bug. It can suit legacy Views but imperative calls become awkward with recreation and multiple outputs.
+
+## MVVM/UDF example
+
+```kotlin
+data class LoginUiState(
+    val email: String = "",
+    val submitting: Boolean = false,
+    val error: LoginError? = null,
+)
+
+sealed interface LoginAction {
+    data class EmailChanged(val value: String) : LoginAction
+    data object Submit : LoginAction
+}
+```
+
+ViewModel accepts actions/method calls and exposes `StateFlow<LoginUiState>`. Compose renders state. This is MVVM in framework role and UDF in data direction; labels can overlap.
+
+## MVI reducer boundary
+
+```kotlin
+fun reduce(state: CartState, result: CartResult): CartState = when (result) {
+    is CartResult.QuantityAccepted -> state.copy(lines = result.lines, error = null)
+    is CartResult.Failed -> state.copy(error = result.reason)
+    CartResult.Submitting -> state.copy(submitting = true)
+}
+```
+
+Pure reducers make transitions testable. Effects (network/database/navigation) remain outside and feed results back. If reducer starts coroutines, purity and replayability disappear.
+
+## Avoid the god ViewModel
+
+Warning signs:
+
+- owns unrelated tabs/features
+- injects 15 repositories
+- exposes dozens of mutable flows
+- formats Android resources and controls navigation details
+- contains reusable business policy
+- every test needs enormous fixture setup
+
+Split by screen/feature ownership, move reusable business rules to data/domain, keep complex UI mechanics in a UI-scoped state holder, and expose cohesive immutable state.
+
+## Migration paths
+
+- MVC Activity: first extract repository/data ownership, then state holder.
+- MVP Views: replace imperative render calls with one state model incrementally.
+- MVVM with many LiveData fields: combine into cohesive UI state to prevent impossible combinations.
+- MVI ceremony: keep UDF but use named ViewModel methods where a universal intent bus adds no value.
+
+<Admonition type="tip" title="Decision rule">
+Choose the simplest state ownership and event flow that makes concurrency, lifecycle, and business rules explicit. A team-wide fashionable acronym is not evidence.
+</Admonition>
+
+## Exercises
+
+1. Draw arrows and owners for the same login screen in MVP and MVVM.
+2. Migrate three independent loading/error LiveData values into valid UI states.
+3. Decide whether a settings toggle needs a reducer-based MVI pipeline.

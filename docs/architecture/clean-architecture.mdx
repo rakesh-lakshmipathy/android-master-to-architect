@@ -1,0 +1,107 @@
+---
+id: clean-architecture
+title: Clean Architecture without ceremony
+---
+import Admonition from '@theme/Admonition';
+
+# Clean Architecture without ceremony
+
+Clean Architecture protects high-value policy from volatile mechanisms. It does not require a universal folder template.
+
+## Dependency rule
+
+```text
+Android UI ---> application/domain policy <--- data adapters
+                       ^                         |
+                       +--- contracts -----------+
+```
+
+Source-code dependencies point toward stable policy. Runtime calls can travel outward through an interface implementation.
+
+```kotlin
+// Stable policy module
+interface Orders {
+    suspend fun submit(draft: OrderDraft, idempotencyKey: String): Order
+}
+
+class SubmitOrder(
+    private val orders: Orders,
+    private val validate: ValidateOrder,
+) {
+    suspend operator fun invoke(draft: OrderDraft): Order {
+        validate(draft).getOrThrow()
+        return orders.submit(draft, draft.submissionId)
+    }
+}
+```
+
+Retrofit/Room implementation maps transport/database models at the edge. Domain types do not import `Response`, `Cursor`, `Context`, or Compose.
+
+## Layer responsibilities
+
+| Layer | Owns | Should not own |
+|---|---|---|
+| Presentation | screen state, UI mapping, user intents | SQL/HTTP policy |
+| Domain (optional) | reusable/complex business operations | Android lifecycle/UI text |
+| Data | repository truth, source coordination, sync/conflicts | widget state/navigation |
+| Data source | one external mechanism/protocol | cross-source business policy |
+
+## Mapping: use boundaries intentionally
+
+API DTO → data entity/domain model → UI model can protect layers, but copying 40 identical fields three times is costly. Map where schemas, nullability, units, lifecycle, security, or ownership differ. Keep a shared type when its meaning and change ownership truly match.
+
+## When a domain layer pays
+
+- rule reused across multiple ViewModels/services/platforms
+- orchestration combines repositories
+- business logic is complex and independently testable
+- product wants stable terminology insulated from APIs
+- team/module ownership needs a contract
+
+## When it is ceremony
+
+```kotlin
+class GetUserUseCase(private val repo: UserRepository) {
+    suspend operator fun invoke(id: String) = repo.getUser(id)
+}
+```
+
+This pass-through adds little unless it enforces a boundary convention, will gain policy, or provides a capability contract. Android guidance explicitly treats the domain layer as optional.
+
+## Error contracts
+
+Do not leak `IOException`, HTTP codes, or SQL exceptions into every UI. Translate at the boundary into meaningful failure types while preserving diagnostics internally:
+
+```kotlin
+sealed interface SubmitFailure {
+    data object Offline : SubmitFailure
+    data object Rejected : SubmitFailure
+    data class Unknown(val incidentId: String) : SubmitFailure
+}
+```
+
+Avoid a generic `Result<T>` wrapper that erases cancellation or forces every failure into a string. Cancellation should generally propagate.
+
+## Architectural fitness checks
+
+- domain module compiles without Android framework where intended
+- forbidden dependency rules fail CI
+- fake implementations satisfy repository contract tests
+- mapping tests cover units/null/defaults
+- dependency graph has no cycles
+- simple feature changes do not require editing every layer mechanically
+
+<Admonition type="tip" title="Architect takeaway">
+Clean Architecture is successful when important policy is easier to understand, test, and change independently. If every change requires more synchronized edits with no protected volatility, simplify.
+</Admonition>
+
+## Sources
+
+- [Android domain layer](https://developer.android.com/topic/architecture/domain-layer)
+- [Guide to app architecture](https://developer.android.com/topic/architecture)
+
+## Exercises
+
+1. Decide whether currency formatting belongs in domain or presentation for two scenarios.
+2. Remove a pass-through use case and justify the decision.
+3. Design failure mapping for checkout while preserving cancellation.

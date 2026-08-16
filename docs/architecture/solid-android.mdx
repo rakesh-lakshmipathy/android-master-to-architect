@@ -1,0 +1,95 @@
+---
+id: solid-android
+title: SOLID principles with Android scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# SOLID principles with Android scenarios
+
+SOLID is a diagnostic vocabulary, not a command to create an interface for every class.
+
+## S — Single Responsibility
+
+A class should have one cohesive reason to change.
+
+❌ `ProfileViewModel` fetches HTTP, parses JSON, validates names, uploads photos, formats strings, logs analytics, and navigates.
+
+✅ ViewModel coordinates screen state; repository owns profile data; validator owns name rules; image uploader owns transfer policy; UI formats localized resources.
+
+Do not turn every three-line function into a class. Extract distinct policy or volatility.
+
+## O — Open/Closed
+
+Add behavior through a stable extension point when variants are expected:
+
+```kotlin
+fun interface ShippingPricePolicy {
+    fun price(order: Order): Money
+}
+
+class Checkout(private val policies: Map<ShippingMethod, ShippingPricePolicy>) {
+    fun shipping(order: Order, method: ShippingMethod) =
+        requireNotNull(policies[method]) { "Unsupported method: $method" }.price(order)
+}
+```
+
+This helps when shipping methods are independently owned. A `when` is clearer for two fixed sealed variants; do not pre-build plugin systems without evidence.
+
+## L — Liskov Substitution
+
+Every implementation must honor the contract.
+
+```kotlin
+interface UserRepository {
+    /** Emits current cached state, then later updates; never performs work on Main. */
+    fun observe(id: UserId): Flow<User?>
+}
+```
+
+If the fake emits once and completes while production emits continuously, tests use a different contract. If one implementation throws for a valid ID despite the contract promising null, substitution fails.
+
+## I — Interface Segregation
+
+❌ A read-only widget depends on `UserRepository` with delete, upload, sync, admin ban, and export methods.
+
+✅ Depend on a focused capability:
+
+```kotlin
+fun interface ObserveUser { operator fun invoke(id: UserId): Flow<User?> }
+```
+
+But many tiny interfaces can hide navigation and complicate DI. Split around consumer capability or ownership, not method count.
+
+## D — Dependency Inversion
+
+High-level policy should not depend directly on low-level mechanism:
+
+```kotlin
+class SubmitOrder(
+    private val orders: OrderRepository,
+    private val clock: Clock,
+    private val idGenerator: IdGenerator,
+)
+```
+
+The domain policy chooses abstractions it needs. Retrofit/Room adapters implement them. Dependency injection supplies implementations; DI itself is not dependency inversion.
+
+## Practical smell table
+
+| Smell | Likely principle | First question |
+|---|---|---|
+| ViewModel changes for API and UI redesign | SRP | which policies are mixed? |
+| Adding payment type edits 12 `when`s | OCP | is a stable variation point real? |
+| Fake behaves unlike production | LSP | what is the missing contract? |
+| Consumer mocks 20 unused methods | ISP | what capability does it need? |
+| Business rule imports Android/Retrofit | DIP | can mechanism point inward? |
+
+<Admonition type="warning" title="Interface inflation">
+An interface with one implementation is justified by boundary ownership, testing strategy, or expected variability—not automatically by SOLID.
+</Admonition>
+
+## Exercises
+
+1. Refactor a sync worker that owns HTTP, SQL, retry policy, and notification UI.
+2. Write a behavioral contract shared by real and fake repositories.
+3. Explain DI versus dependency inversion in one example.

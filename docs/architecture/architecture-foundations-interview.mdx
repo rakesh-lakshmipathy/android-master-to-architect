@@ -1,0 +1,72 @@
+---
+id: architecture-foundations-interview
+title: Architecture foundations interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Architecture foundations interview lab
+
+## Rapid answers
+
+<details><summary><strong>MVVM versus MVI?</strong></summary><p>MVVM describes UI–ViewModel roles; MVI usually emphasizes explicit intents, immutable state, and reducer-like transitions. They can coexist. Explain concrete ownership and flow rather than treating labels as mutually exclusive.</p></details>
+
+<details><summary><strong>Does Clean Architecture require a domain layer?</strong></summary><p>No fixed Android template is universal. Protect stable business policy with inward dependencies; add a domain layer when complexity, reuse, volatility, or ownership makes it valuable.</p></details>
+
+<details><summary><strong>Why repository?</strong></summary><p>It owns application-data policy: exposes data, centralizes mutation, abstracts sources, and can resolve cache/network conflicts. A class that merely renames one DAO call may not yet provide that value.</p></details>
+
+## Case study: offline order submission
+
+Requirements: edit cart offline, submit exactly once, resume after process death, server may reject price changes.
+
+1. Room is local source of truth for cart/order attempt.
+2. Repository transaction creates submission with stable idempotency key.
+3. Use case validates reusable business rules and requests submission.
+4. Worker retries eligible attempts using the same key.
+5. Server response maps to durable Accepted/Rejected state.
+6. ViewModel observes repository and derives UI state.
+7. UI emits intents and never assumes a snackbar means success.
+
+Tradeoffs: stronger consistency and recovery require schema/state-machine complexity; payment/order truth justifies it.
+
+## Architecture review questions
+
+- What changes together, and who owns it?
+- Where is the source of truth?
+- Which transitions are impossible by type?
+- What happens on retry, cancellation, duplicate input, and process death?
+- Which framework types cross boundaries?
+- Do fakes honor production behavior?
+- Which layer can be removed without losing a property?
+- How will dependency direction be enforced?
+
+## Practical mistakes
+
+- ❌ One ViewModel per reusable composable regardless of lifecycle/logic.
+- ✅ ViewModel for screen business state; local/plain holder for UI mechanics.
+- ❌ Interface and mapper for every class because “Clean.”
+- ✅ Boundaries follow volatility, ownership, and contracts.
+- ❌ `MutableStateFlow` exposed publicly.
+- ✅ Immutable state outward; mutations through intent methods.
+- ❌ Network DTO used as database entity and UI model.
+- ✅ Separate when schemas and ownership differ; avoid copying without reason.
+
+## Design exercise
+
+Whiteboard a ride-booking feature. Include location updates, quote expiry, driver matching, cancellation, backgrounding, process death, and payment. Produce:
+
+1. ownership/boundary diagram
+2. state transition table
+3. repository/use-case contracts
+4. concurrency and retry decisions
+5. test strategy
+6. two ADRs with rejected alternatives
+
+<Admonition type="tip" title="Architect answer pattern">
+State the forces, ownership, invariants, dependency direction, failure/lifecycle behavior, tradeoffs, and verification. Pattern names come last.
+</Admonition>
+
+## Exercises
+
+1. Review a god ViewModel and propose an incremental migration.
+2. Contract-test a fake and production repository.
+3. Defend one deliberate violation of a preferred architecture rule.

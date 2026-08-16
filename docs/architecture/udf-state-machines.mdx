@@ -1,0 +1,97 @@
+---
+id: udf-state-machines
+title: Unidirectional data flow and state machines
+---
+import Admonition from '@theme/Admonition';
+
+# Unidirectional data flow and state machines
+
+## State is; events happen
+
+```text
+user/external event -> policy/effect -> result -> state transition -> rendered UI
+```
+
+State must fully describe what the UI needs now. Events are finite occurrences that may cause transitions.
+
+## Prevent impossible combinations
+
+❌ Independent booleans allow `loading=true`, `loaded=true`, and `error=true` together:
+
+```kotlin
+data class BadState(val loading: Boolean, val data: List<Item>?, val error: Throwable?)
+```
+
+✅ A sealed model encodes mutually exclusive phases:
+
+```kotlin
+sealed interface ItemsState {
+    data object InitialLoading : ItemsState
+    data class Content(val items: List<Item>, val refreshing: Boolean) : ItemsState
+    data class Empty(val canRetry: Boolean) : ItemsState
+    data class Failed(val reason: Failure, val previous: List<Item>?) : ItemsState
+}
+```
+
+Note that refresh can coexist with content, so it belongs inside `Content`. Modeling must reflect product reality, not force every flag into exclusivity.
+
+## Explicit transition table
+
+| Current | Event/result | Next | Side effect |
+|---|---|---|---|
+| Editing | Submit | Validating | validate locally |
+| Validating | Invalid | Editing(errors) | focus first error |
+| Validating | Valid | Paying | start idempotent payment |
+| Paying | Accepted | Completed(orderId) | persist/observe order |
+| Paying | Retryable failure | PaymentFailed | offer retry |
+| Completed | Submit | Completed | none; reject duplicate |
+
+This exposes missing cancellation, retry, duplicate-click, and process-recovery decisions before code.
+
+## Effects and reducers
+
+```kotlin
+data class Next<S, E>(val state: S, val effects: List<E> = emptyList())
+
+fun transition(state: PaymentState, event: PaymentEvent): Next<PaymentState, PaymentEffect> =
+    when (state) {
+        is PaymentState.Editing -> when (event) {
+            PaymentEvent.Submit -> Next(PaymentState.Validating, listOf(PaymentEffect.Validate))
+            else -> Next(state)
+        }
+        // exhaustive remaining states
+    }
+```
+
+Interpreter executes effects and returns results as events. This is useful for complex workflows, but a normal ViewModel method is clearer for simple screens.
+
+## Concurrency rules are part of the machine
+
+For each event decide:
+
+- ignore while active?
+- cancel previous and keep latest?
+- queue sequentially?
+- run concurrently and merge by ID?
+- deduplicate with an idempotency key?
+
+A state machine without concurrency policy can still double-charge or display stale search results.
+
+## Persistence boundary
+
+Do not serialize an entire transient machine blindly. Persist durable business facts and minimal reconstruction state. After process death, query order/payment truth and derive the safe screen phase.
+
+<Admonition type="warning" title="One-time events">
+A Channel does not turn a business fact into durable state. Payment completion, upload status, and accepted orders should be recoverable from an authoritative source.
+</Admonition>
+
+## Sources
+
+- [UI state production](https://developer.android.com/topic/architecture/ui-layer/state-production)
+- [State holders and UI state](https://developer.android.com/topic/architecture/ui-layer/stateholders)
+
+## Exercises
+
+1. Write a transition table for offline file upload with cancel/retry.
+2. Model refresh-with-content without impossible states.
+3. Choose concurrency semantics for typeahead search and payment submit.

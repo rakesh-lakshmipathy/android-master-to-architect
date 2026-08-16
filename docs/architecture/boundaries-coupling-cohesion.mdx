@@ -1,0 +1,82 @@
+---
+id: boundaries-coupling-cohesion
+title: Architecture boundaries, coupling, and cohesion
+---
+import Admonition from '@theme/Admonition';
+
+# Architecture boundaries, coupling, and cohesion
+
+Architecture is the set of decisions that make change safe. A diagram is useful only if code dependencies and ownership enforce it.
+
+## Separation by reason to change
+
+```text
+UI interaction -> screen state holder -> business operation -> repository -> data sources
+```
+
+- UI changes because presentation or interaction changes.
+- State holder changes because screen state/event policy changes.
+- Business operation changes because product rules change.
+- Repository changes because application-data policy or source coordination changes.
+- Data source changes because Room, HTTP, Bluetooth, or another external API changes.
+
+❌ A `CheckoutActivity` validates coupons, creates Retrofit requests, writes SQL, formats currency, navigates, and shows errors. Any product, transport, storage, locale, or lifecycle change edits the same class.
+
+✅ The Activity/Compose route binds state and intents; checkout rules are platform-independent; repository owns order data; sources own protocols.
+
+## Coupling has several forms
+
+| Coupling | Android example | Risk |
+|---|---|---|
+| Type | ViewModel imports Retrofit DTO | server schema leaks into UI |
+| Temporal | call `initialize()` before `observe()` | order-dependent failure |
+| Data | five primitives always travel together | missing domain concept |
+| Lifecycle | singleton retains Activity callback | leak/stale UI |
+| Behavioral | caller knows cache retry sequence | policy duplicated |
+
+Not all coupling is bad. UI must depend on a UI model. The goal is deliberate coupling to stable contracts, not zero dependencies.
+
+## Cohesion: keep related policy together
+
+High cohesion means a class has one focused responsibility. “Only one method” does not prove cohesion, and a large class can be cohesive if one complex responsibility genuinely needs its parts.
+
+```kotlin
+class CheckoutPolicy(
+    private val taxPolicy: TaxPolicy,
+    private val inventory: InventoryRepository,
+) {
+    suspend fun quote(cart: Cart, address: Address): CheckoutQuote { /* rules */ }
+}
+```
+
+This is more cohesive than generic `Utils.calculate(cart, address, config, context)` because the name, inputs, and dependencies explain the policy.
+
+## Boundary test
+
+For each dependency ask:
+
+1. Who owns this data?
+2. Who may mutate it?
+3. Which side knows the external framework?
+4. What failure/cancellation contract crosses the boundary?
+5. Could the consumer test its rules with a deterministic fake?
+6. Does changing the provider require editing unrelated consumers?
+
+## Over-separation is also damage
+
+`Button -> Handler -> Coordinator -> Interactor -> UseCase -> Service -> Repository` for a single local preference creates navigation cost without isolating volatility. Add boundaries where they protect business policy, external systems, independent ownership, or reuse.
+
+<Admonition type="tip" title="Architect takeaway">
+Draw boundaries around volatility and ownership. Count reasons to change and dependency direction—not files, packages, or layers.
+</Admonition>
+
+## Sources
+
+- [Guide to Android app architecture](https://developer.android.com/topic/architecture)
+- [Architecture recommendations](https://developer.android.com/topic/architecture/recommendations)
+
+## Exercises
+
+1. Split a god Activity by reasons to change.
+2. Identify temporal and lifecycle coupling in a location screen.
+3. Defend one place where direct coupling is simpler and safe.

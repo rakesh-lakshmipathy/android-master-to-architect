@@ -252,7 +252,28 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Parts IV-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part IV - Application Architecture',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'Architecture Foundations',
+          collapsed: true,
+          items: [
+            'architecture/boundaries-coupling-cohesion',
+            'architecture/solid-android',
+            'architecture/mvc-mvp-mvvm-mvi',
+            'architecture/udf-state-machines',
+            'architecture/clean-architecture',
+            'architecture/architecture-foundations-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Parts V-X - Android to Architect', items: ['roadmap']},
   ],
 };
 
