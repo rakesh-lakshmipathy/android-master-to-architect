@@ -1,0 +1,79 @@
+---
+id: patterns-behavioral
+title: Strategy, Observer, State, and Command
+---
+import Admonition from '@theme/Admonition';
+
+# Strategy, Observer, State, and Command
+
+## Strategy: replace an algorithm
+
+```kotlin
+fun interface ImageCompressionStrategy {
+    suspend fun compress(input: Uri): CompressedImage
+}
+
+class UploadPhoto(private val compression: ImageCompressionStrategy) { /* ... */ }
+```
+
+Choose strategy by product configuration/device capability. Prefer a function type for one method; use an interface when contract/documentation/state grows.
+
+## Observer: publish changing state
+
+Flow/StateFlow and lifecycle collection implement observer-style communication. Define hot/cold, replay, completion, errors, backpressure, and unsubscribe lifecycle.
+
+❌ Listener stored in singleton without removal leaks Activity.
+
+✅ Return a cancellable registration or expose Flow whose collection owns subscription cleanup.
+
+Observer can create invisible dependency webs. Prefer one source of truth and explicit transformations rather than many observers mutating each other.
+
+## State pattern: behavior varies by current state
+
+```kotlin
+sealed interface UploadState {
+    fun on(event: UploadEvent): UploadState
+
+    data class Running(val sent: Long) : UploadState {
+        override fun on(event: UploadEvent) = when (event) {
+            UploadEvent.Cancel -> Cancelled
+            is UploadEvent.Progress -> copy(sent = event.bytes)
+            else -> this
+        }
+    }
+    data object Cancelled : UploadState { override fun on(event: UploadEvent) = this }
+}
+```
+
+For small state machines, an exhaustive reducer is often clearer than methods on each state. State pattern helps when each state owns substantial behavior.
+
+## Command: represent an action as data/object
+
+```kotlin
+sealed interface EditorCommand {
+    fun apply(document: Document): Document
+    fun undo(document: Document): Document
+}
+```
+
+Commands enable queues, undo, logging, retry, or remote transport. A click lambda is already a lightweight command; do not add command classes unless action identity/history matters.
+
+For durable commands, serialize a stable schema and idempotency key—not closures or in-memory objects.
+
+## Corner cases
+
+- strategy instance holds mutable cross-request state
+- observer emits after consumer lifecycle ends
+- state transition runs side effects twice during replay
+- command retries non-idempotent payment
+- undo command cannot reconstruct deleted external data
+
+<Admonition type="tip" title="Decision">
+Use Strategy for replaceable algorithm, Observer for changing data, State for state-dependent behavior, and Command when actions need identity/lifecycle beyond immediate invocation.
+</Admonition>
+
+## Exercises
+
+1. Model image compression variants with Strategy.
+2. Specify a Flow observer contract for connectivity.
+3. Design idempotent queued commands for offline favorites.

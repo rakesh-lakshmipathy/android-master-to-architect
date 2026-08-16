@@ -1,0 +1,62 @@
+---
+id: patterns-interview
+title: Design patterns interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Design patterns interview lab
+
+## Choose from the problem
+
+| Problem | Candidate | Check before choosing |
+|---|---|---|
+| runtime algorithm variants | Strategy | simple function/when enough? |
+| incompatible SDK contract | Adapter | mapping/error semantics defined? |
+| add tracing/retry | Decorator | wrapper order/attempt amplification? |
+| hide subsystem workflow | Facade | cohesive task or god service? |
+| undoable queued action | Command | identity/persistence/idempotency needed? |
+| independently contributed handlers | Chain/multibinding | order and isolation defined? |
+| failing dependency storm | Circuit Breaker | measured need and fallback? |
+
+## Interview scenarios
+
+<details><summary><strong>Factory versus Strategy?</strong></summary><p>Factory chooses/creates an object; Strategy is the replaceable behavior used to perform an operation. A factory may select a strategy.</p></details>
+
+<details><summary><strong>Adapter versus Decorator?</strong></summary><p>Adapter changes one contract into another. Decorator preserves the contract and adds behavior. One wrapper can technically do both, but its primary intent should remain clear.</p></details>
+
+<details><summary><strong>Observer versus event bus?</strong></summary><p>Observer is a relationship/publish-subscribe mechanism. A global event bus is an especially broad implementation that often creates hidden coupling; scoped typed Flow with explicit ownership is safer.</p></details>
+
+## Case study: resilient photo upload
+
+- Factory chooses compressor by media type/capability.
+- Strategy performs compression.
+- Adapter wraps cloud SDK behind `BlobStore`.
+- Decorators add metrics and bounded retry.
+- Repository owns durable upload records/source of truth.
+- Command/Work request carries upload ID and idempotency key.
+- State machine models queued/running/paused/failed/completed.
+- Observer Flow publishes database state.
+- Facade/use case coordinates prepare + enqueue.
+
+Reject needless additions: Builder if Kotlin data class suffices; circuit breaker without observed service storm; global mediator/event bus.
+
+## Practical review checklist
+
+- [ ] Problem and force are stated before pattern.
+- [ ] Simpler language feature/straight code was considered.
+- [ ] Ownership and lifecycle are explicit.
+- [ ] Error/cancellation/retry behavior is documented.
+- [ ] Order matters only where encoded and tested.
+- [ ] Pattern does not hide dependencies.
+- [ ] Fakes preserve behavioral contract.
+- [ ] Removal cost is low if pattern proves unnecessary.
+
+<Admonition type="tip" title="Interview framing">
+Name the pressure, show minimal code/flow, explain why alternatives fail, and state the new tradeoff introduced by the pattern. Pattern collecting is not architecture.
+</Admonition>
+
+## Exercises
+
+1. Solve a theming variation with and without Strategy.
+2. Review a 12-pattern solution and remove unjustified patterns.
+3. Design tests for retry decorator order and idempotency.

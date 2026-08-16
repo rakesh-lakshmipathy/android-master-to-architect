@@ -1,0 +1,78 @@
+---
+id: patterns-coordination
+title: Chain of Responsibility and Mediator
+---
+import Admonition from '@theme/Admonition';
+
+# Chain of Responsibility and Mediator
+
+## Chain of Responsibility
+
+A request passes through ordered handlers until handled or transformed.
+
+```kotlin
+fun interface RequestInterceptor {
+    suspend fun intercept(chain: Chain): Response
+}
+```
+
+OkHttp interceptors are a practical example. Order changes behavior: authentication before logging may expose headers; retry around cache differs from cache around retry.
+
+Validation chain example:
+
+```kotlin
+val validators: List<CheckoutValidator> = listOf(
+    InventoryValidator(), AddressValidator(), PaymentValidator()
+)
+val failures = validators.flatMap { it.validate(draft) }
+```
+
+This collects all errors. A true first-handler chain would stop. Specify stop/continue behavior, ordering, parallelism, and error isolation.
+
+## Mediator
+
+Mediator centralizes interactions among colleagues so they do not reference each other directly.
+
+```kotlin
+class CheckoutCoordinator(
+    private val cart: CartState,
+    private val navigator: CheckoutNavigator,
+    private val analytics: Analytics,
+) {
+    fun onAddressSelected(id: AddressId) { /* coordinate */ }
+}
+```
+
+Useful for complex UI flows, but a mediator can become a god coordinator that owns all business logic. Keep it scoped to interaction/orchestration and delegate domain/data rules.
+
+Event buses are broad mediators with weak contracts. Global string events create hidden many-to-many coupling, ordering ambiguity, lifecycle leaks, and refactoring hazards. Prefer typed local events/state owners.
+
+## Pipeline versus chain versus decorator
+
+- Pipeline: all stages typically transform in sequence.
+- Chain: a handler may stop/pass responsibility.
+- Decorator: nested wrappers preserve one interface.
+
+Code shape can resemble each; intent and contract distinguish them.
+
+## Failure design
+
+For each handler decide:
+
+- timeout and cancellation
+- may mutate request?
+- may run more than once?
+- exception isolation
+- required order
+- tracing of which handler decided
+- behavior when none handles
+
+<Admonition type="warning" title="Order is architecture">
+If correctness or security depends on handler order, encode and test order explicitly. DI Set iteration is not a workflow specification.
+</Admonition>
+
+## Exercises
+
+1. Order auth, redaction, logging, cache, and retry interceptors.
+2. Refactor a global event bus into scoped typed coordination.
+3. Choose chain, pipeline, or decorator for document processing.

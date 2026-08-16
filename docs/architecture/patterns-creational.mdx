@@ -1,0 +1,77 @@
+---
+id: patterns-creational
+title: Factory and Builder patterns
+---
+import Admonition from '@theme/Admonition';
+
+# Factory and Builder patterns
+
+Patterns name recurring design pressures. Use one only when it makes creation rules, variation, or invalid states clearer.
+
+## Factory: choose a concrete product
+
+```kotlin
+interface ReceiptRenderer { fun render(order: Order): ByteArray }
+
+class ReceiptRendererFactory(
+    private val pdf: PdfReceiptRenderer,
+    private val text: TextReceiptRenderer,
+) {
+    fun create(format: ReceiptFormat): ReceiptRenderer = when (format) {
+        ReceiptFormat.Pdf -> pdf
+        ReceiptFormat.PlainText -> text
+    }
+}
+```
+
+The caller asks for a capability and does not know constructors. A factory is useful when creation chooses by configuration/runtime type, validates inputs, or coordinates multiple dependencies.
+
+Do not wrap a public constructor with `FooFactory.create()` if there is no creation policy. It adds indirection without protecting anything.
+
+Android examples:
+
+- `ViewModelProvider.Factory` creates ViewModels with runtime/saved dependencies.
+- Room/Retrofit builders hide multi-step configuration.
+- WorkerFactory lets WorkManager create dependency-rich Workers.
+
+## Builder: readable optional configuration
+
+```kotlin
+val request = UploadRequest.Builder(fileUri)
+    .contentType("image/jpeg")
+    .wifiOnly(true)
+    .maxRetries(4)
+    .build()
+```
+
+Builder fits many optional parameters, ordering-independent configuration, or validation at `build()`.
+
+Kotlin named/default parameters often replace a builder:
+
+```kotlin
+data class RetryPolicy(
+    val maxAttempts: Int = 3,
+    val initialDelay: Duration = 1.seconds,
+    val multiplier: Double = 2.0,
+)
+```
+
+Use a builder when staged Java interoperability, mutable accumulation, or cross-field validation makes it worthwhile.
+
+## Prevent partially valid objects
+
+❌ Builder returns object with missing base URL and fails later during first request.
+
+✅ `build()` validates required fields and invariants; constructed object is usable immediately.
+
+Consider a typed/staged factory if operations must occur in strict sequence. But staged generic builders can become harder to understand than one validated function.
+
+<Admonition type="tip" title="Decision">
+Factory answers “which/how is this object created?” Builder answers “how do I assemble many configuration choices?” Kotlin defaults often answer both more simply.
+</Admonition>
+
+## Exercises
+
+1. Decide factory, builder, constructor, or top-level function for five creation APIs.
+2. Validate cross-field upload constraints in `build()`.
+3. Replace an unnecessary builder with Kotlin defaults.

@@ -1,0 +1,68 @@
+---
+id: patterns-application-resilience
+title: Repository, Use Case, Mapper, Result, and Circuit Breaker
+---
+import Admonition from '@theme/Admonition';
+
+# Repository, Use Case, Mapper, Result, and Circuit Breaker
+
+These are common application/resilience patterns, not universal mandatory layers.
+
+## Repository and Use Case
+
+Repository owns application-data policy and source coordination. Use case owns one business operation/reusable orchestration. Avoid pass-through names that add no contract.
+
+## Mapper protects meaning
+
+```kotlin
+fun PriceDto.toDomain(): Money = Money(
+    minorUnits = requireNotNull(minorUnits),
+    currency = CurrencyCode.parse(currency) ?: error("Unknown currency"),
+)
+```
+
+Mapper handles null/default/unit/name/enum differences. Silent fallbacks can corrupt money or permissions; decide strict versus tolerant behavior per field and record schema incidents.
+
+## Result: make expected failure explicit
+
+```kotlin
+sealed interface PlaceOrderOutcome {
+    data class Accepted(val id: OrderId) : PlaceOrderOutcome
+    data class Rejected(val reasons: List<Rejection>) : PlaceOrderOutcome
+}
+```
+
+Expected business rejection is data. Programming defects may still throw. Do not catch every `Throwable` into `Unknown`; cancellation must propagate and diagnostics must remain.
+
+Kotlin `Result` is convenient at small boundaries, but a domain sealed type communicates recovery choices better when failures matter.
+
+## Circuit Breaker
+
+A circuit breaker prevents repeated calls to a failing dependency:
+
+```text
+Closed -- failures exceed threshold --> Open
+Open -- cooldown expires -----------> Half-open
+Half-open -- probe succeeds --------> Closed
+Half-open -- probe fails -----------> Open
+```
+
+It differs from retry: retry repeats an individual operation; breaker protects system capacity across operations.
+
+Decisions include failure classification, rolling window, threshold, cooldown, probes, per-host/per-operation key, persistence, and user fallback. Do not count 4xx validation failures as infrastructure failure.
+
+On mobile, network loss should usually be handled by offline/source-of-truth policy; an elaborate in-memory breaker resets on process death and may add little. It is useful for expensive unstable SDK/services or shared networking layers when measured failure storms exist.
+
+## Pattern interactions
+
+Retry + timeout + breaker + WorkManager can amplify attempts. Define one attempt budget and observability across layers. Idempotency is required for retried mutations.
+
+<Admonition type="tip" title="Architect takeaway">
+Patterns must publish behavioral contracts: ownership, error classification, retries, cancellation, freshness, idempotency, and observability.
+</Admonition>
+
+## Exercises
+
+1. Map malformed money without silent corruption.
+2. Design a breaker for a flaky ML SDK.
+3. Calculate worst-case attempts across OkHttp, repository, and WorkManager retries.

@@ -1,0 +1,83 @@
+---
+id: patterns-structural
+title: Adapter, Decorator, Facade, and Proxy
+---
+import Admonition from '@theme/Admonition';
+
+# Adapter, Decorator, Facade, and Proxy
+
+## Adapter: translate incompatible contracts
+
+```kotlin
+class FirebaseAnalyticsAdapter(
+    private val firebase: FirebaseAnalytics,
+) : Analytics {
+    override fun record(event: AnalyticsEvent) {
+        firebase.logEvent(event.name, event.toBundle())
+    }
+}
+```
+
+The application owns `Analytics`; adapter contains SDK types and mapping. Replacing SDK does not edit features.
+
+## Decorator: add behavior around the same contract
+
+```kotlin
+class LoggingOrdersRepository(
+    private val delegate: OrdersRepository,
+    private val logger: Logger,
+) : OrdersRepository {
+    override suspend fun submit(order: Order): OrderResult {
+        val started = TimeSource.Monotonic.markNow()
+        return try { delegate.submit(order) }
+        finally { logger.timing("submit_order", started.elapsedNow()) }
+    }
+}
+```
+
+Decorators compose caching, metrics, retries, authorization, or tracing. Order matters: retry outside metrics records one total; metrics inside retry records each attempt.
+
+Avoid double-retry layers (OkHttp + repository + Worker) that multiply requests.
+
+## Facade: simplify a subsystem
+
+```kotlin
+class AccountDeletion(
+    private val remote: AccountApi,
+    private val database: AppDatabase,
+    private val session: SessionManager,
+    private val scheduler: WorkScheduler,
+) {
+    suspend fun delete(): DeletionResult { /* ordered policy */ }
+}
+```
+
+Facade provides one task-focused API over several components. It may become a god service if unrelated workflows accumulate; split by use case/capability.
+
+## Proxy: control access to another object
+
+A proxy may lazy-load, authorize, remote-call, cache, or stand in for another process. Retrofit creates a proxy implementation for service interfaces. Binder proxies represent remote objects.
+
+```kotlin
+class AuthorizedDocuments(
+    private val delegate: Documents,
+    private val session: Session,
+) : Documents {
+    override suspend fun delete(id: DocumentId) {
+        check(session.permissions.canDeleteDocuments)
+        delegate.delete(id)
+    }
+}
+```
+
+Adapter changes interface; decorator adds behavior while preserving it; facade simplifies several APIs; proxy controls access/represents another object. Implementations can overlap—explain intent.
+
+<Admonition type="warning" title="Hidden semantics">
+A wrapper that adds caching/retry/security changes behavioral contracts. Document freshness, attempt count, authorization failure, cancellation, and observability.
+</Admonition>
+
+## Exercises
+
+1. Classify Room mapper, OkHttp interceptor, Retrofit service, and feature coordinator.
+2. Determine decorator order for auth, retry, and metrics.
+3. Find the god-facade boundary in an account manager.
