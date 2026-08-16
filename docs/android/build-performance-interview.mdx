@@ -1,0 +1,126 @@
+---
+id: build-performance-interview
+title: Build performance, CI, and interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# Build performance, CI, and interview scenarios
+
+## Optimize the builds developers actually run
+
+Measure separately:
+
+- configuration/sync;
+- clean build;
+- no-change build;
+- implementation-only Kotlin edit;
+- public ABI edit;
+- resource/manifest edit;
+- annotation/KSP generation;
+- minified release;
+- local versus remote-cache CI.
+
+## Common causes
+
+| Symptom | Investigate |
+|---|---|
+| Every small edit rebuilds many modules | `api` exposure, ABI changes, task inputs, processors |
+| Configuration always slow | eager project/task/configuration resolution, plugin count |
+| Cache misses across CI | machine paths, timestamps, environment, non-relocatable outputs |
+| KSP/kapt dominates | processor incrementality, generated scope, dependency versions |
+| Release suddenly slower | R8 rules, dependency growth, resource graph, profile generation |
+
+## Practical improvement loop
+
+1. Capture baseline with representative scenario.
+2. Identify critical path/task and cause.
+3. Make one architectural/configuration change.
+4. Compare distributions, not one lucky run.
+5. Verify correctness/cache reproducibility.
+6. Add budget/regression monitoring.
+
+### ❌ Avoid “enable parallel and hope”
+
+Parallelism can increase memory pressure/contention and hide incorrectly shared task state.
+
+### ✅ Prefer bottleneck-driven tuning
+
+Fix serialization/eager work/invalidations, then tune workers/heap/parallelism on representative developer and CI hardware.
+
+## CI pipeline shape
+
+```text
+format/static checks
+      ↓
+compile + unit tests (representative variants)
+      ↓
+lint/security/dependency checks
+      ↓
+instrumented/Compose tests (sharded)
+      ↓
+signed minified candidate
+      ↓
+smoke/generated split install + macrobench/profile
+      ↓
+publish immutable artifact + evidence
+```
+
+Parallelize independent stages and fail fast, but do not rebuild a different artifact at promotion time. Promote the already-tested immutable candidate.
+
+## Quick answers
+
+<details><summary><strong>What is a Gradle task graph?</strong></summary><p>A directed acyclic graph of selected tasks and dependencies constructed during configuration and executed in dependency order.</p></details>
+
+<details><summary><strong>`api` versus `implementation`?</strong></summary><p>`api` exposes dependency types as part of a library consumer’s compile contract; `implementation` keeps an implementation detail internal. Public signatures determine the correct choice.</p></details>
+
+<details><summary><strong>Why can release crash when debug works?</strong></summary><p>R8/resource shrinking, signing identity, variant configuration, manifest/resource merging, and split delivery differ. Test the exact minified signed candidate and retrace with its mapping.</p></details>
+
+<details><summary><strong>AAB versus APK?</strong></summary><p>APK is installable; AAB is a publishing format used to generate optimized device APKs. Generated delivery must be tested.</p></details>
+
+## Scenario 1: broad keep rule fixed crash
+
+It restored reflection by retaining an entire package.
+
+**Follow-up:** identify exact reflective contract, prefer generated adapter, narrow the rule, add minified test, compare optimization score/size, retain mapping.
+
+## Scenario 2: cached build contains wrong environment
+
+Custom task read undeclared `SERVER_URL`.
+
+**Fix:** explicit Provider task input and output, or remove build-time environment coupling; add cache correctness test.
+
+## Scenario 3: 96 variants
+
+Four brands × four markets × three environments × two build types.
+
+**Analysis:** identify real compile-time products, move runtime/server flags out, eliminate invalid combinations, create CI tiers, establish ownership and release evidence.
+
+## Architect exercise: enterprise build platform
+
+Design for 150 modules, 20 teams, two brands, weekly release:
+
+1. convention plugin ownership/versioning;
+2. dependency catalog/BOM/verification;
+3. module API boundaries and ABI monitoring;
+4. configuration/build cache and remote security;
+5. test/variant sharding;
+6. signing/secrets/provenance;
+7. R8 mapping/symbol pipeline;
+8. build budgets and incident rollback;
+9. AGP/Gradle/Kotlin migration cadence.
+
+## Mastery checklist
+
+- [ ] I explain build lifecycle/task DAG and lazy Providers.
+- [ ] I model variants without uncontrolled explosion.
+- [ ] I choose dependency configurations from public ABI.
+- [ ] I diagnose minified release failures narrowly.
+- [ ] I distinguish upload and app-signing keys.
+- [ ] I test generated APK delivery from AAB.
+- [ ] I measure clean/incremental/configuration/cache scenarios.
+- [ ] I promote immutable tested artifacts with evidence.
+
+<Admonition type="tip" title="Architect takeaway">
+Build architecture controls developer throughput and release trust. A fast build that produces an untraceable or untested artifact is failure; a secure release pipeline that takes hours for every edit is also unsustainable. Measure both feedback time and artifact integrity.
+</Admonition>
+

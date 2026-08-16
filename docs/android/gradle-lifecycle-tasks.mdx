@@ -1,0 +1,126 @@
+---
+id: gradle-lifecycle-tasks
+title: Gradle lifecycle, tasks, Providers, and caches
+---
+import Admonition from '@theme/Admonition';
+
+# Gradle lifecycle, tasks, Providers, and caches
+
+## Three phases
+
+| Phase | What happens |
+|---|---|
+| Initialization | Discover build/settings/projects/included builds |
+| Configuration | Evaluate build logic, register/configure task graph model |
+| Execution | Run selected tasks and dependencies |
+
+Gradle builds a directed acyclic task graph before execution. Running `assembleRelease` does not mean every registered task runs—only the selected graph.
+
+## Registration versus execution
+
+```kotlin
+tasks.register("printVariant") {
+    doLast {
+        println("Executed")
+    }
+}
+```
+
+The configuration block describes the task; `doLast` action runs only if the task enters the execution graph.
+
+### ❌ Eager creation/configuration
+
+```kotlin
+tasks.create("expensiveTask") {
+    val files = configurations["releaseRuntimeClasspath"].files
+}
+```
+
+This can eagerly create the task and resolve dependencies during configuration, slowing every build—even ones that never need it.
+
+### ✅ Lazy registration and Provider chaining
+
+```kotlin
+abstract class WriteVersionTask : DefaultTask() {
+    @get:Input abstract val versionName: Property<String>
+    @get:OutputFile abstract val outputFile: RegularFileProperty
+
+    @TaskAction
+    fun write() {
+        outputFile.get().asFile.writeText(versionName.get())
+    }
+}
+
+tasks.register<WriteVersionTask>("writeVersion") {
+    versionName.set(providers.gradleProperty("appVersion"))
+    outputFile.set(layout.buildDirectory.file("generated/version.txt"))
+}
+```
+
+Inputs/outputs let Gradle reason about up-to-date checks, caching, and changes. Providers delay reading values until needed.
+
+## Task dependency versus ordering
+
+- `dependsOn`: producer is required for consumer.
+- `mustRunAfter`: ordering only if both are already scheduled.
+- `finalizedBy`: cleanup/finalizer scheduled after task.
+
+Using ordering where a real data dependency exists can create builds that pass only when another task happened to run earlier.
+
+## Incremental, build, and configuration caches
+
+| Mechanism | Reuses |
+|---|---|
+| Up-to-date checking | Previous local task outputs when inputs unchanged |
+| Build cache | Task outputs, potentially across machines/CI |
+| Configuration cache | Serialized configured task graph/model for later invocations |
+
+They solve different costs. “Enable cache” does not fix nondeterministic tasks or undeclared inputs.
+
+## Cache poison scenario
+
+A code-generation task reads current Git branch through a shell command but does not declare it as input. Cached output from `main` is reused on `release`.
+
+### Fix
+
+Pass required value as an explicit Provider/task input, or remove branch-dependent artifact behaviour. Verify cache keys and outputs in clean CI.
+
+## Configuration-cache compatibility
+
+Task actions must not reach back into mutable Project/configuration objects at execution time. Capture serializable declared properties during configuration. Prefer supported lazy APIs over global hooks and `afterEvaluate` patches.
+
+## Avoid `afterEvaluate` architecture
+
+`afterEvaluate` often compensates for eager/ordering assumptions and can break plugin composition/configuration cache. Convention plugins and modern variant/lazy APIs express configuration at the intended lifecycle point.
+
+## Custom build logic location
+
+- tiny one-module configuration can remain in module script;
+- shared conventions belong in convention plugins/build logic;
+- organization-wide plugins can be versioned/published with compatibility tests.
+
+Avoid giant root scripts that configure every project by name and create hidden coupling.
+
+## Diagnose task performance
+
+Use Gradle profiling/build scans/profile reports and compare:
+
+- clean build;
+- no-change incremental build;
+- common source edit;
+- ABI/public API edit;
+- configuration time;
+- cache-hit CI build.
+
+One clean local build duration does not represent developer productivity.
+
+<Admonition type="tip" title="Interview-ready answer">
+Gradle initializes projects, configures a lazy task DAG, then executes only the selected graph. I register tasks lazily, model values with Providers, declare all inputs/outputs, and distinguish up-to-date checks, build cache, and configuration cache. Hidden environment reads and eager dependency resolution make builds slow and non-reproducible, so shared rules live in tested convention plugins.
+</Admonition>
+
+## Exercises
+
+1. Explain `dependsOn` versus `mustRunAfter` with a generated source.
+2. Find undeclared inputs in a task reading time, Git, and environment.
+3. Design measurements for a modular build performance regression.
+

@@ -1,0 +1,125 @@
+---
+id: agp-variants
+title: AGP build types, flavors, variants, and source sets
+---
+import Admonition from '@theme/Admonition';
+
+# AGP build types, flavors, variants, and source sets
+
+## Variant equation
+
+```text
+variant = one build type × one flavor from each dimension
+```
+
+Example dimensions:
+
+```text
+environment: dev, prod
+brand: blue, green
+build type: debug, release
+
+2 × 2 × 2 = 8 variants
+```
+
+Each variant can combine source, resources, manifest, dependencies, generated values, signing, and packaging configuration.
+
+## Build type versus flavor
+
+| Concept | Models |
+|---|---|
+| Build type | How artifact is built: debug/release, minification, debuggability, signing |
+| Product flavor | Product dimension: brand, market, demo/full, sometimes environment |
+
+Do not create a product flavor for every remote feature flag. Variant multiplication increases sync/configuration/tasks/CI/testing and can create untested combinations.
+
+## Kotlin DSL example
+
+```kotlin
+android {
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            isMinifyEnabled = false
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("staging") { dimension = "environment" }
+        create("production") { dimension = "environment" }
+    }
+}
+```
+
+## Source-set precedence
+
+For `stagingDebug`, relevant sets can include:
+
+```text
+src/main/
+src/staging/
+src/debug/
+src/stagingDebug/
+```
+
+Variant-specific sources override/combine according to documented priority. Avoid duplicating whole classes across source sets; extract interfaces/shared implementation and override only true differences.
+
+## Environment configuration danger
+
+```kotlin
+buildConfigField("String", "BASE_URL", "\"https://prod.example.com\"")
+```
+
+Anything embedded in an APK can be extracted. Base URLs are configuration, not secrets. API keys that must remain secret belong on a trusted backend; client-restricted public identifiers need provider restrictions and rotation.
+
+## Variant-aware dependencies
+
+```kotlin
+dependencies {
+    debugImplementation(libs.leakcanary)
+    releaseImplementation(libs.analytics.release)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+}
+```
+
+Ensure debug-only tooling is absent from release and that release-only integrations receive testing.
+
+## Disable invalid variants early
+
+If `demoProductionRelease` is meaningless, use supported Android Components/variant APIs to disable it before unnecessary tasks are created. Better still, reconsider dimensions so impossible products are not modeled.
+
+## Variant matrix ownership
+
+Define tiers:
+
+- every PR: compile/lint/unit tests for representative variants;
+- main/nightly: broader variant matrix/instrumentation;
+- release: exact signed/minified candidate and delivery splits;
+- smoke: install/launch every distributable combination.
+
+“We have eight variants” without a testing policy means some products are effectively unowned.
+
+## Library variants
+
+Library publication can expose build/flavor attributes to consumers. Publishing every internal variant complicates dependency selection and compatibility. Publish only intentional stable variants with documented attributes/contracts.
+
+<Admonition type="tip" title="Interview-ready answer">
+AGP forms a variant from one build type and one flavor per dimension, combining source sets, resources, manifests, dependencies, and packaging. Build types model build behaviour; flavors model product differences. I control variant explosion, avoid embedding secrets, use variant-aware dependencies, disable invalid combinations with supported APIs, and define CI coverage for every distributable variant.
+</Admonition>
+
+## Exercises
+
+1. Calculate variants for 3 brands × 2 environments × 3 build types.
+2. Decide which combinations run on PR, nightly, and release.
+3. Refactor duplicated flavor implementations into an interface boundary.
+

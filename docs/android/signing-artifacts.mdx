@@ -1,0 +1,105 @@
+---
+id: signing-artifacts
+title: Signing, secrets, APK/AAB, and release identity
+---
+import Admonition from '@theme/Admonition';
+
+# Signing, secrets, APK/AAB, and release identity
+
+## Signing establishes update identity
+
+Android requires installable APKs to be signed. The platform uses certificate lineage/identity when deciding whether an update can replace the installed app and for signature-level trust relationships.
+
+Signing proves artifact identity/integrity under a key; it does not make code secret or prove the app has no vulnerability.
+
+## App signing key versus upload key
+
+With Play App Signing:
+
+```text
+Developer/CI signs AAB with upload key
+                 ↓
+Play verifies uploader
+                 ↓
+Play generates device APKs
+                 ↓
+Play signs delivered APKs with app signing key
+```
+
+The [official signing guide](https://developer.android.com/studio/publish/app-signing) recommends separating upload and app-signing responsibilities. A compromised upload key can be reset through the platform process; app-signing identity has broader lifecycle consequences.
+
+## Secret management
+
+### ❌ Never commit
+
+```kotlin
+storePassword = "company-password"
+keyPassword = "company-password"
+```
+
+### ✅ CI secret input
+
+Read protected secret-store/environment/file credentials through Providers at release configuration/execution, mask logs, restrict access, rotate, audit, and fail closed when absent.
+
+Do not print signing configuration. Do not upload keystores as ordinary build artifacts. Back up/recover keys according to distribution strategy.
+
+## Public certificate versus private key
+
+- Private key signs and must remain secret.
+- Certificate/public fingerprint can be shared with API providers.
+
+Register the correct fingerprint: debug, upload, and Play app-signing certificates can differ. A production OAuth/maps failure often comes from registering the upload certificate while users receive APKs signed with the Play app-signing certificate.
+
+## APK versus AAB testing
+
+An AAB enables generated split APKs by ABI, density, language, and features. Risks include:
+
+- missing language/resource split;
+- native library ABI omission;
+- dynamic feature not installed;
+- split-aware resource/class loading;
+- Play signing certificate mismatch.
+
+Use bundle tooling/internal sharing/test tracks to validate generated delivery, not only `assembleDebug`.
+
+## Versioning
+
+- `versionCode`: monotonically ordered platform/store update identifier.
+- `versionName`: user-facing release label; not relied upon for ordering.
+
+Define CI ownership so two branches cannot publish conflicting codes. Preserve artifact → commit → config → mapping → tests → rollout linkage.
+
+## Artifact integrity and provenance
+
+A mature release records:
+
+- source revision and clean/approved state;
+- toolchain/dependency lock inputs;
+- CI workflow identity;
+- artifact checksums/signatures;
+- SBOM/provenance where required;
+- mapping/native symbols;
+- test/security reports;
+- release notes and rollout decision.
+
+## Key compromise scenario
+
+1. Stop unauthorized upload/release access.
+2. Assess which key: CI token, upload key, or app-signing key.
+3. Revoke/reset/rotate through supported store/provider processes.
+4. Audit releases and credentials.
+5. Notify affected stakeholders/providers/users as required.
+6. Improve access controls, hardware-backed storage, and incident playbook.
+
+Do not invent key rotation during incident; document and rehearse it.
+
+<Admonition type="tip" title="Interview-ready answer">
+Android signing establishes install/update identity and artifact integrity. With Play App Signing, CI signs the AAB using an upload key and Play signs delivered APKs using the protected app-signing key. I isolate credentials in audited secret storage, register the correct distribution certificate fingerprints, validate generated split APKs, preserve artifact-to-source/mapping provenance, and maintain tested key-loss/compromise procedures.
+</Admonition>
+
+## Exercises
+
+1. Explain why production Google Sign-In can fail despite a correctly signed upload AAB.
+2. Design key access for developers versus CI/release managers.
+3. Define evidence retained for versionCode 24017.
+

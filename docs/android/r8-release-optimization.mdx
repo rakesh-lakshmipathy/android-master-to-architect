@@ -1,0 +1,120 @@
+---
+id: r8-release-optimization
+title: R8, keep rules, resource shrinking, and retrace
+---
+import Admonition from '@theme/Admonition';
+
+# R8, keep rules, resource shrinking, and retrace
+
+## What R8 changes
+
+R8 analyzes the whole program to:
+
+- remove unreachable code;
+- optimize/inlining/merge/rewrite code;
+- rename classes and members;
+- produce DEX;
+- cooperate with resource shrinking.
+
+Therefore a minified release is not “debug with smaller names.” It is a transformed program that requires release-specific tests.
+
+## Why reflection can break
+
+```kotlin
+val clazz = Class.forName("com.example.PaymentPlugin")
+```
+
+The string does not look like a normal code reference. R8 may remove or rename the class unless library/tool-generated rules describe the reflective contract.
+
+### ✅ Prefer generated/direct references
+
+Serialization frameworks with generated adapters make dependencies visible to tools and fail earlier. If reflection is required, add the narrowest semantic rule.
+
+### ❌ Catastrophic workaround
+
+```proguard
+-keep class com.example.** { *; }
+```
+
+This blocks shrinking/optimization/obfuscation for an entire package and can mask which contract is actually dynamic.
+
+### ✅ Target the contract
+
+```proguard
+-keepclassmembers,allowoptimization class * {
+    @com.example.JsonName <fields>;
+}
+```
+
+Exact syntax depends on the reflective framework/contract. Confirm with official library rules and R8 diagnostics; do not copy random keep files.
+
+## App versus consumer rules
+
+- App `proguard-rules.pro`: rules needed by this app build.
+- Library `consumer-rules.pro`: rules consumers need for the library’s public/runtime contract.
+
+A library should not ship broad consumer rules that disable optimization across consumer code.
+
+## Diagnose release-only crash
+
+1. Reproduce the exact minified variant locally/device farm.
+2. Preserve failing artifact, mapping, seeds/usage/config outputs.
+3. Retrace obfuscated stack trace with matching mapping file.
+4. Identify removed/renamed/optimized contract.
+5. Prefer generated/direct API; otherwise add narrow rule.
+6. Add a release test that executes the path.
+7. Inspect size/optimization impact.
+
+### ❌ Do not solve by disabling minification
+
+```kotlin
+isMinifyEnabled = false
+```
+
+That abandons size/performance/security-by-obscurity benefits and leaves the dynamic contract undocumented.
+
+## Retrace
+
+Every release artifact must retain/upload its exact mapping file to crash reporting. A mapping from another version cannot correctly decode the stack.
+
+```text
+versionCode + artifact hash ↔ mapping/native symbols/source revision
+```
+
+Treat these as release evidence with retention/access controls.
+
+## Resource shrinking
+
+Resource shrinking removes packaged resources unreachable after code analysis.
+
+Dynamic resource-name lookup, reflection, WebView asset conventions, and server-driven names can hide usage.
+
+### ✅ Prefer direct IDs and typed mappings
+
+```kotlin
+val icon = when (type) {
+    Type.SHIPPED -> R.drawable.ic_shipped
+    Type.DELAYED -> R.drawable.ic_delayed
+}
+```
+
+Instead of `getIdentifier(serverName, "drawable", packageName)`.
+
+## Native/JNI
+
+JNI lookup by class/member name can break after renaming. Use documented annotations/rules or registered native methods according to JNI design, and test every shipped ABI with minification.
+
+## Optimization is not secrecy
+
+Obfuscation raises reverse-engineering effort but client code/secrets remain recoverable. Never embed backend secrets or trust client-only business enforcement.
+
+<Admonition type="tip" title="Interview-ready answer">
+R8 removes, optimizes, renames, and converts whole-program code, so reflection, JNI, serialization, and dynamic resources require explicit machine-visible contracts. I reproduce the exact minified variant, retrace with its mapping, use generated/direct references when possible, add narrow keep rules, test release paths, and retain mapping/symbol artifacts. I never disable shrinking or keep whole packages as a permanent fix.
+</Admonition>
+
+## Exercises
+
+1. Diagnose a Gson/JNI plugin that fails only after minification.
+2. Rewrite a dynamic drawable lookup into a typed mapping.
+3. Define mapping-file retention for staged releases.
+

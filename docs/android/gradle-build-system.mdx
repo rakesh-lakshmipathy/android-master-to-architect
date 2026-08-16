@@ -1,80 +1,107 @@
 ---
 id: gradle-build-system
-title: Gradle, AGP, variants, R8, and build performance
+title: Android build system — from source to signed artifact
 ---
 import Admonition from '@theme/Admonition';
 
-# Gradle, Android build tools, variants, and optimization
+# Android build system — from source to signed artifact
 
-Gradle executes a task graph. The Android Gradle Plugin (AGP) adds Android-specific models and tasks for manifests, resources, code, packaging, signing, testing, lint, and publishing.
+## The build is a transformation pipeline
 
-## Build flow
+An Android project contains source code, resources, manifests, generated code, native libraries, dependency metadata, and variant configuration. Gradle orchestrates tasks; Android Gradle Plugin (AGP) contributes Android-specific models and tasks.
 
 ```text
-Source + dependencies + resources + manifest
-→ generated code/resources
-→ Kotlin/Java compilation
-→ bytecode transforms/desugaring
-→ D8/R8 DEX
-→ resource processing/shrinking
-→ packaging and signing
+source + resources + manifests + dependencies + configuration
+                              │
+                 Gradle task graph + AGP
+                              │
+         merge/generate/compile/process/desugar/shrink
+                              │
+                     DEX + packaged resources
+                              │
+                      sign + verify artifact
+                              │
+                         APK or AAB
 ```
 
-## Build types, flavors, and variants
+## What each tool owns
 
-- Build type: debug/release behavior, optimization, signing, debuggability.
-- Product flavor: product/environment dimension such as free/paid or demo/prod.
-- Variant: combination of build type and each flavor dimension.
+| Tool | Main responsibility |
+|---|---|
+| Gradle | Build lifecycle, task graph, dependency resolution, caching |
+| AGP | Android variants, manifests/resources, DEX/package/sign/test/lint integration |
+| Kotlin/Java compilers | Source to JVM class output |
+| AAPT2 | Compile/link Android resources and manifest-related packaging data |
+| D8 | Class bytecode/desugaring to DEX |
+| R8 | Whole-app shrinking, optimization, obfuscation, DEX |
+| apksigner/bundle tooling | Artifact signing/verification/delivery packaging |
 
-Avoid multiplying flavors for values that can be runtime configuration. Variant count multiplies tasks, generated outputs, CI work, and maintenance.
+The exact tasks/tool boundaries evolve with AGP. Treat task names as observable implementation, not a permanent public architecture.
 
-## Dependency configurations
+## APK versus Android App Bundle
 
-- `implementation`: dependency hidden from consumers' compile classpath when possible.
-- `api`: exposed as part of a library module's public API.
-- `compileOnly`, `runtimeOnly`, test configurations: specialized availability.
+- **APK:** installable package for a device.
+- **AAB:** publishing format containing code/resources/metadata from which a distributor such as Google Play generates device-specific APKs.
 
-Overusing `api` increases recompilation and coupling.
+An AAB is not installed directly on a normal device. Test generated APK delivery—languages, densities, dynamic features, signing—not only the universal local debug APK.
 
-## R8
+## Debug success does not prove release success
 
-R8 shrinks, optimizes, and obfuscates release code. Reflection, JNI, serialization, and dynamically referenced classes may need keep rules or generated adapters.
+Release can differ in:
 
-<div className="practice-bad">
+- R8/resource shrinking and obfuscation;
+- signing certificate and API allowlists;
+- `BuildConfig`/manifest placeholders/resources;
+- server base URL and network-security config;
+- debug-only dependencies/tools;
+- debuggability and runtime profiles;
+- Play-generated split delivery.
 
-**✕ Disable shrinking when one release crash occurs**
+### ✅ Release principle
+
+Every critical flow needs tests against a minified, signed, release-like variant before rollout.
+
+## Reproducible and hermetic direction
+
+A build should produce the same logical output from declared inputs. Undeclared environment, current time, network downloads during custom tasks, absolute machine paths, and mutable dependency versions reduce reproducibility/cacheability.
+
+### ❌ Hidden task input
 
 ```kotlin
-isMinifyEnabled = false
+tasks.register("writeServer") {
+    doLast {
+        file("server.txt").writeText(System.getenv("SERVER_URL"))
+    }
+}
 ```
-</div>
 
-<div className="practice-good">
+Gradle cannot reliably cache a task if inputs/outputs are undeclared and it writes arbitrary files.
 
-**✓ Reproduce release build and add the narrow correct rule**
+### ✅ Declared task model
 
-```text
-Identify reflected entry → prefer generated adapter → add targeted keep rule → test mapping/retrace
-```
-</div>
+Use typed task properties annotated as inputs/outputs and Providers for lazy configuration. Validate missing configuration explicitly and keep secrets out of artifact/logs.
 
-## Signing
+## Build configuration is production code
 
-Signing keys identify app updates. Keep release keys/secrets out of source control, restrict access, plan backup/recovery, and use Play App Signing where appropriate.
+A one-line Gradle change can alter signing, exported components, code removal, server environment, permissions, or delivery. Review build logic with the same rigor as Kotlin:
 
-## Build performance
-
-Measure with build scans/profile reports. Common improvements:
-
-- Configuration cache and build cache compatibility
-- Avoid dynamic/changing dependencies
-- Reduce annotation processing; prefer incremental KSP where supported
-- Correct module/API boundaries
-- Avoid task code reading environment/time unpredictably
-- Parallelize CI safely and cache verified inputs
-- Track clean and incremental builds separately
+- ownership and tests;
+- versioned conventions;
+- minimal privileges/secrets;
+- migration plan;
+- measurable build impact;
+- release rollback/forward fix.
 
 <Admonition type="tip" title="Interview-ready answer">
-Gradle builds a task graph; AGP adds Android tasks and variants. Build types and flavors combine into variants. `implementation` limits exposure, R8 optimizes release code, signing protects update identity, and build performance must be measured rather than guessed.
+Gradle models the build lifecycle/task DAG and resolves dependencies; AGP adds Android variants and tasks for resources, manifests, compilation, DEX, shrinking, packaging, signing, testing, and publishing. APK is installable; AAB is a publishing input used to generate device APKs. I treat release as a distinct tested product because shrinking, signing, configuration, and split delivery can differ from debug.
 </Admonition>
+
+## Continue
+
+1. [Gradle lifecycle, tasks, Providers, and caching](./gradle-lifecycle-tasks)
+2. [Build types, flavors, variants, and source sets](./agp-variants)
+3. [Dependencies, `api`/`implementation`, and version catalogs](./gradle-dependencies)
+4. [R8, keep rules, resource shrinking, and retrace](./r8-release-optimization)
+5. [Signing, secrets, APK/AAB, and release identity](./signing-artifacts)
+6. [Build performance, CI, and interview scenarios](./build-performance-interview)
 

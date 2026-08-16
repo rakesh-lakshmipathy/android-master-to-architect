@@ -1,0 +1,126 @@
+---
+id: gradle-dependencies
+title: Dependencies, api versus implementation, and version catalogs
+---
+import Admonition from '@theme/Admonition';
+
+# Dependencies, `api` versus `implementation`, and version catalogs
+
+## Dependency configuration is an architectural boundary
+
+In a library module:
+
+```kotlin
+dependencies {
+    implementation(libs.okhttp)
+    api(projects.models.publicApi)
+}
+```
+
+- `implementation`: needed internally; not intentionally exposed on consumer compile API.
+- `api`: types are part of the module’s public contract and must be visible to consumers.
+
+## Concrete example
+
+```kotlin
+// :network public API
+interface CatalogClient {
+    suspend fun products(): List<Product>
+}
+```
+
+If public method signatures expose no OkHttp type, use `implementation(libs.okhttp)`. Consumers should not compile against OkHttp merely because this module happens to implement HTTP with it.
+
+### ❌ Leaky public API
+
+```kotlin
+fun client(): OkHttpClient
+```
+
+Now OkHttp is part of the module contract, so either `api` is required or the API should be redesigned around owned abstractions.
+
+## Why overusing `api` hurts
+
+- larger compile classpaths;
+- more downstream recompilation when exposed ABI changes;
+- tighter module coupling;
+- accidental reliance on transitive dependencies;
+- harder replacement/migration.
+
+Do not mechanically replace everything with `implementation`; public signatures determine correct exposure.
+
+## Other configurations
+
+| Configuration | Availability |
+|---|---|
+| `compileOnly` | Compile but not runtime/package; consumer/runtime must provide |
+| `runtimeOnly` | Runtime but not compile API |
+| `testImplementation` | Local unit tests |
+| `androidTestImplementation` | Instrumented tests |
+| `ksp` | KSP processors |
+| `lintChecks` | Custom lint rule artifact |
+
+Misusing `compileOnly` can produce release `ClassNotFoundException` if runtime does not actually supply the library.
+
+## Version catalog
+
+```toml
+[versions]
+kotlin = "..."
+room = "..."
+
+[libraries]
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+
+[plugins]
+android-application = { id = "com.android.application", version = "..." }
+```
+
+Catalogs centralize aliases/versions, but they do not guarantee compatibility or force all modules to use one version by themselves. Dependency resolution, platforms/BOMs, constraints, and lock/verification policy still matter.
+
+## Dynamic versions are unstable inputs
+
+### ❌ Avoid
+
+```kotlin
+implementation("com.example:sdk:1.+")
+```
+
+The same commit can resolve differently tomorrow, breaking reproducibility/cache correctness.
+
+### ✅ Prefer pinned reviewed versions
+
+Use dependency update automation with changelog/security review and controlled merge.
+
+## Dependency conflict
+
+Two libraries request different versions. Gradle resolution selects according to metadata/rules, but “highest wins” does not prove binary/runtime compatibility.
+
+Investigate with dependency insight, inspect why each version is present, align using BOM/platform/constraints where valid, and test runtime paths.
+
+## Dependency verification and repositories
+
+Restrict repositories, verify checksums/signatures according to threat model, avoid arbitrary project-added repositories, and keep credentials in protected CI/user configuration—not build scripts.
+
+## Dependency evaluation checklist
+
+- product need and alternatives;
+- maintenance/release/security health;
+- size/method/native ABI contribution;
+- startup initialization/providers;
+- permissions/manifest additions;
+- data/privacy behaviour;
+- transitive graph and license;
+- R8 rules and compatibility;
+- exit/migration plan.
+
+<Admonition type="tip" title="Interview-ready answer">
+`implementation` keeps an internal dependency off consumers’ intended compile API, while `api` is correct when dependency types are exposed in the library’s public ABI. Overusing `api` increases coupling and recompilation. I pin versions, use catalogs/BOMs/constraints intentionally, inspect dependency graphs and release manifests, verify supply-chain inputs, and evaluate size, startup, privacy, security, and removal cost before adding an SDK.
+</Admonition>
+
+## Exercises
+
+1. Decide `api`/`implementation` for three public signatures.
+2. Diagnose `NoClassDefFoundError` caused by `compileOnly`.
+3. Write a third-party analytics SDK evaluation checklist.
+
