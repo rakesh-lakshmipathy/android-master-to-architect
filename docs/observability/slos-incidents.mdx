@@ -1,0 +1,75 @@
+---
+id: slos-incidents
+title: SLIs, SLOs, alerts, incidents, and postmortems
+---
+import Admonition from '@theme/Admonition';
+
+# SLIs, SLOs, alerts, incidents, and postmortems
+
+- SLI: measured indicator of user-relevant service.
+- SLO: target for that SLI over a window.
+- SLA: external/business agreement with consequences; not every internal target.
+
+## Mobile-aware SLI
+
+```text
+Checkout confirmation SLI =
+eligible checkout attempts reaching durable confirmed/rejected outcome
+within 10 seconds / all eligible checkout attempts
+```
+
+Define eligible population, offline handling, app versions, retries, user cancellation, clock, sampling, duplicate events, and missing telemetry. Server-only 200 rate misses UI crashes and local sync failure; client-only telemetry is incomplete/bias-prone. Reconcile signals.
+
+## Error budget
+
+An SLO of 99.9% permits 0.1% bad events in the window. Error-budget burn rate shows how quickly that allowance is consumed. Fast-burn alerts catch acute outage; slow-burn alerts catch chronic degradation without paging on every transient.
+
+## Actionable alert
+
+Every page has:
+
+- user impact/SLO and severity;
+- owner/on-call route;
+- dashboard and version/cohort dimensions;
+- runbook: validate, scope, mitigate, communicate, escalate;
+- safe rollback/flag/traffic control;
+- expected false-positive/no-data behavior.
+
+Alert on symptoms (checkout failures) before only causes (CPU). Cause alerts help diagnose but may not be user-impacting. Avoid paging on a single crash event or unbounded cardinality.
+
+## Incident flow
+
+```text
+detect -> acknowledge -> assign incident commander
+ -> assess impact/scope/version/cohort
+ -> stabilize (rollback/kill switch/rate limit)
+ -> communicate timeline/status
+ -> investigate with preserved evidence
+ -> recover and verify SLI
+ -> postmortem/actions
+```
+
+Separate command, operations, and communication roles for significant incidents. Keep a timestamped decision log and explicit hypotheses.
+
+## Mobile mitigation constraints
+
+Users may not update quickly. Maintain backward-compatible server fixes, kill switches/safe config defaults, staged rollout/rollback, session/token revocation, and graceful old-client behavior. A Play rollback does not instantly replace installed bad builds.
+
+## Blameless postmortem
+
+Document impact, detection, timeline, technical and organizational contributors, what went well/poorly, why safeguards failed, and prioritized actions with owner/deadline. Avoid “engineer should be more careful.” Improve tests, defaults, rollout, observability, ownership, and recovery.
+
+<Admonition type="tip" title="Observability closes a control loop">
+Measure user outcome, compare to objective, act, and verify recovery. Dashboards without decisions/owners are decoration.
+</Admonition>
+
+## Sources
+
+- [Google SRE: Service Level Objectives](https://sre.google/sre-book/service-level-objectives/)
+- [Google SRE: Practical Alerting](https://sre.google/sre-book/practical-alerting/)
+- [Google SRE: Postmortem Culture](https://sre.google/sre-book/postmortem-culture/)
+
+## Exercise
+
+Define SLIs/SLOs and multi-window alerts for login, offline sync, checkout, and crash-free users. Write a first-15-minutes runbook for a bad Android rollout.
+

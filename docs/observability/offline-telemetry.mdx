@@ -1,0 +1,74 @@
+---
+id: offline-telemetry
+title: Offline telemetry buffering, sampling, and delivery
+---
+import Admonition from '@theme/Admonition';
+
+# Offline telemetry buffering, sampling, and delivery
+
+Mobile telemetry runs on intermittent networks, limited disk/battery, revoked consent, clock changes, process death, and old app versions. Delivery must never compete with core user data.
+
+## Durable bounded queue
+
+```kotlin
+data class TelemetryEnvelope(
+    val eventId: String,
+    val schema: String,
+    val version: Int,
+    val occurredAt: Instant,
+    val occurredAtElapsedNanos: Long,
+    val consentEpoch: Long,
+    val samplingProbability: Double,
+    val payload: SafeTelemetryPayload,
+)
+```
+
+Persist only when value justifies it. Set byte/count/age quotas, priority classes, batch size, retry/backoff/jitter, compression, and eviction. Drop low-value debug events before crash/security/core SLI signals, but never pretend dropped samples did not affect analysis.
+
+## At-least-once implications
+
+Uploads can succeed while response is lost. Use event ID/batch ID and server deduplication. Analytics transitions also need business-level dedupe. Do not delete local batch until confirmed; repeated delivery is expected.
+
+## Consent and account changes
+
+On withdrawal/logout/deletion:
+
+- stop collection immediately;
+- purge queued optional events for that purpose/account;
+- prevent delayed worker from uploading under old consent/account;
+- reset/link identifiers according to policy;
+- server processes deletion where required.
+
+Capture a consent/config epoch in envelope and revalidate at upload. Permission grant alone is not telemetry consent.
+
+## Time
+
+Wall clock may jump/time zone changes. Record occurrence wall time for correlation and elapsed monotonic time for within-session durations/order. Server receive time differs from occurrence time; dashboards must choose explicitly.
+
+## Sampling
+
+- deterministic sampling by opaque installation/event key gives stable cohort;
+- event sampling retains fraction of events;
+- session/user sampling supports journey analysis;
+- adaptive sampling keeps rare errors but risks bias;
+- never sample away the denominator needed for an SLI without correction.
+
+Record probability/eligibility and enforce server-side limits because modified clients can ignore client sampling.
+
+## Upload conditions
+
+Use WorkManager/SDK batching; normal telemetry can wait for connectivity/battery conditions. Do not start FGS or exact alarm for analytics. Use network byte/power budgets, backoff, server `Retry-After`, and a kill switch.
+
+<Admonition type="danger" title="Telemetry queue is sensitive storage">
+Encrypt/protect as appropriate, minimize content, exclude from backup where needed, apply retention, and never allow unbounded disk growth during outage.
+</Admonition>
+
+## Sources
+
+- [WorkManager persistent work](https://developer.android.com/develop/background-work/background-tasks/persistent)
+- [Firebase data collection controls](https://firebase.google.com/docs/analytics/configure-data-collection?platform=android)
+
+## Exercise
+
+Design a 5 MB telemetry budget for a week offline. Define priorities, eviction, consent withdrawal, duplicates, time semantics, sampling, upload constraints, and observability of dropped data.
+

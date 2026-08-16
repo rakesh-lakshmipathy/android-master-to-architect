@@ -1,0 +1,72 @@
+---
+id: analytics-contracts
+title: Analytics event contracts and data quality
+---
+import Admonition from '@theme/Admonition';
+
+# Analytics event contracts and data quality
+
+Analytics data must have semantics. “Purchase” emitted on button tap, API response, and background confirmation by different teams produces a persuasive but false dashboard.
+
+## Contract
+
+```yaml
+event: order_confirmed
+version: 2
+meaning: server-confirmed first transition of an order to Confirmed
+owner: checkout-team
+trigger: durable repository applies authoritative confirmation
+dedupe_key: order_operation_id
+properties:
+  payment_method: enum(card, wallet, cash)
+  total_bucket: enum(0-10, 10-50, 50-200, 200+)
+forbidden: [order_id, email, exact_amount, coupon_text, response_body]
+```
+
+Define trigger, at-most/at-least once semantics, deduplication, property types/enums/nullability, identifier scope, consent/purpose, retention, versioning, owner, and validation.
+
+## State transition rather than UI gesture
+
+```text
+button tapped -> attempt_started
+server accepted/durable sync -> order_confirmed
+UI shown confirmation -> confirmation_viewed
+```
+
+These answer different questions. Offline retries must not emit multiple conversions; persist an analytics outbox/dedupe marker with business transition where correctness matters.
+
+## Data quality tests
+
+- schema validation in unit/contract test;
+- unknown enum and optional field behavior;
+- duplicate event under retry/process death;
+- account/consent switch;
+- offline queue ordering and expiry;
+- forbidden field scanner and payload size/cardinality;
+- release dashboard checks for volume/drop/null/distribution changes.
+
+## Versioning
+
+Do not change meaning under the same event silently. Add schema version/new event, run overlap where necessary, migrate queries/dashboards, and retire with owners. Mobile versions remain in the wild, so backend pipeline must accept compatible old versions.
+
+## Cardinality and cost
+
+Trace IDs, URLs, filenames, error messages, timestamps, and raw model names explode dimensions. Metrics/analytics dimensions should be bounded enums/buckets. Keep high-cardinality diagnostic correlation in controlled logs/traces, not every dashboard label.
+
+## Bias
+
+Telemetry is missing from offline devices, denied-consent users, crashed sessions, certain stores/regions, or sampled cohorts. Dashboards describe observed population, not universal truth. Record sampling/eligibility and avoid interpreting absence as success.
+
+<Admonition type="warning" title="Analytics is production code">
+An event bug can drive wrong product decisions and violate privacy commitments. Review, test, version, monitor, and own it like an API.
+</Admonition>
+
+## Sources
+
+- [Firebase Analytics events](https://firebase.google.com/docs/analytics/events?platform=android)
+- [Analytics DebugView](https://firebase.google.com/docs/analytics/debugview)
+
+## Exercise
+
+Specify contracts for checkout started, payment authorized, order confirmed, and refund completed across offline retry/process death. Prevent double counting and exact financial-data leakage.
+

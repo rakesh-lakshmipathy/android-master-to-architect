@@ -1,0 +1,65 @@
+---
+id: firebase-operations
+title: Firebase observability and configuration tools
+---
+import Admonition from '@theme/Admonition';
+
+# Firebase observability and configuration tools
+
+Firebase products can cover important mobile needs, but each has a distinct contract and does not replace architecture or server observability.
+
+## Crashlytics
+
+Use for fatal/nonfatal/ANR/native issue grouping, affected users, breadcrumbs/custom keys, release velocity. Upload R8 mappings/native symbols per build. Keep custom keys bounded and non-sensitive. Disable/enable collection according to privacy policy and verify test crash pipeline.
+
+## Performance Monitoring
+
+Automatically captures supported startup/screen/network signals and permits custom traces/metrics/attributes. Validate URL grouping, sampling/data collection, and what “screen” means in Compose/single-Activity architecture. Custom trace should represent user journey and stop on every path.
+
+## Analytics
+
+Use governed event contracts, recommended events when semantics match, bounded properties, DebugView for validation, consent/default collection configuration, and export/data-quality monitoring. It is not an audit log or exact financial counter.
+
+## Remote Config
+
+Use in-app safe defaults before fetch, typed schema/validation, min-fetch/cache/offline behavior, targeting review, staged publishing, rollback history, owner/expiry, and real-time listener lifecycle where appropriate.
+
+```kotlin
+data class SafeConfig(
+    val checkoutEnabled: Boolean = true,
+    val maxUploadBatch: Int = 20,
+)
+
+fun FirebaseRemoteConfig.toSafeConfig(): SafeConfig = SafeConfig(
+    checkoutEnabled = getBoolean("checkout_enabled"),
+    maxUploadBatch = getLong("max_upload_batch")
+        .coerceIn(1, 100).toInt(),
+)
+```
+
+Remote Config values are visible to clients and controllable by attackers locally. Never store secrets or use a flag as authorization/payment limit/server security policy. Server enforces important rules.
+
+## Product boundaries
+
+| Product | Good signal | Does not guarantee |
+|---|---|---|
+| Crashlytics | client crash/ANR grouping | all backend failures, perfect grouping |
+| Performance | sampled mobile latency/network | full distributed trace/SLO truth |
+| Analytics | behavioral aggregates | exact audit/accounting |
+| Remote Config | client rollout/config | secrecy, authorization, immediate reach |
+
+## Initialization and privacy
+
+SDK ContentProviders/initializers can run before UI choice. Configure manifest/default collection and consent propagation before collection. Inventory data, retention, processors, identifiers, export/deletion, and regional/policy needs.
+
+## Sources
+
+- [Firebase Crashlytics](https://firebase.google.com/docs/crashlytics)
+- [Firebase Performance Monitoring](https://firebase.google.com/docs/perf-mon)
+- [Google Analytics for Firebase](https://firebase.google.com/docs/analytics)
+- [Remote Config on Android](https://firebase.google.com/docs/remote-config/android/get-started)
+
+## Exercise
+
+Map a purchase flow across Crashlytics, Performance, Analytics, Remote Config, backend logs/traces/metrics, and audit records. State owner, privacy, sampling, and what each cannot prove.
+

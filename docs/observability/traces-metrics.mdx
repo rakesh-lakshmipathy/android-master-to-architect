@@ -1,0 +1,80 @@
+---
+id: traces-metrics
+title: Traces, metrics, startup, and custom signals
+---
+
+# Traces, metrics, startup, and custom signals
+
+- Metrics aggregate numeric behavior over time.
+- Traces connect timing across operations/components.
+- Logs describe discrete diagnostic events.
+- Profiles explain resource usage in a captured interval.
+
+Use them together.
+
+## Mobile trace
+
+```text
+user refresh intent
+  -> app cache read
+  -> HTTP request (trace context)
+  -> gateway -> order service -> database
+  -> response parse
+  -> Room transaction
+  -> Compose content visible
+```
+
+Measure user-perceived start/end, not only HTTP duration. Add spans for cache/DB/parse/render with bounded names/attributes. Propagate W3C trace context or platform standard through trusted backend; do not accept arbitrary client sampling/identity as authorization.
+
+## Metrics design
+
+```text
+order_refresh_success_rate = successful refreshes / eligible attempts
+order_refresh_latency = intent -> usable content duration distribution
+offline_queue_age = oldest pending operation age
+sync_convergence = confirmed local version / server expected version
+```
+
+Every metric has unit, population/denominator, event boundary, labels, sampling, retention, owner, and action. A counter `errors_total` without denominator/version is hard to interpret.
+
+## Label cardinality
+
+Good labels: app version, OS major, device tier, network class, bounded result code, feature cohort. Bad: user/order ID, URL, exception message, timestamp, exact device model if unbounded. High cardinality raises cost and makes dashboards unusable/privacy-risky.
+
+## Startup signals
+
+Distinguish cold/warm/hot, TTID and TTFD, launcher/deep-link/notification entry, compilation/update state, app version/device tier. Automated startup monitoring may use a different “ready” boundary; add a custom full-ready signal when product content matters and verify its semantics.
+
+## Sampling
+
+Head sampling decides before trace outcome and may miss rare failures; tail sampling can retain errors/slow traces but generally requires backend support. Always keep aggregate metrics for population truth. Record sampling probability and use weighted analysis where appropriate.
+
+## Custom trace example
+
+```kotlin
+val trace = Firebase.performance.newTrace("order_refresh")
+trace.putAttribute("result", "unknown")
+trace.start()
+try {
+    repository.refresh()
+    trace.putAttribute("result", "success")
+} catch (t: Throwable) {
+    trace.putAttribute("result", "failure")
+    throw t
+} finally {
+    trace.stop()
+}
+```
+
+Do not create traces per frame or use sensitive/high-cardinality attributes. Ensure every path stops the trace.
+
+## Sources
+
+- [Firebase Performance Monitoring](https://firebase.google.com/docs/perf-mon)
+- [Custom code traces](https://firebase.google.com/docs/perf-mon/custom-code-traces?platform=android)
+- [Android vitals](https://developer.android.com/topic/performance/vitals)
+
+## Exercise
+
+Instrument an offline search from keystroke to rendered results and later sync. Define spans, metrics, bounded labels, sampling, trace propagation, and privacy constraints.
+

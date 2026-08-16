@@ -1,0 +1,73 @@
+---
+id: observability-interview
+title: Production reliability and interview lab
+---
+
+# Production reliability and interview lab
+
+## Case study: checkout regression after staged release
+
+Symptom: revenue drops; backend 5xx looks normal; crash-free users slightly decline.
+
+1. Checkout SLI combines eligible attempt→durable outcome from server and sampled client journey, segmented by app version/cohort/device/network.
+2. Burn-rate alert pages because v430 p95 failure breaches objective, not because one exception occurred.
+3. Incident commander scopes to v430 + a Remote Config experiment; freezes rollout and disables new parser path using validated kill switch.
+4. Crashlytics shows obfuscated top frame until CI mapping upload is corrected; archived map deobfuscates a null-enum crash.
+5. Trace ID links attempt to successful server response—proving client parse/Room application failed after HTTP.
+6. Analytics conversion uses durable confirmation contract, so button taps did not hide failure.
+7. Server remains backward compatible; v429 works. Fix tolerates unknown enum, tests contract, stages v431.
+8. SLI recovers; incident log/postmortem assigns mapping-upload release gate, unknown-enum contract test, config validation, and alert/runbook improvements.
+
+## Failure-injection checklist
+
+- mapping/native symbols missing for one flavor/ABI;
+- release version/config/cohort absent from crash events;
+- sensitive token appears in exception message/breadcrumb;
+- analytics emits conversion on tap and duplicates after retry;
+- high-cardinality URL/order ID explodes metrics;
+- offline queue fills disk and evicts critical crash signal;
+- user withdraws consent while telemetry is queued;
+- device clock changes and events arrive a week late;
+- sampling removes denominator or rare failure;
+- client says success while server says failure, or vice versa;
+- alert pages with no runbook/owner or misses bad mobile version;
+- kill switch has unsafe missing/invalid default;
+- old app cannot be remotely updated immediately;
+- backup restore/account deletion resurrects telemetry ID.
+
+## Interview questions
+
+1. **Logs, metrics, traces?** Discrete diagnostic events, aggregated numeric health, and causal/timing path across operations.
+2. **What makes a log structured?** Stable event schema with typed bounded fields, purpose/owner/retention—not string concatenation.
+3. **Why trace ID not user ID?** Correlates one operation without permanent identity/linkage; safer cardinality/privacy.
+4. **Why mapping files per release?** Obfuscation mapping is build-specific; exact artifact is needed for source stacks.
+5. **Event count versus affected users?** One crash loop can create many events; user/session reach better expresses impact.
+6. **Analytics contract?** Precise meaning/trigger/schema/dedupe/version/privacy/owner so dashboards remain truthful.
+7. **Why not exact amount/order ID in analytics?** Sensitive/high-cardinality and unnecessary for aggregate product question; bucket/minimize.
+8. **Mobile trace boundary?** Start at user intent and end at usable UI/business outcome, spanning cache/network/server/DB/render.
+9. **Why are labels bounded?** High cardinality increases cost, latency, privacy risk, and unusable dashboards.
+10. **How handle offline telemetry?** bounded prioritized durable queue, dedupe, retention, consent revalidation, sampling metadata, power-aware batches.
+11. **SLI versus SLO versus SLA?** Indicator measurement, internal target, and external agreement/consequence.
+12. **Why error-budget alert?** Pages on sustained user-objective consumption rather than noisy component blips.
+13. **Why mobile incidents are hard to mitigate?** installed versions persist/offline; use staged rollout, server compatibility, safe flags, kill switches, and new release.
+14. **Blameless postmortem?** Analyze system/organizational contributors and actionable safeguards, not personal blame.
+15. **Remote Config security boundary?** None; client values are readable/manipulable. Server enforces authorization/invariants.
+
+## Review checklist
+
+- [ ] Logs/events/traces have schemas, owners, bounded fields/cardinality, redaction, sampling, and retention.
+- [ ] Release identity, mapping/native symbols, and controlled crash verification are CI-gated.
+- [ ] Analytics transitions/dedupe/versioning reflect durable business truth.
+- [ ] User journeys have client + server trace/metric correlation and explicit boundaries.
+- [ ] Offline telemetry is bounded, prioritized, idempotent, consent-aware, and power-aware.
+- [ ] SLIs define population/denominator/window/missing data; SLO alerts use user impact/error budget.
+- [ ] Every alert has owner, runbook, safe mitigation, and no-data behavior.
+- [ ] Firebase/other SDK collection, privacy, initialization, and product limitations are understood.
+- [ ] Config/flags have safe local defaults, validation, rollout, rollback, owner, and expiry.
+- [ ] Incident/postmortem actions improve tests, release, observability, recovery, and ownership.
+
+## Exercises
+
+1. Write an observability spec for offline order creation from tap through eventual confirmation.
+2. Design a dashboard and multi-window alert for vitals + checkout SLO by version/cohort.
+3. Run a game day: bad config + missing mapping file + backend success/client parse crash; produce timeline and postmortem.

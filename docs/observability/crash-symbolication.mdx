@@ -1,0 +1,63 @@
+---
+id: crash-symbolication
+title: Crash reporting, symbols, and release correlation
+---
+
+# Crash reporting, symbols, and release correlation
+
+A crash report is useful only when it identifies the exact binary/configuration, has readable stacks, groups related faults correctly, and preserves privacy.
+
+## Release identity
+
+Attach:
+
+- application/package and distribution channel;
+- version name/code, build/commit ID;
+- build type/flavor and architecture/ABI;
+- OS/API/device tier;
+- rollout cohort and active safe flag/config version;
+- foreground screen/operation state code;
+- trace ID, not raw user content.
+
+Never use “latest” as incident identity. Multiple staged versions/configurations coexist.
+
+## Java/Kotlin deobfuscation
+
+R8 mapping is unique to an output build. Archive and upload the matching mapping for every released artifact. Rebuilding the same source can produce a different map. CI should fail release publication if symbol/mapping upload or archival evidence is missing.
+
+## Native symbols
+
+NDK stacks need unstripped native symbols/build IDs matching shipped `.so` files and ABIs. Upload per flavor/version and retain according to supported-release/incident needs. A raw program counter without correct binary is rarely actionable.
+
+## Grouping
+
+Grouping only by top frame can combine distinct causes or split one issue after refactor. Use exception type, normalized stack, signal, root cause metadata, version/config, and manual merge/split carefully. Track:
+
+- affected users/sessions, not only event count;
+- first/last seen and regression version;
+- crash-free users/sessions;
+- foreground/background/fatal/nonfatal/ANR/native separately;
+- rate per active population and rollout cohort.
+
+## Nonfatal errors
+
+Record only actionable unexpected failures. Expected offline/validation/permission denial is normal product state, not a nonfatal exception flood. Give each recorded error owner/action and rate limit.
+
+## Breadcrumbs
+
+Useful: `checkout_submit`, `token_refresh_started`, `database_migration_v7_v8`, state/error codes. Dangerous: screen text, search query, message body, URL, exact coordinates, HTTP body/token.
+
+## Reproduce and validate pipeline
+
+For release candidate, force a controlled Java/Kotlin crash and, if relevant, native crash. Verify console receives exact version and readable stack, mapping/symbol works, privacy fields are absent, and alert routes to owner. Do not wait for a real incident to discover missing symbols.
+
+## Sources
+
+- [Crashlytics for Android](https://firebase.google.com/docs/crashlytics/get-started?platform=android)
+- [Deobfuscate crash reports](https://firebase.google.com/docs/crashlytics/get-deobfuscated-reports)
+- [Crashlytics NDK symbols](https://firebase.google.com/docs/crashlytics/android/get-started-ndk)
+
+## Interview question
+
+**Why archive mapping files?** Obfuscated names are build-specific; without the exact released mapping, stack traces cannot reliably map back to source and rebuilding may not reproduce it.
+

@@ -1,0 +1,79 @@
+---
+id: structured-logging
+title: Structured logging and privacy-safe diagnostics
+---
+import Admonition from '@theme/Admonition';
+
+# Structured logging and privacy-safe diagnostics
+
+Logs should answer “what happened, where, and what should we do?” without becoming a second sensitive database.
+
+## Event, not sentence
+
+```kotlin
+logger.info(
+    event = "order_sync_completed",
+    fields = mapOf(
+        "result" to "success",
+        "attempt" to 2,
+        "duration_bucket_ms" to "500-1000",
+        "app_version" to BuildConfig.VERSION_CODE,
+        "trace_id" to traceId,
+    ),
+)
+```
+
+Structured fields support aggregation and stable queries. Keep a schema registry: event name, purpose, owner, allowed fields/types/cardinality, sampling, retention, and dashboards/alerts.
+
+## Never log raw secrets or content
+
+Exclude access/refresh tokens, cookies, PKCE codes/verifiers, passwords/OTP, encryption keys, full URLs/query parameters, exact location, health/financial/message/file content, BLE/NFC payloads, request/response bodies, and user-entered free text.
+
+```kotlin
+// ❌
+Log.e("Login", "failed token=$token email=$email response=$body", error)
+
+// ✅
+logger.error("login_failed", error, mapOf(
+    "reason" to error.safeCode,
+    "issuer" to issuerAlias,
+    "trace_id" to traceId,
+))
+```
+
+Exception messages, causes, filenames, and stack breadcrumbs can contain sensitive data; sanitize at creation and export.
+
+## Correlation
+
+Use an opaque random trace/operation ID propagated through app requests, WorkManager/outbox, server, and support diagnostics. It is not an account ID and should have bounded lifetime/cardinality.
+
+```text
+UI intent -> operationId -> Room outbox -> HTTP idempotency/trace -> backend logs
+```
+
+## Levels and rate
+
+- ERROR: failed outcome requiring investigation/action.
+- WARN: degraded/unexpected but handled.
+- INFO: bounded lifecycle/business outcome useful operationally.
+- DEBUG/TRACE: local diagnosis, normally excluded/redacted in production.
+
+Do not emit one log per animation frame, sensor reading, retry loop, or list item. Aggregate/rate-limit repetitive events and report counts.
+
+## On-device diagnostic export
+
+Use an opt-in, time-bounded support bundle with preview/redaction, app/build/device metadata, state codes, and recent ring-buffer events. Share through secure URI grant; never silently upload. Include consent/access/retention policy appropriate to product.
+
+<Admonition type="warning" title="Hashing is not automatic anonymization">
+A stable hash of email/account/device remains linkable and often reversible by dictionary. Prefer ephemeral/purpose-scoped opaque correlation IDs.
+</Admonition>
+
+## Sources
+
+- [Android log disclosure risk](https://developer.android.com/privacy-and-security/risks/log-info-disclosure)
+- [Firebase Crashlytics data collection](https://firebase.google.com/docs/crashlytics)
+
+## Exercise
+
+Create safe log schemas for login, sync, checkout, BLE connection, and database migration. Define forbidden fields, cardinality limits, sampling, retention, and an example investigation query.
+
