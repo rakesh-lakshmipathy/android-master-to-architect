@@ -1,0 +1,46 @@
+---
+id: modularization-migration
+title: Monolith-to-modular architecture migration
+---
+
+# Monolith-to-modular architecture migration
+
+Modules should improve ownership, dependency direction, build isolation, testability, or delivery—not merely increase folder count.
+
+## Find seams before moving files
+
+Map change coupling, build hotspots, team ownership, feature/domain boundaries, cycles, shared mutable state, navigation, resources, database/network models, and public APIs. Define allowed dependency directions and enforce them automatically.
+
+```text
+app -> feature:checkout -> domain:orders
+                         -> data:orders
+feature modules -> design-system
+data implementations -> core network/database
+domain must not depend on Android UI or feature modules
+```
+
+Extract a leaf with a narrow contract. Move behavior and tests together. Use interfaces only across a real ownership/substitution boundary; an interface per class adds indirection without decoupling.
+
+## Migration hazards
+
+- `api` dependencies leak transitive implementation and enlarge recompilation; prefer `implementation` unless consumers require the type.
+- A giant `core` module recreates the monolith.
+- Shared resource names collide or become accidental public API.
+- Cross-module navigation passing Parcelable graphs couples features; pass stable IDs/commands.
+- Centralized build logic can hide variant/plugin divergence; use convention plugins with tests.
+
+Measure incremental/clean build, affected-module count, dependency cycles, public API surface, test time, ownership and lead time. If metrics worsen, change the boundary rather than celebrating module count.
+
+## Practical mistakes
+
+- ❌ Create modules by architecture layer across the whole company without ownership analysis.
+- ✅ choose seams matching change and team boundaries.
+- ❌ Let every feature depend on every other feature.
+- ✅ mediate through app navigation or stable domain contracts.
+- ❌ Keep duplicate old/new implementations indefinitely.
+- ✅ define traffic migration and deletion criteria.
+
+## Exercise
+
+Design the first three extractions from a monolith containing login, catalog, cart, checkout, a shared database, and cyclic navigation. Explain why that order reduces risk.
+

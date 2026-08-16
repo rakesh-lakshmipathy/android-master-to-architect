@@ -1,0 +1,46 @@
+---
+id: migration-strategy
+title: Safe migration and refactoring strategy
+---
+
+# Safe migration and refactoring strategy
+
+A refactor preserves externally observable behavior. A migration intentionally changes technology, data, contracts, or behavior. Both need evidence, but migration additionally needs coexistence and compatibility plans.
+
+## Start with invariants
+
+For checkout, examples are: one order per idempotency key; price is server-authoritative; an interrupted payment resumes safely; accessibility actions remain reachable; analytics meaning does not change silently.
+
+Then establish a baseline: crashes/ANRs, latency, build time, defect/change-failure rate, test duration/flakes, module coupling, conversion, accessibility, and developer lead time. Without a baseline, “modernized” is not evidence of improvement.
+
+## Migration slice
+
+```text
+one user journey
+ -> compatibility boundary
+ -> new implementation behind controlled routing
+ -> old/new contract tests
+ -> staged exposure + observability
+ -> decide
+ -> delete old path and adapter
+```
+
+Prefer vertical slices that deliver/test a real journey over rewriting every repository and then every ViewModel. Keep commits reversible, but recognize that persisted data, public APIs, and server writes may be irreversible.
+
+## Migration ledger
+
+Record scope, owner, invariant, legacy/new entry points, data/contract compatibility, rollout, success/guardrail metrics, rollback limit, deletion condition, and expiry. A compatibility adapter without an expiry becomes the new legacy.
+
+## Practical mistakes
+
+- ❌ Rewrite because the code “feels old.”
+- ✅ Name the quality attribute and measurable constraint being improved.
+- ❌ Combine migration with unrelated redesign and product changes.
+- ✅ Separate dimensions so regressions are attributable.
+- ❌ Call “new code merged” complete.
+- ✅ Complete only after legacy branches/dependencies/telemetry are removed.
+
+## Exercise
+
+Write invariants and a migration ledger for replacing a legacy upload engine while millions of uploads are queued offline.
+

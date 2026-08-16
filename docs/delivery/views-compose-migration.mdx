@@ -1,0 +1,48 @@
+---
+id: views-compose-migration
+title: Views-to-Compose staged migration
+---
+
+# Views-to-Compose staged migration
+
+Compose and Views can coexist. Migrate a leaf component or complete screen, not an arbitrary half of state ownership.
+
+```kotlin
+override fun onCreateView(
+    inflater: LayoutInflater,
+    container: ViewGroup?,
+    state: Bundle?,
+) = ComposeView(requireContext()).apply {
+    setViewCompositionStrategy(
+        ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+    )
+    setContent { AppTheme { ProfileRoute() } }
+}
+```
+
+In Compose, use `AndroidView` for a View that has no Compose replacement. Keep state/event ownership outside the interop wrapper. In mixed screens decide one owner for lifecycle, navigation, focus, nested scrolling, insets, saved state, accessibility traversal, and testing synchronization.
+
+## Migration sequence
+
+1. Establish design tokens/theme and unidirectional screen state.
+2. Build new/low-risk leaves or screens in Compose.
+3. Test visual, semantics, keyboard/focus, large text, rotation, process restoration, performance, and mixed Espresso/Compose behavior.
+4. Move navigation only when destination model/interoperability supports the transition.
+5. Remove fragments/XML/custom views and interop wrappers when no longer needed.
+
+Do not preserve a `ComposeView` per RecyclerView row without profiling pooling/disposal and jank. Do not pass a ViewModel through every composable; screen-level code obtains it and passes state/callbacks.
+
+## Practical mistakes
+
+- ❌ Recreate the old View hierarchy one-to-one in composables.
+- ✅ Model state and layout intent, then implement Compose semantics.
+- ❌ Let Views and Compose both consume the same insets/event.
+- ✅ Declare one owner at the boundary.
+- ❌ Judge success by percentage of Kotlin/Compose files.
+- ✅ Measure defects, accessibility, performance, delivery speed, and deleted legacy.
+
+## Sources
+
+- [Compose migration strategy](https://developer.android.com/develop/ui/compose/migrate/strategy)
+- [Compose/View interoperability](https://developer.android.com/develop/ui/compose/migrate/interoperability-apis)
+

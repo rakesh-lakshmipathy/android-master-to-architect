@@ -1,0 +1,41 @@
+---
+id: migration-interview
+title: Strangler migration case study and interview preparation
+---
+
+# Strangler migration case study and interview preparation
+
+## Case study: replace legacy checkout without a rewrite freeze
+
+Place a stable `CheckoutGateway` around the legacy implementation. Characterize behavior with contract/golden tests. Build new checkout as a vertical slice using the same domain commands and server idempotency. Route only eligible new journeys; a journey keeps its implementation after starting. Compare shadow reads where privacy/load permit, but never shadow a payment write.
+
+Roll out by employee/account/app-version cohorts with crash, latency, duplicate-order, payment, conversion, support, and data-reconciliation guardrails. Rollback routes future journeys to legacy; in-progress/new-format data needs forward-compatible completion or repair. Completion means 100% observed stability followed by deletion of legacy code, adapters, flags, dependencies, tests, and dashboards.
+
+## Interview questions
+
+1. **Refactor versus migration?** Refactor preserves external behavior; migration changes a technology/contract/data boundary and needs coexistence planning.
+2. **Why strangler pattern?** It shifts traffic slice-by-slice through a stable boundary, limiting blast radius and enabling learning.
+3. **What makes rollback impossible?** Irreversible writes, schema contraction, external side effects, and clients already acting on new semantics.
+4. **How migrate LiveData to Flow?** Preserve lifecycle, initial state, hot/cold, replay, error/completion, event, and testing semantics.
+5. **Biggest DI coexistence risk?** Duplicate graphs/scopes creating multiple supposed singletons.
+6. **How measure modularization?** Build impact, dependency direction/cycles, API surface, ownership, defects, tests, and lead time—not module count.
+7. **When contract old data/API?** After telemetry proves supported consumers no longer use it and recovery/backup windows are addressed.
+
+## Checklist
+
+- [ ] Business/data/security invariants and baseline measured.
+- [ ] Stable seam with old/new contract tests.
+- [ ] Coexistence ownership and compatibility window defined.
+- [ ] Persisted/distributed changes use expand-migrate-contract.
+- [ ] Staged routing, guardrails, diagnostics, and incident owner ready.
+- [ ] Rollback limits and forward-repair paths documented.
+- [ ] Developer/product impact measured against baseline.
+- [ ] Legacy deletion condition, owner, and date committed.
+
+## Exercises
+
+1. Migrate a callback-based Java sync engine to Kotlin coroutines without losing queued work.
+2. Plan a screen-by-screen View/Compose migration with shared navigation and design system.
+3. Split a database-owning monolith while preventing cross-module DAO access.
+4. Review a proposed “six-month rewrite” and replace it with measurable vertical slices.
+

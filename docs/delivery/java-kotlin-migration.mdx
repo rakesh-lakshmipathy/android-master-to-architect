@@ -1,0 +1,50 @@
+---
+id: java-kotlin-migration
+title: Java-to-Kotlin migration
+---
+
+# Java-to-Kotlin migration
+
+Java and Kotlin compile together, so migrate boundary-first or feature-by-feature. Automatic conversion creates compiling Kotlin—not necessarily idiomatic, null-safe design.
+
+## Stabilize the Java boundary
+
+Add nullability annotations, tests, and small APIs before conversion. Platform types (`String!`) transfer null uncertainty into Kotlin.
+
+```java
+public interface UserStore {
+  @Nullable User find(@NonNull String id);
+}
+```
+
+```kotlin
+fun loadName(id: String): String =
+    userStore.find(id)?.name ?: "Unknown"
+```
+
+Review SAM/lambda calls, checked exceptions, getters/setters, static APIs, overloads/default arguments, wildcards, `@JvmStatic`, `@JvmOverloads`, `@JvmName`, and binary/public API consumers. Do not add `!!` merely to silence converted platform types.
+
+## Safe sequence
+
+1. Lock behavior with tests and nullability contracts.
+2. Convert a leaf or coherent feature.
+3. Keep public Java-facing signatures stable where required.
+4. Make null/error/state modeling idiomatic in a separate reviewable step.
+5. Run Java callers, release shrinking, serialization/reflection, and ABI checks.
+6. Delete obsolete Java helpers/adapters.
+
+Kotlin may increase build/code-generation cost if adopted carelessly. Measure incremental and clean builds; modernize build logic and annotation processing deliberately.
+
+## Practical mistakes
+
+- ❌ Convert the whole repository in one mechanical commit.
+- ✅ Migrate owned slices with testable boundaries.
+- ❌ Replace every nullable platform type with `!!`.
+- ✅ Clarify the producer contract and handle absence.
+- ❌ Change Java API shape accidentally through Kotlin defaults/properties.
+- ✅ Inspect bytecode/API reports and test Java callers.
+
+## Exercise
+
+Migrate a Java callback repository to suspend functions while keeping a Java consumer. Define cancellation, null, error, threading, and adapter deletion behavior.
+

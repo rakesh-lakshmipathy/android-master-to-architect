@@ -1,0 +1,46 @@
+---
+id: data-contract-migration
+title: Database and network-contract migration
+---
+
+# Database and network-contract migration
+
+Persisted data and distributed APIs outlive a deployment. Rollback often cannot undo writes already made in a new format.
+
+## Expand, migrate, contract
+
+For a column/field change:
+
+1. **Expand:** add a backward-compatible field/table/endpoint; old clients continue.
+2. **Migrate:** backfill or dual-read; carefully dual-write if idempotent and monitored.
+3. **Switch:** new readers become authoritative behind controlled rollout.
+4. **Observe:** verify counts, checksums, errors, latency, and business invariants.
+5. **Contract:** remove old format only after supported clients/jobs no longer require it.
+
+```kotlin
+fun UserDto.displayName(): String =
+    fullName?.takeIf(String::isNotBlank)
+        ?: listOfNotNull(firstName, lastName).joinToString(" ").ifBlank { "User" }
+```
+
+The adapter supports new and old server responses. Define precedence when both exist and instrument fallback use so removal is evidence-based.
+
+## Room/data risks
+
+Test migrations from every supported historical schema using real snapshots, including empty/large/unusual data. Verify constraints, indexes, triggers, foreign keys, null/default semantics, encryption, WAL/disk space, interruption, downgrade/restore, and performance. Never use destructive fallback for user-owned data unless loss is an explicit product contract.
+
+For networks, preserve tolerant readers, version semantics, idempotency, pagination/cursor behavior, error mapping, auth, retry safety, unknown enums, missing/null fields, and old-client server compatibility. Consumer-driven/schema contract tests help but do not prove operational rollout safety.
+
+## Practical mistakes
+
+- ❌ Rename/remove a field in server and mobile simultaneously.
+- ✅ expand, observe adoption, then contract.
+- ❌ Assume app rollback restores the old database.
+- ✅ design forward-compatible readers and repair paths.
+- ❌ Dual-write without reconciliation.
+- ✅ define source of truth, idempotency, drift metrics, and repair.
+
+## Exercise
+
+Migrate `price: Double` to integer minor units plus currency while old clients remain for six months. Design API, database, precedence, backfill, telemetry, and contraction.
+

@@ -1,0 +1,48 @@
+---
+id: state-di-migration
+title: LiveData-to-Flow and Dagger-to-Hilt migration
+---
+
+# LiveData-to-Flow and Dagger-to-Hilt migration
+
+These migrations change semantics and object graphs, not merely types/annotations.
+
+## LiveData to Flow
+
+`LiveData.observe` is lifecycle-aware. Flow collection is not automatically stopped with the UI. `StateFlow` requires an initial value and conflates state; an event stream needs a separate delivery contract.
+
+```kotlin
+class ProfileViewModel : ViewModel() {
+    private val _state = MutableStateFlow(ProfileUiState.Loading)
+    val state: StateFlow<ProfileUiState> = _state.asStateFlow()
+}
+
+viewLifecycleOwner.lifecycleScope.launch {
+    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.state.collect(::render)
+    }
+}
+```
+
+Audit cold-flow duplicate work, `stateIn` scope/start policy, replay, error/completion, initial/loading state, equality/conflation, lifecycle, event loss/duplication, and test schedulers. During coexistence expose one canonical producer with adapters, not two independent sources of truth.
+
+## Dagger to Hilt
+
+Inventory component scopes, subcomponents, component dependencies, custom factories, multibindings, qualifiers, entry points, test replacements, dynamic features, and startup ordering. Map lifetimes explicitly before replacing annotations.
+
+Migrate leaf bindings and Android entry points incrementally. Use compatibility entry points/adapters where necessary, but keep one owner for each scoped object. Two singleton graphs can create duplicate databases, caches, sessions, or analytics.
+
+## Practical mistakes
+
+- ❌ Replace `LiveData<T>` with `StateFlow<T?> = MutableStateFlow(null)` everywhere.
+- ✅ Model a meaningful initial state and separate events.
+- ❌ Collect Flow with an unconstrained UI `launch`.
+- ✅ use lifecycle-aware collection.
+- ❌ Run old/new DI containers with duplicate “singletons.”
+- ✅ define graph ownership and bridge explicitly.
+
+## Sources
+
+- [StateFlow and SharedFlow on Android](https://developer.android.com/kotlin/flow/stateflow-and-sharedflow)
+- [Hilt in multi-module apps](https://developer.android.com/training/dependency-injection/hilt-multi-module)
+
