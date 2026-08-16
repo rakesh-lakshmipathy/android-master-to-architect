@@ -1,0 +1,107 @@
+---
+id: art-compilation-profiles
+title: ART execution — interpreter, JIT, AOT, and profiles
+---
+import Admonition from '@theme/Admonition';
+
+# ART execution — interpreter, JIT, AOT, and profiles
+
+## Why ART uses more than one strategy
+
+Compiling every method eagerly can improve execution but increases install/update time and storage. Interpreting everything saves compilation work but makes frequently executed code slower. ART combines strategies to balance startup, steady-state speed, battery, storage, and update cost.
+
+| Strategy | When work happens | Main trade-off |
+|---|---|---|
+| Interpretation | While method runs | Fast availability, slower repeated execution |
+| JIT compilation | Runtime discovers hot code | Runtime CPU/memory cost, optimized hot paths |
+| AOT compilation | Before later execution | Faster execution, compilation/storage cost |
+| Profile-guided AOT | Profiles identify important paths | Compiles useful subset instead of guessing all code |
+
+The official [AOSP JIT documentation](https://source.android.com/docs/core/runtime/jit-compiler) describes methods as potentially interpreted, JIT-compiled, or AOT-compiled.
+
+## Scenario: checkout path becomes hot
+
+```kotlin
+fun calculateTotal(lines: List<Line>): Money =
+    lines.fold(Money.ZERO) { total, line ->
+        total + line.unitPrice * line.quantity
+    }
+```
+
+Conceptually:
+
+1. ART can initially execute the DEX implementation.
+2. Repeated execution supplies runtime evidence that the method/path is hot.
+3. JIT compilation can create optimized machine code.
+4. Profile information can later guide AOT compilation.
+5. A future process may execute precompiled important code earlier.
+
+Do not manually rewrite readable code based only on this story. Benchmark the actual critical journey.
+
+## Profiles are evidence about code paths
+
+A runtime profile records classes/methods important during real execution. Cloud Profiles can aggregate production behaviour through the distribution ecosystem; Baseline Profiles ship developer-provided critical paths with the app/library.
+
+```text
+No profile on first install
+  → interpreter/JIT discovers behaviour
+
+Baseline Profile included
+  → known critical paths can receive useful compilation earlier
+```
+
+## Why “works after using app five times” happens
+
+Possible contributors:
+
+- filesystem/page caches become warm;
+- network/server/cache state changes;
+- images/data are cached;
+- JIT/profile-guided compilation improves hot code;
+- initialization is already complete.
+
+Do not attribute all warm improvement to ART. Controlled benchmarks isolate compilation modes and app data conditions.
+
+## Deoptimization and runtime reality
+
+Optimized compiled code can rely on runtime assumptions. When assumptions become invalid, ART can deoptimize and return execution to a less optimized representation. The architect-level lesson is that runtime optimisation is adaptive, not a one-time “DEX becomes native forever” step.
+
+## Native code is different, not automatically faster
+
+JNI/NDK code is compiled for device ABIs, but crossing JNI has overhead and manual memory/safety complexity. Use native code for measured needs or existing native libraries—not to bypass ART based on folklore.
+
+## Practical mistakes
+
+### ❌ Microbenchmark in an ordinary loop
+
+```kotlin
+val start = System.nanoTime()
+repeat(1_000_000) { calculateTotal(lines) }
+println(System.nanoTime() - start)
+```
+
+This mixes warmup, JIT, dead-code optimisation risks, device state, and logging. It is not a trustworthy Android performance benchmark.
+
+### ✅ Prefer benchmark libraries
+
+Use Jetpack Benchmark/Macrobenchmark with controlled compilation modes, warmup, iterations, and release-like builds. Measure the user journey whose performance matters.
+
+## Architecture implications
+
+- Optimize end-to-end latency, not just method speed.
+- Do not block startup waiting for code/data that can be loaded later.
+- Generate profiles from representative critical user journeys.
+- Regenerate when paths change significantly.
+- Test startup and interactions across app updates and fresh installs.
+- Keep correct, readable algorithms; use measurement to find genuine bottlenecks.
+
+<Admonition type="tip" title="Interview-ready answer">
+ART uses hybrid execution because no single strategy optimizes install time, storage, startup, and steady-state speed. DEX can be interpreted, hot methods can be JIT-compiled, and profiles can guide AOT compilation of important paths. Performance often improves after use for several reasons, so I isolate compilation and cache state with Jetpack benchmarks instead of relying on stopwatch loops or assuming ART caused every change.
+</Admonition>
+
+## Exercises
+
+1. Why not AOT-compile every method aggressively?
+2. List four reasons a second launch can be faster than the first.
+3. When is a Microbenchmark more appropriate than Macrobenchmark?
+

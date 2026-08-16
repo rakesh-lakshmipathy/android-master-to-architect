@@ -1,0 +1,103 @@
+---
+id: baseline-startup-profiles
+title: Baseline Profiles and Startup Profiles
+---
+import Admonition from '@theme/Admonition';
+
+# Baseline Profiles and Startup Profiles
+
+## The problem they solve
+
+On a fresh install/update, ART has little runtime evidence about which code your users need first. A Baseline Profile ships developer-supplied knowledge of important classes and methods so ART can optimize those paths earlier.
+
+The [official overview](https://developer.android.com/topic/performance/baselineprofiles/overview) describes Baseline Profiles as rules used for ahead-of-time optimization of frequently used code paths, including startup and other critical journeys.
+
+## Baseline versus Startup Profile
+
+| Profile | Main purpose |
+|---|---|
+| Baseline Profile | Guides ART compilation for startup and other critical user journeys |
+| Startup Profile | Guides DEX layout so startup-critical code is placed advantageously |
+
+They complement each other and do not replace Macrobenchmark measurement.
+
+## Generate from real critical journeys
+
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class BaselineProfileGenerator {
+    @get:Rule
+    val rule = BaselineProfileRule()
+
+    @Test
+    fun generate() = rule.collect(
+        packageName = "com.example.shop",
+        includeInStartupProfile = true
+    ) {
+        pressHome()
+        startActivityAndWait()
+        device.findObject(By.text("Catalog")).click()
+        device.findObject(By.text("Checkout")).click()
+    }
+}
+```
+
+This Android instrumentation example is illustrative; plugin/library APIs evolve, so follow the current Android template/documentation in the project.
+
+The journey must represent real product usage. Randomly opening every screen bloats the profile and spends compilation budget on unimportant code.
+
+## Practical workflow
+
+1. Identify startup and high-value interactions from product/performance data.
+2. Add a Baseline Profile generator module/configuration.
+3. Automate deterministic critical user journeys.
+4. Generate profile rules for the target release.
+5. Package and verify the profile in the release artifact.
+6. Macrobenchmark compilation modes with and without the profile.
+7. Track regressions in CI/release monitoring.
+8. Regenerate when critical code paths materially change.
+
+## Common mistakes
+
+### ❌ Profile only the splash screen
+
+The first frame improves, but scrolling/catalog/checkout still JITs and janks.
+
+### ✅ Include bounded critical journeys
+
+Cover startup plus the first important interactions, not the entire app.
+
+### ❌ Assume presence means benefit
+
+Finding `baseline.prof` in an artifact proves packaging, not performance improvement.
+
+### ✅ Benchmark the user journey
+
+Compare controlled compilation modes and representative devices.
+
+### ❌ Generate once and forget
+
+Refactors/navigation changes can make rules stale or incomplete.
+
+### ✅ Treat profiles as release artifacts
+
+Own, regenerate, review, verify, and monitor them.
+
+## Library profiles
+
+Libraries can ship profiles for their own critical code. An app can benefit from combined library and app profiles, but should still profile end-to-end journeys. A library cannot know the app’s complete startup graph or business-critical path.
+
+## Profile does not fix blocking I/O
+
+If `Application.onCreate()` blocks on a network call, precompiled code may execute that bad decision faster but still waits on the network. Remove architectural blockers first.
+
+<Admonition type="tip" title="Interview-ready answer">
+A Baseline Profile supplies ART with important app/library code paths so they can receive useful AOT optimization from early use; a Startup Profile additionally influences DEX layout for startup. I generate profiles from deterministic critical user journeys, package and verify them, then compare Macrobenchmark compilation modes. Profiles complement removal of blocking startup work—they cannot fix bad I/O or state architecture.
+</Admonition>
+
+## Exercises
+
+1. Select three profile journeys for banking and justify them.
+2. Why is opening every screen a poor generator strategy?
+3. How would you prove a packaged profile improved checkout?
+

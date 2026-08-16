@@ -1,0 +1,83 @@
+---
+id: runtime-interview
+title: Process, startup, and ART interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# Process, startup, and ART interview scenarios
+
+## Rapid questions
+
+<details><summary><strong>Does ViewModel survive process death?</strong></summary><p>No. It survives eligible configuration recreation while its owner remains logically alive. Process death removes the ViewModel, repository instances, singletons, and coroutines. Restore from small saved inputs and durable data.</p></details>
+
+<details><summary><strong>What is a cold start?</strong></summary><p>The app process does not exist, so Android must create it and the app must initialize Application/providers, the entry component, UI, and first frame. It has more work than warm/hot starts.</p></details>
+
+<details><summary><strong>What does Zygote do?</strong></summary><p>Zygote is a prepared runtime process that forks app processes. It reduces repeated setup and allows unchanged pages to be shared copy-on-write; each child is specialized and isolated with its own UID/process state.</p></details>
+
+<details><summary><strong>DEX versus ART?</strong></summary><p>DEX is the executable bytecode format packaged for Android. ART is the runtime that loads, verifies, executes, compiles, profiles, and garbage-collects managed code.</p></details>
+
+<details><summary><strong>JIT versus AOT?</strong></summary><p>JIT compiles hot methods during execution using runtime evidence. AOT compiles before later execution. ART combines interpretation, JIT, AOT, and profiles to balance startup, runtime speed, install/update cost, storage, and battery.</p></details>
+
+<details><summary><strong>Why can an Activity leak if GC exists?</strong></summary><p>GC removes unreachable objects. A leaked Activity remains reachable from a longer-lived root, such as a singleton listener or application coroutine, so GC correctly retains it.</p></details>
+
+## Scenario 1: rotation passes, production loses cart
+
+The cart lives only in ViewModel. Rotation works; returning after background memory pressure shows an empty cart.
+
+**Answer:** rotation can preserve ViewModel, but process death cannot. Persist cart business state, save only stable keys/small UI values, and reconstruct a new ViewModel from repository data.
+
+## Scenario 2: empty Application but slow startup
+
+`Application.onCreate()` has two lines, yet trace shows 900 ms before Activity creation.
+
+**Investigate:** merged-manifest ContentProviders/initializers, class initialization, DI eager graph, library startup, disk I/O, and process-specific initialization. Measure the trace instead of inspecting one callback.
+
+## Scenario 3: debug is slow, release is smooth
+
+Debug and release differ in compiler/runtime optimizations, shrinking, instrumentation, and profiles. Do not “fix” production based on debug timing. Benchmark a release-like variant and preserve debuggability through dedicated tooling.
+
+## Scenario 4: OutOfMemory despite image files being 3 MB
+
+Compressed file size is not decoded bitmap size. Calculate width × height × pixel bytes, load to display dimensions, bound memory cache, and inspect retained references.
+
+## Scenario 5: calling `System.gc()` reduces graph temporarily
+
+This does not prove a fix. Collection can reclaim temporary unreachable allocations, but cannot reclaim a leaked reachable object. Find the retaining root path and correct ownership.
+
+## Architect exercise: startup design
+
+Design startup for a finance app requiring:
+
+- immediate theme and locked shell;
+- local session state;
+- database migration after update;
+- remote feature flags;
+- fraud SDK;
+- first account list;
+- deep link into a transaction.
+
+Address:
+
+1. Which work must occur before first frame?
+2. What can use cached values and refresh later?
+3. How does a deep link avoid initializing unrelated home features?
+4. What happens if migration is long or fails?
+5. Which process-death inputs are saved?
+6. How are TTID and TTFD reported?
+7. Which profile journeys and benchmark states are required?
+
+## Mastery checklist
+
+- [ ] I distinguish app, process, component, and task lifetime.
+- [ ] I explain cold/warm/hot startup and TTID/TTFD.
+- [ ] I can trace Zygote to Application/provider/Activity creation.
+- [ ] I classify UI, durable, and cache state.
+- [ ] I explain class → DEX → ART execution.
+- [ ] I distinguish desugaring from API availability.
+- [ ] I explain interpretation, JIT, AOT, and profiles.
+- [ ] I diagnose leaks through reachability/ownership.
+- [ ] I benchmark release-like journeys rather than stopwatch loops.
+
+<Admonition type="tip" title="Architect takeaway">
+Runtime mastery connects correctness and performance: process death determines state architecture; startup ownership determines TTID/TTFD; DEX/ART/profiles determine execution conditions; and heap reachability determines memory lifetime. Treat all four as measured production concerns, not isolated trivia.
+</Admonition>

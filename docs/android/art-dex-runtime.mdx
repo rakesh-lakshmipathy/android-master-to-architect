@@ -1,63 +1,160 @@
 ---
 id: art-dex-runtime
-title: ART, DEX, and runtime execution
+title: ART and DEX — from source code to execution
 ---
 import Admonition from '@theme/Admonition';
 
-# ART, DEX, and runtime execution
+# ART and DEX — from source code to execution
 
-Kotlin and Java source become JVM bytecode, then Android build tools convert it to DEX bytecode packaged in the app.
+## The complete idea in one sentence
+
+Kotlin and Java are compiled into JVM class files; Android build tools transform those class files into DEX bytecode; Android Runtime (ART) loads and executes that DEX using a changing combination of interpretation, just-in-time compilation, ahead-of-time compilation, and profiles.
 
 ```text
-Kotlin/Java source
-→ compiler bytecode (.class)
-→ desugaring and D8
-→ DEX files
-→ APK/App Bundle delivery
-→ ART executes optimized code
+Kotlin source (.kt) ──► Kotlin compiler ──┐
+                                          ├─► JVM bytecode (.class)
+Java source (.java) ──► Java compiler ────┘
+                                                    │
+                                      desugaring + D8/R8
+                                                    │
+                                                    ▼
+                                             DEX bytecode
+                                                    │
+                                          packaged in APK(s)
+                                                    │
+                                                    ▼
+                                                   ART
+                          interpreter / JIT / profile-guided AOT
 ```
 
-## D8 and desugaring
+This corrects two common oversimplifications:
 
-- D8 converts class bytecode to DEX.
-- Desugaring rewrites supported newer language/library features for older Android runtimes when necessary.
-- The minimum SDK and toolchain configuration affect what needs transformation.
+- “Kotlin runs directly on Android” — the Android toolchain transforms compiler output into DEX.
+- “ART compiles the entire app during installation” — modern ART uses hybrid execution and profile-guided optimization depending on device/API/install state.
 
-## ART execution
+## What DEX is designed for
 
-ART combines installation-time, ahead-of-time, and just-in-time/profile-guided optimization depending on platform conditions. Do not reduce it to “Android interprets DEX” or “everything is compiled once.”
+DEX means **Dalvik Executable format**. ART uses it even though the old Dalvik runtime was replaced.
 
-## Garbage collection
+Compared with separate JVM class files, a DEX file organizes bytecode and shared metadata in an Android-oriented format. An APK can contain `classes.dex`, `classes2.dex`, and more.
 
-Managed objects live on the heap and are reclaimed when unreachable. A memory leak means an object remains reachable even though the app no longer needs it.
+## D8, R8, and desugaring
 
-<div className="practice-bad">
+| Tool/process | Practical responsibility |
+|---|---|
+| Kotlin/Java compiler | Produces `.class` bytecode and metadata |
+| Desugaring | Rewrites supported newer language/library constructs for configured Android compatibility |
+| D8 | Converts class bytecode into DEX |
+| R8 | Shrinks, optimizes, and obfuscates; also produces DEX in release pipelines |
+| Resource shrinker | Removes eligible unused resources after code shrinking analysis |
 
-**✕ Static reference keeps an Activity alive**
+The exact pipeline is controlled by Android Gradle Plugin versions and configuration. Learn the responsibilities rather than memorizing one internal task name forever.
+
+## Practical example: a lambda on an older device
 
 ```kotlin
-object Holder { var activity: Activity? = null }
+val labels = orders.map { order -> order.displayName }
 ```
-</div>
 
-<div className="practice-good">
+The Kotlin compiler creates JVM-compatible output. Android desugaring/D8 then ensures supported constructs can run for the application’s configured API range. This is why using a newer language syntax is not identical to calling an Android framework API introduced on a newer API level.
 
-**✓ Store application-scoped dependencies or short-lived callbacks with clear ownership**
+```text
+Language compatibility: can tooling rewrite/compile this construct?
+Platform API compatibility: does this device actually contain this Android API?
+```
+
+Calling a new platform method still requires an API check or compatibility abstraction when `minSdk` is older.
+
+## Core-library desugaring
+
+Some newer Java library APIs can be made available on older Android releases through core-library desugaring when configured and supported. This is a tool-provided compatibility implementation, not proof that every modern JDK API exists on every Android version.
+
+### ❌ Avoid assumption-driven compatibility
 
 ```kotlin
-class Analytics(private val appContext: Context)
+// “It compiles, therefore it works on minSdk.”
+val result = SomeNewAndroidApi.doWork()
 ```
-</div>
 
-## DEX limits and multidex
+### ✅ Prefer
 
-Large method-reference counts may require multiple DEX files. Modern Android tooling handles multidex for configured applications, but excessive dependencies still affect build time, download size, startup, and class loading.
+Check official API availability, lint output, desugaring support, and tests on the minimum/representative API levels.
 
-## Baseline profiles
+## What ART does
 
-Baseline profiles describe important code paths for ahead-of-time optimization, improving startup and common interactions. They complement—not replace—good startup architecture and macrobenchmark measurement.
+ART is the managed runtime that:
+
+- loads DEX classes;
+- verifies bytecode and runtime constraints;
+- manages the heap and garbage collection;
+- executes interpreted or compiled code;
+- collects runtime profiles;
+- supports debugging, stack traces, JNI interaction, and runtime services.
+
+The [AOSP ART configuration documentation](https://source.android.com/docs/core/runtime/configure) explains that modern ART combines AOT, JIT, interpretation, and profile-guided compilation.
+
+## Method execution can change over time
+
+```text
+First uses:     interpreted DEX may run
+Repeated hot use: JIT may compile the method
+Profile saved: important paths recorded
+Idle/install optimization: profile-guided AOT may compile paths
+Next runs:      compiled code can execute directly
+```
+
+This is a mental model, not a fixed schedule promised to every app. Device state, runtime version, compilation filters, install source, and profiles affect behaviour.
+
+## Release build versus debug build
+
+Debug builds can disable/minimize optimizations, add debugging checks, skip shrinking, and use different compilation/runtime conditions. A performance conclusion from debug mode is weak evidence for production.
+
+### ✅ Rule
+
+Use debuggable builds for debugging correctness. Use release-like, non-debuggable, profile/benchmark-compatible builds for performance measurement.
+
+## Multidex
+
+DEX has reference-index constraints. Large apps may produce multiple DEX files.
+
+Modern Android/plugin support makes multidex routine, but it does not make dependency growth free:
+
+- larger downloads and installs;
+- more classes to verify/load;
+- longer builds and shrinking;
+- startup placement concerns on older configurations;
+- more attack surface and update cost.
+
+### ❌ Avoid “multidex solved app size”
+
+Adding another DEX file solves a packaging constraint, not architectural dependency bloat.
+
+### ✅ Prefer dependency governance
+
+Measure size contribution, remove redundant SDKs, use focused artifacts, review transitive dependencies, and keep startup-critical code paths lean.
+
+## Class initialization can hide startup work
+
+```kotlin
+object CurrencyFormatter {
+    private val rules = loadRulesFromDisk() // Runs when object initializes.
+}
+```
+
+The first reference can trigger disk I/O and class/object initialization on whichever thread touches it. “Lazy” only moves cost; it does not guarantee a safe thread or good user moment.
+
+### ✅ Prefer explicit suspend initialization or precomputed lightweight configuration
+
+Make expensive work visible in the API and assign lifecycle/thread ownership.
 
 <Admonition type="tip" title="Interview-ready answer">
-Android build tools convert JVM class files into DEX. ART executes and optimizes that code using platform-dependent compilation and profiles. Garbage collection removes unreachable objects; leaks remain reachable. R8/D8, desugaring, multidex, and baseline profiles affect packaging and runtime behavior.
+Kotlin and Java compile to class bytecode, then Android tooling desugars and converts it into DEX using D8 or the R8 release pipeline. ART loads DEX and uses a hybrid of interpretation, JIT, AOT, and profile-guided compilation. Desugaring can provide selected language/library compatibility, but it does not make newer Android framework APIs exist on older devices. Multidex handles packaging limits but does not remove size, startup, or dependency costs.
 </Admonition>
+
+## Continue
+
+1. [ART execution, JIT, AOT, and profiles](./art-compilation-profiles)
+2. [Heap, garbage collection, and memory leaks](./art-memory-gc)
+3. [Baseline and Startup Profiles](./baseline-startup-profiles)
+4. [Runtime interview scenarios](./runtime-interview)
 

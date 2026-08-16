@@ -1,0 +1,155 @@
+---
+id: art-memory-gc
+title: ART memory — heap, garbage collection, and leaks
+---
+import Admonition from '@theme/Admonition';
+
+# ART memory — heap, garbage collection, and leaks
+
+## Garbage collection solves reclamation, not ownership
+
+Managed objects are reclaimed when the runtime determines they are no longer reachable from live roots. You do not manually `free()` ordinary Kotlin objects.
+
+```text
+GC root → Application singleton → listener → destroyed Activity
+```
+
+The Activity is still reachable, so GC correctly keeps it. That is a **memory leak**: the program unintentionally retains an object beyond its useful lifetime.
+
+## Reachable versus useful
+
+```kotlin
+object EventHub {
+    private val listeners = mutableListOf<(Event) -> Unit>()
+}
+```
+
+```kotlin
+class CheckoutActivity : AppCompatActivity() {
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        EventHub.register { event -> render(event) }
+    }
+}
+```
+
+The lambda captures the Activity. If it is never removed, a process-lifetime singleton retains the destroyed screen.
+
+### ✅ Lifecycle-owned registration
+
+```kotlin
+override fun onStart() {
+    super.onStart()
+    subscription = eventHub.subscribe(::render)
+}
+
+override fun onStop() {
+    subscription.dispose()
+    super.onStop()
+}
+```
+
+Flow plus lifecycle-aware collection can encode this ownership more safely, but any upstream scope/reference can still leak if designed incorrectly.
+
+## Common Android leak paths
+
+- singleton/static field → Activity/View/Fragment;
+- long-running coroutine in an application scope captures a screen;
+- callback registered but never unregistered;
+- Fragment binding retained after `onDestroyView()`;
+- Handler/Runnable queued longer than screen lifetime;
+- WebView, animation, or drawable callback retains context/view;
+- unbounded cache retains large values;
+- native/JNI allocation is not released.
+
+## Application context is not a universal fix
+
+Use application context for dependencies that genuinely need process lifetime and do not require an Activity theme/window.
+
+```kotlin
+class Analytics(context: Context) {
+    private val appContext = context.applicationContext
+}
+```
+
+Do not replace Activity context with application context when showing dialogs, inflating themed UI, or accessing window-scoped behaviour. Fix ownership rather than blindly changing context.
+
+## Allocation pressure and jank
+
+Even objects that are not leaked can hurt performance if a hot loop allocates heavily. More allocations create more GC work and can contribute to missed frames.
+
+### ❌ Allocation during every draw/recomposition
+
+```kotlin
+fun render(items: List<Item>) {
+    val formatter = DecimalFormat("#,##0.00")
+    items.forEach { draw(formatter.format(it.price)) }
+}
+```
+
+### ✅ Reuse appropriate immutable/configured helpers
+
+```kotlin
+class PriceRenderer(
+    private val formatter: NumberFormat
+) {
+    fun render(items: List<Item>) { /* use formatter with thread ownership */ }
+}
+```
+
+Be careful: some formatter implementations are mutable/not thread-safe. Reuse must respect threading.
+
+## Large bitmaps
+
+A 4,000 × 3,000 image at 4 bytes per pixel is roughly 48 MB uncompressed, regardless of a much smaller compressed JPEG file size.
+
+```text
+width × height × bytes-per-pixel
+4000 × 3000 × 4 ≈ 48,000,000 bytes
+```
+
+Load images at the display size using a proven image library, bound caches, and release references with lifecycle-aware requests.
+
+## Memory cache design
+
+A cache deliberately retains objects, so it must define:
+
+- maximum size/cost;
+- eviction policy;
+- key identity and invalidation;
+- response to memory pressure;
+- process-death behaviour;
+- threading.
+
+An unbounded `mutableMapOf` is not a production cache.
+
+## Diagnose with evidence
+
+1. Reproduce navigation/allocation pattern.
+2. Observe memory trend and GC, but do not conclude from one graph.
+3. Use LeakCanary for retained-object paths during development.
+4. Capture heap dump/profile when needed.
+5. Find the GC-root reference chain.
+6. Fix ownership/lifetime.
+7. Repeat the scenario and verify release.
+
+## `System.gc()` is not a leak fix
+
+### ❌ Avoid
+
+```kotlin
+System.gc()
+```
+
+Requesting collection cannot reclaim reachable leaked objects and can disrupt performance. Remove the retaining reference.
+
+<Admonition type="tip" title="Interview-ready answer">
+ART garbage collection reclaims unreachable managed objects. A leak remains reachable through an unintended reference chain, often from a longer-lived singleton, coroutine, callback, or Fragment to a shorter-lived Activity/View. I fix lifecycle ownership, bound caches and image sizes, avoid allocation-heavy hot paths, and use heap/LeakCanary evidence to identify the GC-root path rather than calling `System.gc()`.
+</Admonition>
+
+## Exercises
+
+1. Calculate approximate memory for a 1440 × 3200 ARGB bitmap.
+2. Draw the reference chain for a Fragment binding leak.
+3. Explain why an application context can still participate in a leak.
+
