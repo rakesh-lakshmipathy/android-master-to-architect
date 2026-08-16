@@ -1,0 +1,141 @@
+---
+id: configuration-state
+title: Configuration changes and state reconstruction
+---
+import Admonition from '@theme/Admonition';
+
+# Configuration changes and state reconstruction
+
+## Configuration can change while the process lives
+
+Examples include:
+
+- window/display size and orientation;
+- fold/unfold and multi-window resize;
+- font size/weight;
+- locale and layout direction;
+- light/dark mode;
+- keyboard/peripheral availability;
+- density/display changes.
+
+Android commonly recreates an Activity so the new instance re-resolves appropriate resources.
+
+```text
+Old Activity/View tree destroyed
+           ↓
+New configuration becomes active
+           ↓
+New Activity/View tree created
+           ↓
+Resources selected again
+           ↓
+State reconstructed
+```
+
+## Recreation is a feature
+
+It allows `values-night`, localized strings, dimensions, layout direction, and other configuration-specific resources to apply consistently. Preventing recreation transfers responsibility for updating every affected resource and subsystem to your code.
+
+## State categories during recreation
+
+| State | Example | Owner |
+|---|---|---|
+| UI element state | Text cursor, scroll | View/Compose saveable state when appropriate |
+| Screen state | Loaded order, errors | ViewModel derived from repository |
+| Restoration input | `orderId`, selected tab | SavedStateHandle/arguments |
+| Durable business state | Draft checkout | Database/server |
+| Configuration representation | Translated string, dimensions | Re-resolve from new Context/resources |
+
+## Practical ViewModel
+
+```kotlin
+class OrderViewModel(
+    savedState: SavedStateHandle,
+    repository: OrderRepository
+) : ViewModel() {
+    private val orderId = requireNotNull(savedState.get<String>("orderId"))
+
+    val state = repository.observe(orderId)
+        .map(::toUiState)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            OrderUiState.Loading
+        )
+}
+```
+
+The ViewModel can survive eligible configuration recreation. Its UI state should not store Activity, View, or old configuration Context.
+
+## Stale resource trap
+
+### ❌ Store translated text in ViewModel
+
+```kotlin
+data class UiState(val errorMessage: String)
+```
+
+If the locale changes while ViewModel survives, the string can remain in the old language.
+
+### ✅ Store semantic error and resolve in UI
+
+```kotlin
+sealed interface CheckoutError {
+    data object NetworkUnavailable : CheckoutError
+    data object PaymentDeclined : CheckoutError
+}
+```
+
+UI maps the semantic value to current `stringResource(...)`. For server-provided messages, define localization/formatting strategy separately.
+
+## `android:configChanges`
+
+```xml
+<activity
+    android:name=".PlayerActivity"
+    android:configChanges="orientation|screenSize" />
+```
+
+This tells Android that your Activity handles specified changes and receives `onConfigurationChanged()` rather than normal recreation for them.
+
+### ❌ Avoid as a lifecycle bug patch
+
+Declaring every flag does not preserve process state and requires manually updating affected UI/resources. New platform/configuration categories and multi-window behavior make blanket handling fragile.
+
+### ✅ Use only for a justified specialized need
+
+Examples may include an expensive realtime surface where a controlled subset can be safely reconfigured. Document every handled change and test resource/theme/window updates.
+
+## Orientation locking is not state architecture
+
+Locking portrait may be a product requirement for a specialized experience. It should not be used solely to hide recreation crashes; foldables, resizing, locale, dark mode, and process death still exist.
+
+## Compose configuration
+
+Reading configuration/resources inside composition creates state-dependent UI that recomposes when the relevant value changes. Do not copy `LocalConfiguration.current` into a process singleton and expect it to remain current.
+
+Prefer adaptive APIs such as window size classes/current constraints over orientation labels. Two landscape windows can have very different usable widths.
+
+## Testing matrix
+
+- rotate while loading and after content;
+- resize in multi-window;
+- fold/unfold on representative emulator/device;
+- switch light/dark;
+- change locale/layout direction;
+- increase font/display size;
+- connect hardware keyboard;
+- recreate Activity and separately kill process.
+
+The last two are different tests.
+
+<Admonition type="tip" title="Interview-ready answer">
+Configuration changes commonly recreate Activities so Android can re-resolve resources. I keep durable data in repositories, screen state in ViewModel, small restoration keys in saved state, and resolve strings/themes from the current UI Context. I do not use `configChanges` or orientation locking to hide lifecycle bugs; manual handling is reserved for measured specialized cases and must update every affected resource/system.
+</Admonition>
+
+## Exercises
+
+1. Explain why ViewModel can display an old-language error after locale change.
+2. Design state restoration while rotating during payment submission.
+3. List what a video player must update if it handles screen-size changes manually.
+

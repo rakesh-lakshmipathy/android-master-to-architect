@@ -1,67 +1,162 @@
 ---
 id: resources-configuration
-title: Resources and configuration
+title: Android resources and runtime selection
 ---
 import Admonition from '@theme/Admonition';
 
-# Resources, configuration, and compatibility
+# Android resources and runtime selection
 
-Android chooses resources using the current configuration: locale, layout direction, screen size, orientation, density, night mode, API level, and more.
+## Resources separate identity from representation
+
+Your code asks for a stable resource ID such as `R.string.checkout_title`. Android chooses the best representation for the current locale, night mode, density, API level, and other configuration.
 
 ```text
-res/values/strings.xml
-res/values-fr/strings.xml
-res/values-night/colors.xml
-res/layout-sw600dp/screen.xml
+Code asks for R.string.checkout_title
+                     │
+        current configuration = Tamil + night + tablet
+                     │
+        Android selects the best matching value
 ```
 
-## Resource selection
+:::warning Android-only chapter
+The resource compiler, `R`, `Resources`, configuration, and manifest examples require an Android project.
+:::
 
-Android finds matching candidates, then chooses the most specific appropriate resource according to qualifier precedence. Do not write manual device-name or pixel-size checks when a resource qualifier expresses the requirement.
+## Resource types
 
-## Density
+```text
+res/
+├─ values/       strings, colors, dimensions, styles
+├─ layout/       View XML layouts
+├─ drawable/     vectors, shapes, images
+├─ mipmap/       launcher icons
+├─ font/         font resources
+├─ menu/         menu definitions
+├─ navigation/   navigation graphs
+├─ raw/          raw files with generated IDs
+└─ xml/          general structured XML configuration
+```
 
-- `dp`: layout size independent of density.
-- `sp`: text size and user font scaling.
-- `px`: physical pixels; rarely the correct source-unit for layout.
+Files in `assets/` retain file-like paths and do not receive normal `R` IDs. Choose `res/raw` when a generated ID/resource stream is useful; choose assets for original hierarchy/names and `AssetManager` access.
 
-## Configuration change
+## Default and alternative resources
 
-By default, relevant configuration changes recreate Activities so resources are re-resolved. ViewModels survive ordinary configuration recreation; Views and Activities do not.
+```text
+values/strings.xml                 default
+values-ta/strings.xml              Tamil
+values-night/colors.xml            dark theme
+drawable-hdpi/product.png          high-density bitmap
+layout-sw600dp/checkout.xml         View layout for sufficient width
+```
 
-<div className="practice-bad">
+Every required resource needs a safe default unless the resource system explicitly guarantees another fallback. A string existing only in `values-en` can fail on an unsupported locale because no default value exists.
 
-**✕ Lock orientation to hide recreation bugs**
+## How selection works
+
+Android does not count matching qualifiers and pick the directory with the most. It:
+
+1. removes alternatives that contradict the device configuration;
+2. evaluates qualifier types in documented precedence order;
+3. narrows candidates using the first relevant higher-precedence qualifier;
+4. continues until the best match remains;
+5. handles density using closest-match/scaling rules.
+
+The [official resource guide](https://developer.android.com/guide/topics/resources/providing-resources) emphasizes that qualifier precedence matters more than the number of exact matches.
+
+## Practical selection example
+
+Available:
+
+```text
+drawable/banner.xml
+drawable-en/banner.xml
+drawable-night/banner.xml
+drawable-en-night/banner.xml
+```
+
+Device: English + night mode.
+
+Result: `drawable-en-night/banner.xml` is the best compatible candidate. If it were missing, precedence/fallback rules—not arbitrary filename order—determine the result.
+
+## Qualifier directory order matters
+
+```text
+drawable-night-hdpi/   ✅ valid qualifier order
+drawable-hdpi-night/   ❌ ignored/invalid ordering
+```
+
+Do not invent combinations from intuition. Android Studio and official qualifier tables encode a defined order.
+
+## Version qualifiers
+
+```text
+values/styles.xml
+values-v31/styles.xml
+```
+
+The `v31` value is considered only where that API-level configuration is supported. Always keep a default compatible resource for lower versions.
+
+### ❌ Avoid duplicating values unnecessarily
+
+If the default works on all versions, do not copy it into every `values-vXX` folder. Alternatives should represent actual differences; duplication creates drift.
+
+## Resource references and themes
 
 ```xml
-android:screenOrientation="portrait"
+<TextView
+    android:text="@string/checkout_title"
+    android:textColor="?attr/colorOnSurface" />
 ```
-</div>
 
-<div className="practice-good">
+- `@string/...` references a concrete resource identity.
+- `?attr/...` asks the current theme to resolve an attribute.
 
-**✓ Model state and build adaptive UI**
+Theme attributes let a reusable component adapt to light/dark/brand themes without hardcoding colors.
+
+### ❌ Hardcoded semantic color
+
+```xml
+android:textColor="#000000"
+```
+
+This may disappear in dark mode or violate brand/accessibility decisions.
+
+### ✅ Theme semantic attribute
+
+```xml
+android:textColor="?attr/colorOnSurface"
+```
+
+## Resource merge is different from runtime selection
+
+At build time, resources from app source sets, build variants, and libraries are merged. At runtime, Android selects among the alternatives packaged into the chosen variant.
 
 ```text
-ViewModel/domain state survives recreation
-Saved state restores small transient input
-Resources/adaptive layout respond to available space
+Build merge: which resources enter this APK?
+Runtime resolution: which packaged alternative matches this device now?
 ```
-</div>
 
-## Localization corner cases
+## Resource shrinking caveat
 
-- Never concatenate translated sentence fragments.
-- Use quantity strings for plural rules.
-- Use locale-aware formatting for numbers/dates/currency.
-- Test longer text, right-to-left layout, and large font scale.
-- Resource shrinking and dynamic features require testing of indirect resource access.
+Release shrinking can remove resources considered unused. Indirect/dynamic name lookup such as `getIdentifier()` is harder for tools to analyze and makes refactoring/shrinking unsafe.
 
-## API compatibility
+### ✅ Prefer direct generated references
 
-Use runtime API checks only when behavior/API availability differs. Prefer AndroidX compatibility APIs where they provide a stable abstraction. Keep minimum, target, and compile SDK meanings separate.
+```kotlin
+imageView.setImageResource(R.drawable.order_shipped)
+```
+
+Use keep configuration only for justified indirect access and test the minified release—not merely debug.
 
 <Admonition type="tip" title="Interview-ready answer">
-Android resolves resources from configuration qualifiers and may recreate UI components when configuration changes. Use dp/sp correctly, model state outside Views, localize complete messages, and design for available space instead of specific device names.
+Android resources give code a stable ID while the runtime selects the best packaged alternative for the current configuration. Selection eliminates incompatible candidates and applies defined qualifier precedence; it does not simply choose the directory with the most qualifiers. I always provide required defaults, order qualifiers correctly, use theme attributes for semantic styling, distinguish build-time merging from runtime resolution, and test minified release resources.
 </Admonition>
+
+## Continue
+
+1. [Density, dp, sp, and scalable graphics](./density-dp-sp)
+2. [Configuration changes and state reconstruction](./configuration-state)
+3. [Localization, plurals, formatting, and RTL](./localization-rtl)
+4. [Manifest merging and API/device compatibility](./manifest-compatibility)
+5. [Resources interview scenarios](./resources-interview)
 

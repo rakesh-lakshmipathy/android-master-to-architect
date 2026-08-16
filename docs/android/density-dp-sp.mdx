@@ -1,0 +1,128 @@
+---
+id: density-dp-sp
+title: Density, dp, sp, pixels, and scalable graphics
+---
+import Admonition from '@theme/Admonition';
+
+# Density, dp, sp, pixels, and scalable graphics
+
+## Why raw pixels fail
+
+Two screens can have the same physical size but very different pixel counts. A 100-pixel button appears physically smaller on a denser screen.
+
+Android supplies density-independent units so layout intent is not tied directly to hardware pixels.
+
+| Unit | Use | Conversion idea |
+|---|---|---|
+| `dp` | Layout dimensions/touch targets | pixels = dp × density |
+| `sp` | Text size respecting font scaling | pixels = sp × scaledDensity |
+| `px` | Actual render pixels | Use at drawing/interoperability boundaries |
+
+## Concrete conversion
+
+On density `3.0`:
+
+```text
+48 dp × 3.0 = 144 px
+```
+
+The layout intent remains a roughly consistent density-independent target while the system renders more pixels on the denser display.
+
+## `sp` respects user preference
+
+A user can increase font size for readability. `sp` includes font scaling; `dp` does not.
+
+### ❌ Avoid dp text
+
+```xml
+android:textSize="16dp"
+```
+
+### ✅ Prefer sp
+
+```xml
+android:textSize="16sp"
+```
+
+Then test large and maximum supported font scales. Using `sp` alone does not guarantee accessibility if fixed-height containers clip the text.
+
+## Fixed height text failure
+
+```xml
+<TextView
+    android:layout_width="match_parent"
+    android:layout_height="40dp"
+    android:textSize="24sp" />
+```
+
+At large font scale or a verbose translation, text clips.
+
+### ✅ Prefer content-driven sizing
+
+Use `wrap_content`, appropriate minimum size/padding, multi-line policy, and adaptive surrounding layout. Validate with actual font scale and locales.
+
+## Compose example
+
+```kotlin
+Button(
+    modifier = Modifier.heightIn(min = 48.dp),
+    onClick = onCheckout
+) {
+    Text(text = stringResource(R.string.checkout), fontSize = 16.sp)
+}
+```
+
+`heightIn(min=...)` permits growth when text needs more space; an exact height can clip.
+
+## Bitmap density
+
+Bitmap folders communicate source density:
+
+```text
+drawable-mdpi/   1×
+drawable-xhdpi/  2×
+drawable-xxhdpi/ 3×
+```
+
+Android can scale the closest asset, but scaling a too-small bitmap upward can blur it and waste decoding decisions. Provide suitable raster variants or use vectors where appropriate.
+
+## Vector drawables
+
+Vectors scale without shipping raster copies for each density and suit icons/simple illustrations. They are not automatically ideal for photos or extremely complex artwork; rendering complexity and visual fidelity matter.
+
+## `drawable` versus `mipmap`
+
+Use mipmap resources primarily for launcher icons, where launchers may retain/use density variants differently. Normal in-app images belong in drawable resources.
+
+## `nodpi` and `anydpi`
+
+- `nodpi`: bitmap should not be density-scaled automatically.
+- `anydpi`: resource works at any density, commonly vector/XML.
+
+Do not place a normal UI bitmap in `nodpi` merely to stop unexpected size; understand its intended dp/px behaviour.
+
+## Canvas coordinates
+
+Custom drawing APIs use pixels. Convert from dp at the boundary:
+
+```kotlin
+val strokePx = 2.dp.toPx() // Compose DrawScope
+drawLine(color, start, end, strokeWidth = strokePx)
+```
+
+Do not repeatedly convert already-pixel values or mix units in a public API. Name units when ambiguity exists (`radiusDp`, `widthPx`).
+
+## Screenshot dimensions are not layout requirements
+
+“The design is 1080 × 2400” describes one output image, not all devices. Implement constraints, spacing tokens, min/max widths, and adaptive layouts, then compare visual intent across sizes.
+
+<Admonition type="tip" title="Interview-ready answer">
+`dp` expresses density-independent layout size, `sp` adds user font scaling for text, and rendering ultimately happens in pixels. I avoid raw-pixel layouts and fixed-height text containers, test large font scales, use appropriate density raster assets or vectors, and convert to pixels only at drawing/interoperability boundaries with explicit unit names.
+</Admonition>
+
+## Exercises
+
+1. Convert 24 dp on densities 1, 2.75, and 4.
+2. Diagnose a button that clips only with large font and German text.
+3. Choose vector, density bitmap, or `nodpi` for an icon, photograph, and pixel-art game board.
+

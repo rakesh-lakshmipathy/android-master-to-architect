@@ -1,0 +1,79 @@
+---
+id: resources-interview
+title: Resources and compatibility interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# Resources and compatibility interview scenarios
+
+## Quick answers
+
+<details><summary><strong>How does Android choose an alternative resource?</strong></summary><p>It eliminates incompatible alternatives and applies qualifier types in defined precedence order until the best candidate remains. More matching qualifiers do not automatically win over a higher-precedence match.</p></details>
+
+<details><summary><strong>Why are default resources required?</strong></summary><p>A device can use a configuration you did not explicitly provide. Without a default required resource, runtime resolution can fail. Defaults provide a safe fallback.</p></details>
+
+<details><summary><strong>dp versus sp?</strong></summary><p>dp expresses density-independent layout size; sp also respects user font scaling and is used for text. Both eventually convert to pixels.</p></details>
+
+<details><summary><strong>Does ViewModel solve every configuration problem?</strong></summary><p>No. It preserves eligible screen objects across recreation, but UI/resources must be recreated for the new configuration and ViewModel must not retain old Activity/View/translated strings. It also does not survive process death.</p></details>
+
+<details><summary><strong>minSdk versus targetSdk versus compileSdk?</strong></summary><p>minSdk is the install/runtime floor, compileSdk supplies compile-time API symbols, and targetSdk declares adaptation to platform behaviour changes. They solve different compatibility concerns.</p></details>
+
+## Scenario 1: works in English, crashes in Japanese
+
+`R.string.payment_title` exists only in `values-en`.
+
+**Diagnosis:** required default missing. Add it to `values/strings.xml`, keep localized alternatives complete, and add default-resource validation.
+
+## Scenario 2: dark mode changes but text remains black
+
+The component hardcodes `#000000` instead of resolving semantic theme attributes.
+
+**Fix:** use theme color roles, re-resolve under current theme, and test contrast in both modes.
+
+## Scenario 3: Tamil translation clips
+
+Fixed 40 dp container, 20 sp text, single line.
+
+**Fix:** content-driven height/minimum touch size, intentional wrapping/ellipsis policy, translator context, large-font and narrow-window tests.
+
+## Scenario 4: language changes, error stays English
+
+ViewModel stored already-resolved English string and survived Activity recreation.
+
+**Fix:** model semantic error and resolve localized text in current UI context.
+
+## Scenario 5: release crashes; debug works
+
+Resource is found only through dynamic string name; shrinker removes it.
+
+**Fix:** direct `R` reference where possible, justified keep rule if unavoidable, and minified-release tests.
+
+## Architect exercise: global adaptive checkout
+
+Design checkout for:
+
+- 20 locales including Arabic/Tamil;
+- phones, tablets, foldables, and desktop windows;
+- light/dark/high-contrast needs;
+- font scale up to product-supported maximum;
+- API 24 through current target;
+- optional camera receipt capture;
+- three branded product flavors.
+
+Address resource/theme layering, defaults, translator workflow, RTL, window constraints, state recreation, flavor merge priority, optional hardware, API checks, screenshot/accessibility tests, and target-SDK rollout.
+
+## Mastery checklist
+
+- [ ] I explain qualifier precedence and default fallback.
+- [ ] I distinguish resource merging from runtime selection.
+- [ ] I use dp/sp and support content growth.
+- [ ] I reconstruct state without retaining old configuration objects.
+- [ ] I localize messages/plurals/formatting and RTL correctly.
+- [ ] I inspect the merged release manifest.
+- [ ] I distinguish min/target/compile SDK.
+- [ ] I detect capabilities rather than device names.
+
+<Admonition type="tip" title="Architect takeaway">
+Resources are a runtime adaptation system. A robust UI does not merely translate strings; it reconstructs from semantic state under changing locale, density, font, theme, window, API behaviour, feature availability, and build-variant inputs.
+</Admonition>
+

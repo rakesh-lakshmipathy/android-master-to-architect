@@ -1,0 +1,127 @@
+---
+id: localization-rtl
+title: Localization, plurals, formatting, and RTL
+---
+import Admonition from '@theme/Admonition';
+
+# Localization, plurals, formatting, and RTL
+
+## Translation is more than replacing words
+
+Localization includes language, grammar, plural rules, date/time, numbers, currency, layout direction, typography, images, legal text, and available space.
+
+## Complete messages, not fragments
+
+### ❌ Concatenation
+
+```kotlin
+val message = getString(R.string.you_have) + " " + count + " " +
+    getString(R.string.items)
+```
+
+Other languages may reorder words or change grammar based on quantity.
+
+### ✅ Message resource
+
+```xml
+<string name="cart_summary">You have %1$d items in %2$s</string>
+```
+
+```kotlin
+val message = getString(R.string.cart_summary, count, cartName)
+```
+
+Translators receive one complete sentence and can reorder numbered placeholders.
+
+## Plurals
+
+```xml
+<plurals name="cart_item_count">
+    <item quantity="one">%d item</item>
+    <item quantity="other">%d items</item>
+</plurals>
+```
+
+```kotlin
+val text = resources.getQuantityString(
+    R.plurals.cart_item_count,
+    count,
+    count
+)
+```
+
+The first `count` selects the grammatical quantity; the second fills `%d`. Languages can have more plural categories than English, so do not implement `if (count == 1)` as a universal grammar engine.
+
+## Locale-aware formatting
+
+### ❌ Hardcoded money
+
+```kotlin
+val text = "₹" + String.format("%.2f", amount)
+```
+
+### ✅ Currency formatter
+
+```kotlin
+val formatter = NumberFormat.getCurrencyInstance(locale).apply {
+    currency = Currency.getInstance(currencyCode)
+}
+val text = formatter.format(amount)
+```
+
+Be explicit whether locale follows user app language/device locale and whether currency follows account/order data. Locale and currency are related but not identical.
+
+Use locale/time-zone aware APIs for dates. Store instants/structured data, then format at the presentation boundary. Avoid storing “08/09/26” as ambiguous business truth.
+
+## RTL layout
+
+Use start/end rather than left/right for directional layout:
+
+```xml
+android:paddingStart="16dp"
+android:paddingEnd="24dp"
+```
+
+Directional icons may need mirroring; universal symbols/logos may not. Test meaning, not just geometry.
+
+Mixed bidirectional text—such as an English order ID inside Arabic text—can display confusingly. Use bidi formatting APIs when inserting user/external text into directional messages.
+
+## Translatable and non-translatable strings
+
+```xml
+<string name="analytics_api_key" translatable="false">...</string>
+```
+
+Do not put secrets into resources; they are extractable from the app. `translatable="false"` is for technical labels/values that should not reach translation, not security.
+
+## Long text and font scale
+
+German, Finnish, Tamil, and other translations can expand or wrap differently. A layout that fits English at default font is not proven.
+
+### ✅ Test
+
+- pseudolocale `en-XA` for expansion/accenting;
+- pseudolocale `ar-XB` for RTL stress;
+- real supported locales;
+- largest supported font/display scale;
+- compact widths and landscape/multi-window;
+- TalkBack reading order/content descriptions.
+
+## Per-app language
+
+Modern Android supports app-specific language preferences. Use supported AndroidX/platform mechanisms so locale state, process recreation, resources, backups, and settings integration behave consistently. Avoid a custom global `Locale.setDefault()` hack that leaves resources/components inconsistent.
+
+## Translator context
+
+Resource names/comments should explain where text appears, placeholder meaning, character constraints, and tone. Reusing a vague `ok`/`title` string across unrelated screens can prevent correct translation.
+
+<Admonition type="tip" title="Interview-ready answer">
+Localization includes grammar, plural categories, formatting, direction, and layout—not word substitution. I translate complete messages with numbered placeholders, use Android plurals and locale-aware number/date/currency APIs, use start/end and bidi support for RTL, keep semantic data unformatted until UI, and test pseudolocales, real locales, large fonts, and narrow windows.
+</Admonition>
+
+## Exercises
+
+1. Localize “Rakesh sent 2 files at 5:30 PM” without concatenation.
+2. Explain why locale cannot be used to infer account currency safely.
+3. Audit a checkout row for RTL and large-font failure.
+

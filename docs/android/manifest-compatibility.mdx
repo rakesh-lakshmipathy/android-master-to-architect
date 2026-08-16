@@ -1,0 +1,130 @@
+---
+id: manifest-compatibility
+title: Manifest merging and API/device compatibility
+---
+import Admonition from '@theme/Admonition';
+
+# Manifest merging and API/device compatibility
+
+## The manifest you write is not necessarily the manifest shipped
+
+Your final variant merges manifests from:
+
+- main source set;
+- product flavors;
+- build type/variant source sets;
+- libraries/AARs.
+
+The [official manifest merge guide](https://developer.android.com/build/manage-manifests) documents priority and merge markers. Always inspect the Merged Manifest for the exact release variant.
+
+## Practical surprise
+
+A library contributes:
+
+```xml
+<provider
+    android:name="com.sdk.AutoInitProvider"
+    android:authorities="${applicationId}.sdk-init"
+    android:exported="false" />
+```
+
+Your source manifest looks clean, but the provider initializes during startup. Diagnose the merged manifest and dependency, then use the SDK’s supported opt-out/configuration if unnecessary.
+
+## Merge markers
+
+```xml
+<application
+    xmlns:tools="http://schemas.android.com/tools"
+    android:allowBackup="false"
+    tools:replace="android:allowBackup" />
+```
+
+Use `tools:replace`, `tools:remove`, or selectors deliberately and document why. Forcing a merge can violate a library’s security/functional assumptions; read the conflict rather than silencing it blindly.
+
+## SDK versions mean different things
+
+| Setting | Meaning |
+|---|---|
+| `minSdk` | Oldest API level on which app may install/run |
+| `targetSdk` | Behaviour contract level app declares it has adapted to |
+| `compileSdk` | API surface available while compiling |
+
+Raising `compileSdk` does not make new APIs safe on `minSdk`. Raising `targetSdk` can activate platform behaviour changes that need testing.
+
+## Runtime API availability
+
+```kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 10)
+} else {
+    showPreNotificationSettingsUi()
+}
+```
+
+Prefer AndroidX compatibility APIs where they provide correct cross-version abstraction. Keep version checks narrow around the actual differing API/behaviour.
+
+## Desugaring versus Android API
+
+Compiler/core-library desugaring can backport selected language/library behaviour. It cannot synthesize every framework service or permission model from a new Android release.
+
+```text
+Compiles with new syntax ≠ device contains new Android API
+```
+
+## Feature detection beats device-name detection
+
+### ❌ Avoid
+
+```kotlin
+if (Build.MANUFACTURER == "SomeBrand") enableNfc()
+```
+
+### ✅ Prefer capability queries
+
+```kotlin
+val hasNfc = packageManager.hasSystemFeature(
+    PackageManager.FEATURE_NFC
+)
+```
+
+Even with a declared feature, runtime availability/policy/permission can differ. Model unsupported, disabled, denied, busy, and failed states.
+
+## `uses-feature` and distribution
+
+```xml
+<uses-feature
+    android:name="android.hardware.camera.any"
+    android:required="false" />
+```
+
+`required="true"` can filter app availability to devices declaring that feature. Use `false` when the app can degrade gracefully, then check at runtime and hide/replace the feature.
+
+## Package visibility
+
+Modern Android limits broad discovery of installed apps. Declare only required package/intent queries and design for unresolved intents. Do not enumerate installed apps without a valid product/privacy need.
+
+## OEM and form-factor compatibility
+
+API level alone does not prove identical hardware, windowing, background, camera, BLE, or power behaviour. Test representative capabilities and device classes, monitor production, and use defensive timeouts/error states—not manufacturer-wide hacks without evidence.
+
+## Target SDK migration
+
+For each target raise:
+
+1. Read official behaviour changes for all relevant versions.
+2. Audit permissions, background work, storage, notifications, components, security.
+3. Update libraries/toolchain.
+4. Run compatibility toggles/tests where available.
+5. Test fresh install, upgrade, signed-in/out, background/deep-link paths.
+6. Stage rollout and monitor.
+
+<Admonition type="tip" title="Interview-ready answer">
+The packaged manifest is merged from variant, build-type, flavor, main, and library manifests, so I inspect the release Merged Manifest and use merge markers only with understood consequences. `minSdk` controls install floor, `compileSdk` compile APIs, and `targetSdk` adopted platform behaviour. I combine narrow API checks/AndroidX with runtime capability detection, optional `uses-feature` declarations, representative-device tests, and staged target-SDK migration.
+</Admonition>
+
+## Exercises
+
+1. Explain how a library provider can slow startup without appearing in your manifest file.
+2. Can code compiled with API 35 safely call every API on minSdk 24? Explain.
+3. Design optional camera behaviour for devices without a camera.
+
