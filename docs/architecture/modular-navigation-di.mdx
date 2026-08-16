@@ -1,0 +1,70 @@
+---
+id: modular-navigation-di
+title: Navigation and DI across module boundaries
+---
+import Admonition from '@theme/Admonition';
+
+# Navigation and DI across module boundaries
+
+## App owns composition; feature owns destinations
+
+```kotlin
+// :feature:profile:api
+@Serializable data class ProfileRoute(val userId: String) : AppRoute
+
+fun interface EntryInstaller {
+    fun install(builder: EntryProviderBuilder<AppRoute>)
+}
+```
+
+Features can contribute route entries through DI multibinding while the app owns the root navigator/back-stack policy. Consumers navigate to typed route contracts, not feature Activities/classes.
+
+Alternative: each feature exposes `fun NavGraphBuilder.profileGraph(...)`. This is simple for install-time features but can couple app to implementation. Choose based on graph ownership/dynamic delivery.
+
+## Cross-feature flow
+
+Catalog should not import checkout UI. It emits `BuyProduct(ProductId)`. App-level coordinator/navigator maps intent to a checkout route. Both features access product/cart truth through owned data contracts.
+
+## DI boundary
+
+App composition root selects implementations. API module must not expose Dagger/Hilt internals unless DI integration itself is intentionally public.
+
+In Dagger multi-module graphs:
+
+- app component provides shared long-lived bindings
+- feature modules expose modules/subcomponents only when needed
+- same-level features do not depend on each other
+- component dependencies/entry points expose narrow APIs across boundaries
+- dynamic feature cannot rely on base compiling against its implementation
+
+## Scope alignment
+
+Module is a source/build boundary, not a runtime lifetime. `:feature:checkout` does not imply one checkout singleton. Scope objects to application, session, navigation graph, destination, or Worker lifecycle explicitly.
+
+## Result/data exchange
+
+Use small typed navigation results for ephemeral UI coordination. Use repository/source-of-truth state for durable business outcomes. Cross-module event buses hide dependencies and lose/replay events unpredictably.
+
+## Testing
+
+- compile feature against API fakes without app internals
+- navigation contract tests: route serialization/deep links
+- app assembly test: all entry installers/DI bindings present
+- graph-scope identity and cleanup
+- missing dynamic feature behavior
+- no forbidden feature-to-feature dependencies
+
+<Admonition type="tip" title="Architect takeaway">
+Separate three graphs: Gradle dependency graph, runtime DI graph, and navigation graph. They interact, but using one graph to imply another creates scope and ownership bugs.
+</Admonition>
+
+## Sources
+
+- [Navigation multi-module integration](https://developer.android.com/guide/navigation/integrations/multi-module)
+- [Modular Navigation with Hilt recipe](https://developer.android.com/guide/navigation/navigation-3/recipes/modular-hilt)
+
+## Exercises
+
+1. Route catalog to checkout without feature-to-feature dependency.
+2. Draw build, DI, and navigation graphs separately.
+3. Integrate an optional feature's routes safely.

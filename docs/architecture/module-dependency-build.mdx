@@ -1,0 +1,65 @@
+---
+id: module-dependency-build
+title: Dependency graphs and build performance
+---
+import Admonition from '@theme/Admonition';
+
+# Dependency graphs and build performance
+
+## A healthy graph is directed and understandable
+
+```text
+:app -> feature modules -> domain/data APIs -> core capabilities
+                       \-> design system
+implementations -> their APIs
+```
+
+Feature A importing Feature B often creates navigation/ownership coupling. Prefer app-level composition, shared domain state, or a small feature API contract.
+
+## Cycles reveal missing ownership
+
+Gradle rejects direct cycles, but teams recreate logical cycles through global event buses or `:core:everything`.
+
+When A and B need each other:
+
+1. identify shared concept owner
+2. extract a small lower-level contract if truly shared
+3. let a higher-level app/mediator orchestrate workflow
+4. merge if they are one cohesive capability
+
+Do not automatically create `:common-ab` full of both internals.
+
+## Build performance is empirical
+
+More modules can enable parallelism/cache/incremental isolation, but also add configuration, variant, resource processing, plugin, and dependency-resolution overhead.
+
+Measure with representative clean, incremental ABI change, implementation-only change, and test workflows. Use Gradle Build Scans/profile, configuration cache status, task critical path, cache hits, and developer-machine/CI distributions.
+
+## Practical levers
+
+- convention plugins centralize consistent configuration
+- version catalogs centralize dependency coordinates
+- `implementation` rather than `api`
+- pure Kotlin/JVM modules where Android resources/framework are unnecessary
+- avoid annotation processors/plugins in modules that do not need them
+- reduce dynamic dependency versions and non-cacheable tasks
+- keep public ABI small
+- enable/test configuration and build cache correctness
+
+## False optimizations
+
+- parallelism with one giant critical-path module
+- hundreds of empty modules
+- remote cache hiding non-deterministic tasks
+- moving code solely to improve clean build while daily incremental builds worsen
+- measuring one warm run and announcing success
+
+<Admonition type="warning" title="Correctness first">
+A cache hit is valuable only if task inputs/outputs are declared correctly. Undeclared environment inputs can produce fast but stale/wrong artifacts.
+</Admonition>
+
+## Exercises
+
+1. Break a feature dependency cycle three ways.
+2. Design a build benchmark matrix.
+3. Explain why `api` can enlarge recompilation.

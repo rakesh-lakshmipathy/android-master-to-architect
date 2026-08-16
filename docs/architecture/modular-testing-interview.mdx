@@ -1,0 +1,77 @@
+---
+id: modular-testing-interview
+title: Modular testing strategy and interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Modular testing strategy and interview lab
+
+## Scalable test placement
+
+| Test | Lives with | Proves |
+|---|---|---|
+| domain/unit | implementation | local policy |
+| API contract | API test kit/implementation | every implementation honors behavior |
+| feature UI | feature | state-to-UI and intent contract |
+| module integration | feature/data module | internal adapters work together |
+| app assembly | app | navigation/DI/manifest/resource wiring |
+| end-to-end critical journeys | app/test module | representative user outcome |
+
+Share test fixtures/builders sparingly through dedicated test-fixture modules. A giant `:test-utils` becomes another unstable core dependency.
+
+## Contract test example
+
+```kotlin
+abstract class OrdersContract {
+    abstract fun repository(): OrdersRepository
+
+    @Test fun submitted_order_is_observable_after_recreation() = runTest { /* ... */ }
+}
+```
+
+Run against fake and Room/network-backed implementation where feasible. This catches fakes with different replay/error/offline semantics.
+
+## CI strategy
+
+Changed-module selection needs a trustworthy transitive dependency graph. Run impacted tests quickly, plus scheduled/full critical suites to catch undeclared dependencies and tooling mistakes. Cache test results only with complete inputs.
+
+## Interview scenarios
+
+<details><summary><strong>More modules always improve build speed?</strong></summary><p>No. They can improve incremental isolation/parallelism but add configuration, variants, resource, and plugin overhead. Measure representative workflows and critical path.</p></details>
+
+<details><summary><strong>Feature module versus dynamic feature?</strong></summary><p>A feature module usually means a functional code boundary. A dynamic feature is also a Play delivery unit whose code may be absent at runtime, requiring installation/error UX and base-direction constraints.</p></details>
+
+<details><summary><strong>Why avoid feature-to-feature dependencies?</strong></summary><p>They couple ownership and create cycles/large change blast radius. Compose at app level or communicate through shared owned data/API contracts; allow direct dependency only when ownership and cohesion justify it.</p></details>
+
+## Case study: extracting checkout
+
+1. Measure checkout change/build hotspots.
+2. Define `:feature:checkout` UI contract and `:data:orders` repository API.
+3. Move internals behind `internal`; pass IDs/routes.
+4. App owns navigation and DI binding.
+5. Add repository contract tests and feature fake.
+6. Enforce no catalog→checkout-implementation dependency.
+7. Compare incremental build and team lead time.
+8. Only consider dynamic delivery after size/usage analysis.
+
+## Review checklist
+
+- [ ] Every module has one purpose and owner.
+- [ ] Public API is minimal and does not leak implementation.
+- [ ] Graph is acyclic and same-level dependencies are justified.
+- [ ] Runtime scope is not inferred from module boundary.
+- [ ] Navigation/DI/app composition remain explicit.
+- [ ] Build improvements are measured.
+- [ ] Contract and app-assembly tests cover seams.
+- [ ] Dynamic delivery includes absent/failure/recovery UX.
+- [ ] Module count does not exceed organizational value.
+
+<Admonition type="tip" title="Interview framing">
+Explain desired organizational/build/runtime property, proposed boundary, dependency direction, public contract, migration, tests, measurements, and the overhead you accept.
+</Admonition>
+
+## Exercises
+
+1. Create a test pyramid for 100 modules.
+2. Design safe changed-module CI selection.
+3. Present an ADR for splitting or merging one module.

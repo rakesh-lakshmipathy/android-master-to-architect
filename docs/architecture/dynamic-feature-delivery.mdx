@@ -1,0 +1,67 @@
+---
+id: dynamic-feature-delivery
+title: Dynamic feature delivery architecture
+---
+import Admonition from '@theme/Admonition';
+
+# Dynamic feature delivery architecture
+
+A regular feature module is a code boundary. A Play dynamic feature also changes installation/runtime availability.
+
+## Delivery choices
+
+- install-time: included initially but modularized
+- conditional: installed for device/country/feature conditions
+- on-demand: downloaded when user requests feature
+- removable: eligible for later uninstall where supported
+
+Choose dynamic delivery for meaningful download-size or conditional-capability benefit, not merely because a feature is conceptually separate.
+
+## Availability is state
+
+```kotlin
+sealed interface FeatureAvailability {
+    data object NotInstalled : FeatureAvailability
+    data class Downloading(val percent: Int?) : FeatureAvailability
+    data object Installed : FeatureAvailability
+    data class Failed(val recoverable: Boolean) : FeatureAvailability
+}
+```
+
+UX must handle network loss, storage shortage, cancellation, Play errors, process death during install, update/version mismatch, and user retry. Never navigate by reflection assuming code exists.
+
+## Base versus feature dependency direction
+
+Dynamic feature depends on base. Base cannot directly reference feature implementation classes. Put stable route/capability contracts in base/API module and use supported navigation/registration mechanisms after installation.
+
+Keep shared resources/code in base only when essential; otherwise size savings disappear. Avoid base manifest/class initialization referencing absent feature code.
+
+## Data and security
+
+Downloaded code does not grant authorization. Server and local policy re-check entitlement. Feature should read durable shared data through contracts and handle schema compatibility across app updates.
+
+## Testing matrix
+
+- fresh install without feature
+- successful/failed/cancelled download
+- background/process death during download
+- installed then app updated
+- low storage/offline/slow network
+- deep link before installation
+- feature removed and requested again
+- bundletool/Play-delivered artifact, not only Android Studio's convenient install
+
+<Admonition type="warning" title="Operational cost">
+On-demand delivery adds UX states, analytics, support cases, release compatibility, and testing. Quantify initial-size/user benefit before accepting that permanent complexity.
+</Admonition>
+
+## Sources
+
+- [Play Feature Delivery overview](https://developer.android.com/guide/playcore/feature-delivery)
+- [Configure on-demand delivery](https://developer.android.com/guide/playcore/feature-delivery/on-demand)
+
+## Exercises
+
+1. Design deep-link flow to an uninstalled AR feature.
+2. Decide which three commerce features should be dynamic.
+3. Plan recovery from process death at 60% download.

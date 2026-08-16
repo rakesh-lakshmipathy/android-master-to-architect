@@ -1,0 +1,89 @@
+---
+id: modularization-strategy
+title: Modularization strategy and granularity
+---
+import Admonition from '@theme/Admonition';
+
+# Modularization strategy and granularity
+
+A Gradle module is a compile/dependency boundary. A package is only a namespace/visibility convention. Pay module overhead only when the stronger boundary produces value.
+
+## Start from desired outcomes
+
+- independent ownership/release confidence
+- visibility enforcement
+- parallel or incremental build isolation
+- reuse across apps/form factors
+- replaceable implementation
+- dynamic delivery
+- smaller cognitive scope
+
+“Enterprise apps have many modules” is not an outcome.
+
+## Feature versus layer modules
+
+```text
+Horizontal layers: :ui -> :domain -> :data
+Vertical features:  :feature:checkout, :feature:catalog, :feature:profile
+Hybrid:             feature UI + domain-specific data/api + shared platform modules
+```
+
+One global `:data` module becomes a bottleneck as every feature changes it. Pure vertical features can duplicate cross-cutting network/database/design-system policy. Most large apps use a hybrid.
+
+Example:
+
+```text
+:app
+├─ :feature:catalog
+├─ :feature:checkout
+├─ :data:products
+├─ :data:orders
+├─ :core:network
+├─ :core:database
+└─ :core:designsystem
+```
+
+Features depend on domain/data contracts, not on each other's UI internals.
+
+## Granularity signals
+
+Split when:
+
+- independent domain ownership/change cadence exists
+- public contract is small and stable
+- implementation churn should not invalidate consumers
+- capability is shared by multiple apps/features
+- delivery/variant needs differ
+
+Merge when:
+
+- two modules always change/release together
+- boundary passes internal details constantly
+- only one tiny class plus repetitive build files
+- cycles are repeatedly “solved” with mediator clutter
+- no owner can explain the contract
+
+## Migration sequence
+
+1. Map actual dependencies/change hotspots.
+2. Define target contract and owner.
+3. Enforce package visibility first.
+4. Move one vertical slice, keep behavior unchanged.
+5. Add dependency rules/contract tests.
+6. Measure build and developer workflow.
+7. Repeat only where evidence supports it.
+
+<Admonition type="warning" title="Common failure">
+Moving files into 80 modules while leaving a global service locator and shared mutable models does not create modular architecture; it creates distributed coupling.
+</Admonition>
+
+## Sources
+
+- [Guide to Android app modularization](https://developer.android.com/topic/modularization)
+- [Common modularization patterns](https://developer.android.com/topic/modularization/patterns)
+
+## Exercises
+
+1. Propose hybrid modules for a banking app.
+2. Identify three over-granular modules to merge.
+3. Define metrics proving a migration helped.

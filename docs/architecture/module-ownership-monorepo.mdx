@@ -1,0 +1,72 @@
+---
+id: module-ownership-monorepo
+title: Module ownership, team topology, and monorepos
+---
+import Admonition from '@theme/Admonition';
+
+# Module ownership, team topology, and monorepos
+
+Technical boundaries without human ownership decay. Human boundaries that fight the dependency graph create queues and bypasses.
+
+## Ownership contract
+
+Each module/capability should declare:
+
+- accountable team and review policy
+- purpose and consumers
+- public API and behavioral guarantees
+- deprecation/migration process
+- SLO/quality/security responsibilities where relevant
+- release/versioning model
+- escalation and incident ownership
+
+CODEOWNERS can route reviews but cannot replace documentation or stewardship.
+
+## Team topology alignment
+
+- stream-aligned teams own end-to-end business capabilities
+- platform teams own paved roads (build, design system, observability, networking) with product-like APIs
+- enabling teams help migrations/adoption temporarily
+- complicated subsystem teams own specialized areas such as media/crypto
+
+A “core team” approving every shared change becomes a bottleneck. Platform contracts, self-service templates, compatibility tests, and clear exception paths reduce queues.
+
+## Public API governance
+
+Treat internal APIs consumed by 50 modules like platform APIs:
+
+- lightweight proposal for consequential changes
+- compatibility/deprecation windows
+- usage discovery and migration tooling
+- API lint/binary compatibility checks where useful
+- examples and golden paths
+- adoption/feedback metrics
+
+## Monorepo tradeoffs
+
+Benefits: atomic refactors, unified search/tooling, consistent policies, shared cache, easier cross-cutting changes.
+
+Costs: huge graph/tooling scale, broad visibility, accidental coupling, ownership/review load, CI blast radius.
+
+Multi-repo benefits independent release/access control but adds version coordination, integration testing, dependency updates, and non-atomic migrations.
+
+Do not confuse monorepo with monolith: a monorepo can enforce strong module boundaries; multiple repos can remain tightly coupled operationally.
+
+## Architecture fitness functions
+
+- forbidden dependency checks
+- public API/binary compatibility
+- cyclic graph detection
+- module owner/purpose metadata validation
+- dependency freshness/security policy
+- maximum allowed layering/critical path budgets
+
+<Admonition type="tip" title="Architect takeaway">
+Module boundaries are socio-technical contracts. Optimize flow of change across teams, not merely the elegance of a dependency diagram.
+</Admonition>
+
+## Exercises
+
+1. Assign teams to a commerce module graph without central bottleneck.
+2. Design deprecation policy for a design-system component.
+3. Compare monorepo and multi-repo for three Android apps sharing capabilities.

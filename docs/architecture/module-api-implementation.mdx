@@ -1,0 +1,69 @@
+---
+id: module-api-implementation
+title: Module APIs and implementation boundaries
+---
+import Admonition from '@theme/Admonition';
+
+# Module APIs and implementation boundaries
+
+## Expose capabilities, not internals
+
+```kotlin
+// :orders:api
+interface Orders {
+    fun observe(id: OrderId): Flow<Order?>
+    suspend fun submit(draft: OrderDraft): OrderId
+}
+```
+
+`:orders:impl` contains Room entities, Retrofit DTOs, sync metadata, mappers, and implementation. Consumers see stable domain concepts.
+
+Use `internal`/`private`, resource prefixes where useful, and `implementation` dependencies by default. Gradle `api` exposes transitive types to consumers and expands compile invalidation/public contract.
+
+## API/implementation split pays when
+
+- multiple implementations/variants exist
+- many consumers need a stable small contract
+- implementation churn is high
+- teams develop independently
+- build invalidation reduction is measurable
+- technology isolation matters
+
+It can be excessive for a five-class feature with one consumer and no stability boundary.
+
+## Model ownership
+
+A giant `:core:model` makes every domain depend on every concept and turns changes global. Prefer domain-owned models; share types only when meaning and ownership truly span modules.
+
+Cross-feature exchange should usually use stable IDs or owned contracts:
+
+```kotlin
+@JvmInline value class ProductId(val value: String)
+```
+
+Passing `CatalogScreenState` into checkout leaks presentation ownership.
+
+## Compatibility
+
+Public module APIs are internal platform APIs. Evolve them deliberately:
+
+- additive defaults before removals
+- deprecate with replacement/migration example
+- semantic behavior documented, not only signatures
+- consumers tracked
+- contract tests across implementations
+- avoid public mutable collections/framework internals
+
+## Resource and manifest leakage
+
+Android libraries can merge resources/manifests. Duplicate names, exported components, authorities, and permissions can collide. Keep manifest contributions minimal; use placeholders/resource prefixes and inspect merged artifacts.
+
+<Admonition type="tip" title="Architect takeaway">
+The useful boundary is the smallest stable capability. If consumers need implementation DTOs, DAOs, internal resources, and concrete classes, the API split is fictional.
+</Admonition>
+
+## Exercises
+
+1. Design API/impl split for payments with Play and enterprise implementations.
+2. Remove DTO leakage from a feature contract.
+3. Plan a breaking API migration across 20 consumers.
