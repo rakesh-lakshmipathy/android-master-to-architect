@@ -1,0 +1,73 @@
+---
+id: offline-write-strategies
+title: Offline write strategies and optimistic UI
+---
+import Admonition from '@theme/Admonition';
+
+# Offline write strategies and optimistic UI
+
+## Choose per operation
+
+| Strategy | Flow | Appropriate |
+|---|---|---|
+| online-only | server first, then local | bank transfer/quote requiring live authorization |
+| queued | enqueue, send later | telemetry/non-urgent fire-and-forget |
+| lazy/local-first | local truth + outbox, sync later | notes/tasks/favorites/drafts |
+
+An app can be offline-first for reads while requiring online payment writes.
+
+## Transactional optimistic update
+
+```kotlin
+database.withTransaction {
+    taskDao.updateTitle(id, newTitle, SyncStatus.Pending)
+    outboxDao.insert(
+        OutboxEntity(
+            operationId = UUID.randomUUID().toString(),
+            entityId = id.value,
+            kind = "rename_task",
+            payload = encode(newTitle),
+        )
+    )
+}
+scheduleSync()
+```
+
+Writing entity and outbox atomically prevents “UI changed but never synced” after crash. UI observes pending local value immediately.
+
+## Rollback is not always correct
+
+If server rejects favorite toggle, rollback is simple. If user edited a long note while offline, discarding it is unacceptable. Preserve local draft/conflict and ask user/merge. Product semantics decide.
+
+## Multiple local edits
+
+Before upload, collapse superseded operations when safe:
+
+- favorite true→false can coalesce to latest desired state
+- increment commands cannot always coalesce without semantics
+- append messages must preserve each item/order
+- create then delete before sync can cancel both if never externally visible
+
+Use operation identity and base/server version. Do not mutate JSON payload blindly.
+
+## User-visible status
+
+Pending/syncing/rejected/conflicted should be visible where consequences matter. “Saved” might mean saved locally; communicate when cloud backup/team visibility is pending.
+
+## Undo
+
+Undo before remote commit can cancel/replace pending operation transactionally. After commit, undo is a new compensating operation, not history erasure.
+
+## Security
+
+Outbox payload is persisted sensitive data. Minimize fields, encrypt if threat model requires, expire on logout/account removal, and never log full payload.
+
+<Admonition type="warning" title="Optimistic is not imaginary">
+Optimistic UI should reflect a durable local state transition with pending metadata—not a ViewModel-only visual guess that disappears after process death.
+</Admonition>
+
+## Exercises
+
+1. Choose write strategy for transfer, favorite, analytics, and note edit.
+2. Coalesce safe outbox operations.
+3. Design undo before and after remote commit.

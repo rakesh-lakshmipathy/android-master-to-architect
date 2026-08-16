@@ -1,0 +1,65 @@
+---
+id: sync-queue-idempotency
+title: Sync queues, retries, backoff, and idempotency
+---
+import Admonition from '@theme/Admonition';
+
+# Sync queues, retries, backoff, and idempotency
+
+## Outbox schema
+
+```text
+operation_id (stable idempotency key)
+account_id / entity_id / type
+payload or referenced local state
+base_version
+attempt_count / next_attempt_at
+state: pending | running | blocked | terminal
+created_at
+```
+
+Keep running leases/timeouts so process death does not leave operation permanently “running.” Worker claims items transactionally.
+
+## Drain algorithm
+
+1. select eligible item(s) in deterministic order
+2. mark/lease transactionally
+3. send with same operation ID
+4. classify response
+5. transactionally update entity/version and remove/complete operation
+6. on transient failure schedule bounded retry with jitter
+7. on terminal/conflict preserve diagnostic/recovery state
+
+Do not hold DB transaction during HTTP.
+
+## Idempotency
+
+Client retries same operation ID. Server atomically stores operation ID + request fingerprint + result. Duplicate returns original result; same ID/different payload is rejected. Client-only deduplication cannot prevent duplicate server mutation after ambiguous timeout.
+
+## Retry policy
+
+Retry timeout/connection/selected 5xx/429. Honor `Retry-After`; exponential backoff with jitter avoids synchronized storm. Stop on validation/auth/permission/conflict until condition changes. Bound attempts/time and expose terminal state.
+
+## Ordering
+
+Global FIFO blocks all entities behind one bad item. Often preserve order per entity/account while allowing parallel independent entities with bounded concurrency. Create must precede update/delete for local temporary ID; server ID mapping is transactional.
+
+## WorkManager
+
+Use unique work to ensure a drainer is scheduled, constraints as hints, and Room as robust queue when ordering/state matters. Worker can run more than once and be stopped; algorithm remains idempotent.
+
+`Result.retry()` delegates scheduling but does not replace per-operation classification. One poison item should not cause endless whole-queue retry.
+
+## Observability
+
+Measure queue depth/age, attempts, success latency, terminal/conflict counts, bytes, battery constraints, and per-version failure—without payload/PII.
+
+<Admonition type="tip" title="Architect takeaway">
+At-least-once execution plus idempotent operation is the realistic mobile guarantee. Exactly-once effect requires server cooperation and durable deduplication.
+</Admonition>
+
+## Exercises
+
+1. Recover an operation left running after process death.
+2. Avoid global FIFO poison-item blocking.
+3. Specify end-to-end idempotency for order creation.

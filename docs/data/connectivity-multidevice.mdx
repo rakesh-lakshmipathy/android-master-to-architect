@@ -1,0 +1,66 @@
+---
+id: connectivity-multidevice
+title: Connectivity uncertainty and multi-device convergence
+---
+import Admonition from '@theme/Admonition';
+
+# Connectivity uncertainty and multi-device convergence
+
+## “Online” is not server reachable
+
+`NET_CAPABILITY_INTERNET` means network configured for internet; `VALIDATED` indicates system validation, but target DNS/TLS/server/auth may still fail. Captive portals/VPN/firewall/partial outage remain.
+
+Use network callbacks to improve scheduling/UI hints and unregister at owner end. Always handle actual operation failure. Do not block a user action solely because stale boolean says offline; local-first write may succeed locally.
+
+## Sync trigger coalescing
+
+Triggers include app startup/foreground, connectivity change, push hint, user refresh, periodic work, and pending write. Coalesce into unique sync rather than launching simultaneous drains. New trigger during run may set “run again”/leave pending rows for next pass.
+
+## Multi-device eventually consistent UI
+
+Users may see:
+
+- pending local edit not yet on other device
+- remote edit arriving and reordering list
+- conflict/rejection
+- deletion while detail open
+- server normalization (canonical name/order)
+
+UI should use stable IDs, preserve drafts, animate/reconcile changes, show pending/conflict status, and not assume list position identity.
+
+## Session/account changes
+
+Token expiry during drain pauses operations, refreshes once, or marks blocked-auth. Logout cancels account work, closes sockets, clears secrets and policy-selected local rows/outbox. Never send old-account queue with new-account token.
+
+## Battery/data policy
+
+Batch/coalesce, use constraints for large transfers, respect metered/roaming/user setting, incremental cursors and compression. Urgent user action may override periodic constraints with explicit UX. Avoid network polling when push + cursor suffices.
+
+## Convergence properties
+
+Ask:
+
+- do all replicas eventually reach server accepted state?
+- are operations commutative/idempotent?
+- can duplicates/out-of-order events regress version?
+- what is maximum staleness?
+- what happens when server forgets dedupe keys/cursors?
+- how is schema/client-version incompatibility handled?
+
+## Test harness
+
+Simulate two logical devices, deterministic server versions, offline intervals, reorder/duplicate/drop responses, auth expiry, cursor expiration, clock skew, process death, and app upgrade. Assert eventual DB state and preserved user work.
+
+<Admonition type="warning" title="Connectivity observer">
+Do not use connectivity changes as a guarantee or launch an unbounded sync for every callback. They are noisy hints; unique durable work and idempotent sync provide correctness.
+</Admonition>
+
+## Sources
+
+- [Read network state](https://developer.android.com/develop/connectivity/network-ops/reading-network-state)
+
+## Exercises
+
+1. Handle logout during outbox drain.
+2. Coalesce six sync triggers.
+3. Design two-device deterministic sync tests.

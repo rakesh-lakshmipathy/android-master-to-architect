@@ -286,16 +286,13 @@ Do not try to memorize everything in one pass. Learn a topic, run its examples, 
 
 ### Chapter 26: Offline-first architecture and synchronization
 
-- ○ Local database as the application’s readable source of truth
-- ○ Read-through, write-through, and cache-aside strategies
-- ○ Optimistic updates and rollback
-- ○ Sync queues, retries, exponential backoff, and idempotency keys
-- ○ Conflict detection and resolution
-  - Last-write-wins and its risks
-  - Server authority, client authority, merge rules, and version vectors overview
-- ○ Tombstones, deletions, pagination cursors, and clock problems
-- ○ Connectivity changes and why “online” does not guarantee server reachability
-- ○ Multi-device editing and eventually consistent UI
+- ✅ [Local observable readable truth, pull/push/hybrid refresh, bootstrap, stale states, and account safety](./data/offline-readable-truth)
+- ✅ [Online-only, queued, and lazy writes, optimistic persistence, rollback, coalescing, and undo](./data/offline-write-strategies)
+- ✅ [Transactional outbox, queue leases, ordering, retries, exponential backoff, WorkManager, and idempotency](./data/sync-queue-idempotency)
+- ✅ [Conflict detection, ETags/versions, server/client/LWW/merge policies, three-way merge, and version vectors](./data/sync-conflicts)
+- ✅ [Tombstones, delete conflicts, incremental and pagination cursors, full resync, and clock hazards](./data/sync-tombstones-cursors)
+- ✅ [Connectivity uncertainty, trigger coalescing, account/auth changes, battery policy, and multi-device convergence](./data/connectivity-multidevice)
+- ✅ [Offline-first interview scenarios and collaborative-notes distributed-system case study](./data/offline-first-interview)
 
 ### Chapter 27: Paging 3
 

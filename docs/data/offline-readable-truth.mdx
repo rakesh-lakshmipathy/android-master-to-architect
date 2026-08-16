@@ -1,0 +1,82 @@
+---
+id: offline-readable-truth
+title: Offline-first readable source of truth
+---
+import Admonition from '@theme/Admonition';
+
+# Offline-first readable source of truth
+
+Offline-first means core reads work without reliable network. Higher layers read local observable truth; network refresh updates that truth.
+
+```text
+UI <- Flow <- repository <- Room
+                         ^
+                         | transaction
+                     network sync
+```
+
+```kotlin
+override fun observeTopics(): Flow<List<Topic>> =
+    dao.observeTopics().map { rows -> rows.map(TopicEntity::toDomain) }
+
+override suspend fun refresh() {
+    val response = remote.fetchTopics(syncToken())
+    database.withTransaction {
+        dao.applyChanges(response.items.map(TopicDto::toEntity))
+        syncDao.saveToken(response.nextToken)
+    }
+}
+```
+
+UI never renders `response.items` directly. This prevents network/cache race, keeps process recovery coherent, and makes online/offline paths identical.
+
+## Local truth versus server authority
+
+The server may be global business authority while Room is the app's readable source of truth. Local can be stale/pending; metadata must express that rather than pretending it is synchronized.
+
+```kotlin
+enum class SyncStatus { Synced, Pending, Rejected }
+```
+
+## Read strategies
+
+- pull/navigation refresh: simple but repeated data use and stale unvisited areas
+- push notification + fetch: efficient but needs version/cursor recovery
+- periodic/background sync: bounded staleness, battery/data cost
+- hybrid: choose by domain volatility/value
+
+Push message is a hint, not full truth; fetch changes because messages can be delayed/lost/duplicated.
+
+## First launch and empty states
+
+Distinguish:
+
+- no local data, initial sync running
+- valid empty dataset
+- stale data refreshing
+- stale data with refresh failure
+- no data and failure
+
+Do not replace useful stale content with full-screen error.
+
+## Scope and account safety
+
+Rows, cursors, pending operations, and cache keys must include account/tenant. Account switch transaction clears/selects correct partition and cancels old scheduled work. A global DB observer briefly showing previous user's data is a privacy failure.
+
+## Bootstrap/version
+
+Full snapshot needs atomic replacement semantics. Incremental sync needs durable cursor tied to query/account/schema. Never advance cursor until all corresponding changes commit.
+
+<Admonition type="tip" title="Architect takeaway">
+Offline-first read path is simple by design: observe local truth. Complexity is concentrated in correctly updating that truth and exposing staleness/pending metadata.
+</Admonition>
+
+## Sources
+
+- [Build an offline-first app](https://developer.android.com/topic/architecture/data-layer/offline-first)
+
+## Exercises
+
+1. Model initial/empty/stale/error UI states.
+2. Prevent cross-account data flash.
+3. Explain why cursor and changes commit together.

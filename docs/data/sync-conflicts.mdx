@@ -1,0 +1,68 @@
+---
+id: sync-conflicts
+title: Conflict detection and resolution
+---
+import Admonition from '@theme/Admonition';
+
+# Conflict detection and resolution
+
+A conflict exists when local edit was based on version V while server has advanced beyond V.
+
+## Detect with versions
+
+```http
+PATCH /notes/42
+If-Match: "version-7"
+```
+
+Server returns updated version or 412/409. Version counters/ETags are stronger than device wall-clock timestamps.
+
+## Resolution strategies
+
+| Strategy | Good for | Risk |
+|---|---|---|
+| server wins | authoritative permissions/prices | loses local work |
+| client wins | personal setting where latest intent accepted | overwrites other device |
+| last-write-wins | low-value whole record | clock skew/data loss |
+| field merge | independent fields | semantic cross-field invariants |
+| operation merge/CRDT-like | counters/sets/collaboration | protocol complexity |
+| user-assisted | valuable text/design conflicts | UX burden |
+
+## Last-write-wins warning
+
+Device clocks are untrusted/skewed and can move backward. Server-assigned ordering is safer but arrival order still means offline older semantic intent may win. Use LWW only when loss is acceptable and document tie-break.
+
+## Three-way merge
+
+Compare base, local, and remote:
+
+```text
+field unchanged locally -> take remote
+field unchanged remotely -> take local
+both changed same way -> take value
+both changed differently -> conflict/policy
+```
+
+Cross-field rules (start < end, currency + amount) require domain validation after merge.
+
+## Version vectors overview
+
+Per-replica counters can detect causality/concurrent updates better than one timestamp, but metadata grows and server/client protocol is complex. Useful in true multi-master collaboration, excessive for simple server-authoritative data.
+
+## Conflict persistence
+
+Store base/local/remote or enough recovery data, status, and operation IDs durably. Do not hold conflict only in dialog state. User may leave/process may die.
+
+## Testing
+
+Two devices edit same field/different fields, clock skew, delayed packets, duplicate retry, delete-versus-edit, permission revoked, server normalization, and process death during resolution.
+
+<Admonition type="warning" title="Business decision">
+Conflict policy is product semantics. Engineers cannot safely choose “last write wins” globally just because it is easy.
+</Admonition>
+
+## Exercises
+
+1. Three-way merge a contact edited on two devices.
+2. Choose policy for cart quantity, note text, and permission role.
+3. Explain why timestamps do not prove causality.

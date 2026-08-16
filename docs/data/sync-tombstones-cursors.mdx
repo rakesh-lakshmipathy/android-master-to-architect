@@ -1,0 +1,64 @@
+---
+id: sync-tombstones-cursors
+title: Tombstones, deletions, cursors, and clock problems
+---
+import Admonition from '@theme/Admonition';
+
+# Tombstones, deletions, cursors, and clock problems
+
+## Why physical delete resurrects data
+
+Device A deletes item offline and removes row. Device B/server later syncs old item; without deletion record/version, A cannot distinguish old data from new creation.
+
+A tombstone records ID, deletion version/time, account, and sync state:
+
+```text
+entity_id | deleted=true | server_version | pending_operation_id
+```
+
+UI filters tombstones; sync propagates them. Garbage-collect only after all relevant replicas/cursor windows can no longer send older state or server guarantees retention horizon.
+
+## Delete versus edit
+
+Define policy: deletion wins, edit recreates, user resolves, or server authority. Permission/account deletion often must win and purge sensitive local data immediately while retaining minimal safe sync marker if needed.
+
+## Incremental cursor
+
+Server change feed returns changes + next opaque cursor. Cursor belongs to exact account/query/schema and advances in same DB transaction as applying changes.
+
+```kotlin
+database.withTransaction {
+    apply(response.changes)
+    cursorDao.save(scope, response.nextCursor)
+}
+```
+
+Crash before commit replays safely; commit keeps data/cursor aligned. Server change IDs/version make replay idempotent.
+
+## Pagination cursor is not always sync cursor
+
+Page cursor orders browsing snapshot; sync cursor tracks change stream. Inserts/deletes between pages can cause gaps/duplicates. Follow server contract and deduplicate by ID/version.
+
+## Clock hazards
+
+- wall clock jumps/timezone changes
+- devices disagree
+- server/client milliseconds precision differs
+- equal timestamps need tie-break
+- offline operation arrives much later
+
+Use monotonic clock only for durations within process, server version/order for distributed consistency, and UTC instant for user-visible chronology—not as universal conflict solution.
+
+## Full resync
+
+Cursor can expire or schema rules change. Full resync must preserve pending local edits/outbox, apply authoritative snapshot, rebase/conflict pending operations, and avoid deleting local-only drafts.
+
+<Admonition type="tip" title="Architect takeaway">
+Deletion is data in a replicated system. Cursor is committed state. Both need versioning, retention, replay, and recovery rules.
+</Admonition>
+
+## Exercises
+
+1. Prevent deleted note resurrection.
+2. Recover expired cursor without losing pending edits.
+3. Separate browsing and sync cursor contracts.

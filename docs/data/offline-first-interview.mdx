@@ -1,0 +1,67 @@
+---
+id: offline-first-interview
+title: Offline-first architecture interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Offline-first architecture interview lab
+
+## Rapid answers
+
+<details><summary><strong>Does offline-first require offline writes?</strong></summary><p>No. At minimum critical reads work offline. Each write chooses online-only, queued, or local-first based on business safety.</p></details>
+
+<details><summary><strong>Can WorkManager guarantee exactly once?</strong></summary><p>No. Work may rerun. Design at-least-once execution with durable queue, leases, and end-to-end idempotency/deduplication.</p></details>
+
+<details><summary><strong>Why tombstones?</strong></summary><p>Replicas need durable knowledge that an entity was deleted; physical removal can allow older copies to resurrect it.</p></details>
+
+## Case study: collaborative notes
+
+- Room is readable truth with note version, pending/conflict status.
+- local edit transaction updates note and inserts outbox with base version.
+- drainer sends stable operation ID and conditional base version.
+- nonconflicting fields three-way merge; text conflict preserves local/remote/base for user.
+- deletes are tombstones and conflict with edits by product rule.
+- server change cursor commits with applied changes.
+- push hints schedule unique sync; missing push recovered on foreground/periodic.
+- two-device tests reorder/duplicate/drop events and kill process mid-drain.
+
+## Failure scenarios
+
+### Duplicate order after timeout
+
+Retry used new operation ID. Persist key before first request; server returns original result for duplicate same request.
+
+### Item reappears after deletion
+
+Physical row deletion discarded tombstone before remote replicas aged out. Retain versioned deletion marker through synchronization horizon.
+
+### Old response overwrites new edit
+
+No version compare. Apply responses conditionally by server/entity version and rebase pending local edits.
+
+### Sync runs forever on invalid item
+
+Poison operation classified all errors retryable. Separate transient, blocked, conflict, and terminal; continue independent items and surface recovery.
+
+## Review checklist
+
+- [ ] Local observable source is exclusive higher-layer read path.
+- [ ] Every write has explicit online/queued/lazy strategy.
+- [ ] Local mutation and outbox are transactional.
+- [ ] Operations have stable IDs and server deduplication.
+- [ ] Retry is bounded, jittered, classified, and observable.
+- [ ] Ordering/parallelism/poison behavior is specified.
+- [ ] Conflict policy is per domain, not global LWW.
+- [ ] Tombstone and cursor retention/replay are correct.
+- [ ] Account/session boundaries prevent cross-user sync.
+- [ ] Multi-device/process-death tests prove convergence.
+
+<Admonition type="tip" title="Interview framing">
+State truth and read path, write strategy, queue transaction, idempotency, ordering/retry, version/conflict/tombstone/cursor rules, connectivity assumptions, UX, and convergence tests.
+</Admonition>
+
+## Exercises
+
+1. Design offline shopping cart across two devices.
+2. Calculate queue recovery after auth expiry and process kill.
+3. Defend a non-LWW conflict policy to product stakeholders.
