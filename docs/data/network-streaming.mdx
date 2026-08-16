@@ -1,0 +1,65 @@
+---
+id: network-streaming
+title: Uploads, downloads, progress, cancellation, and streaming
+---
+import Admonition from '@theme/Admonition';
+
+# Uploads, downloads, progress, cancellation, and streaming
+
+## Stream instead of buffering
+
+Never call `bytes()`/load entire multi-GB body into memory. Stream source to sink with bounded buffer, close with `use`, and move blocking I/O to appropriate dispatcher/API.
+
+```kotlin
+response.body.byteStream().use { input ->
+    temp.outputStream().use { output -> input.copyTo(output, bufferSize = 64 * 1024) }
+}
+```
+
+Verify HTTP success before consuming. Write temporary file, validate length/checksum/content, then atomically rename. On cancellation/failure, remove or retain partial according to resume policy.
+
+## Progress
+
+Wrap RequestBody/ResponseBody counting bytes and emit throttled progress. Emitting every 8KB can overwhelm Main/recompose. Total may be unknown for chunked/compressed transfer; represent indeterminate progress.
+
+Progress “100% uploaded” means request bytes sent, not server processed. Wait for accepted response/status.
+
+## Multipart
+
+Validate content URI through `ContentResolver`; do not assume path, filename, MIME, length, or continued permission. Stream with size limits. Sanitize server-visible filename; never trust extension as content type.
+
+## Resumable transfers
+
+Large reliable upload usually needs server protocol:
+
+1. create upload session/idempotency identity
+2. split into numbered/checksummed chunks
+3. persist acknowledged offsets/chunks
+4. retry chunks safely
+5. finalize atomically
+6. query status after ambiguity
+
+HTTP Range download must verify ETag/version so bytes from changed resource are not appended.
+
+## Cancellation ownership
+
+Screen coroutine cancellation suits disposable preview. User-requested durable upload belongs in repository/WorkManager and continues beyond screen; UI observes persistent status. Cancel action updates durable state and server session where supported.
+
+## Security/resource limits
+
+- maximum bytes/time/decompressed size
+- archive bomb/path traversal prevention
+- checksum/authenticated source where required
+- disk-space preflight and low-storage recovery
+- no secret URLs/tokens in filenames/logs
+- TLS and authorization on every resume request
+
+<Admonition type="warning" title="Retry">
+Replaying a multipart POST may duplicate server state. Use a documented resumable/idempotent protocol rather than assuming network library retry is safe.
+</Admonition>
+
+## Exercises
+
+1. Design 2GB resumable upload across process death.
+2. Throttle progress without losing final state.
+3. Securely stream a user-selected content URI.

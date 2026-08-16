@@ -1,0 +1,64 @@
+---
+id: okhttp-execution
+title: OkHttp interceptors, authentication, pooling, and timeouts
+---
+import Admonition from '@theme/Admonition';
+
+# OkHttp interceptors, authentication, pooling, and timeouts
+
+Reuse one `OkHttpClient` (or `newBuilder()` variants) so connection/thread pools are shared. Per-request clients waste sockets/TLS work and can exhaust resources.
+
+## Application versus network interceptors
+
+Application interceptor sees logical call and can short-circuit/retry. Network interceptor observes each actual network exchange and must call `proceed()` exactly once. Ordering changes auth, compression, cache, retry, and logging semantics.
+
+```kotlin
+class AuthHeaderInterceptor(private val tokens: TokenStore) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val token = tokens.currentAccessToken()
+        val request = chain.request().newBuilder().apply {
+            if (token != null) header("Authorization", "Bearer $token")
+        }.build()
+        return chain.proceed(request)
+    }
+}
+```
+
+Do not block interceptor on slow DataStore/network token refresh for every request. Keep current token in a safely synchronized session owner and refresh through authenticator/coordinator.
+
+## Authenticator and refresh storm
+
+Many requests can receive 401 simultaneously. Single-flight refresh ensures one refresh; waiting requests reuse result. Before refreshing, compare failed request token with current token—another call may already have refreshed.
+
+Stop loops: count prior responses, do not authenticate refresh endpoint recursively, return null when refresh fails, atomically clear session, and retry original request once with new token.
+
+## Timeouts
+
+- connect: establish TCP/TLS
+- read: inactivity reading
+- write: inactivity writing
+- call: entire logical call budget
+
+Set by endpoint/user expectation and payload, not one arbitrary “30 seconds.” Streaming may need different read/call policy. Timeout is cancellation locally, not proof server rolled back.
+
+## Connections and resources
+
+Always close response bodies. HTTP/2 multiplexes streams; pool handles keep-alive. Dispatcher limits protect device/server but can cause queue latency—measure DNS/connect/TLS/request/response/queue separately with EventListener/tracing.
+
+## Logging
+
+Debug body logging can expose tokens, cookies, PII, payment/health data and consume memory for large bodies. Redact headers/fields, disable body logs in release, cap sizes, and use structured privacy-reviewed telemetry.
+
+<Admonition type="warning" title="Retry multiplication">
+Authenticator, interceptor, OkHttp internal retry, repository, and WorkManager can multiply calls. Define one total attempt budget and idempotency policy.
+</Admonition>
+
+## Sources
+
+- [OkHttpClient API](https://square.github.io/okhttp/5.x/okhttp/okhttp3/-ok-http-client/)
+
+## Exercises
+
+1. Design single-flight token refresh.
+2. Tune timeouts for thumbnail and 2GB upload.
+3. Find why creating clients per request hurts performance.

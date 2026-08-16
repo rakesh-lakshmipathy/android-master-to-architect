@@ -1,0 +1,55 @@
+---
+id: realtime-networking
+title: WebSockets and server-sent updates
+---
+import Admonition from '@theme/Admonition';
+
+# WebSockets and server-sent updates
+
+## Choose transport from communication shape
+
+| Need | Choice |
+|---|---|
+| request/response, cacheable | HTTP |
+| server→client text stream, automatic event IDs/reconnect semantics | SSE |
+| bidirectional low-latency messages | WebSocket |
+| background delivery while app absent | push notification + sync |
+
+A socket does not remain reliable when app process is killed or background-restricted. Important messages must be recoverable from durable server API.
+
+## Connection state machine
+
+```text
+Disconnected -> Connecting -> Connected -> BackingOff -> Connecting
+                         \-> Unauthorized -> refresh/login
+```
+
+Define lifecycle owner, foreground/background policy, network changes, heartbeat, idle timeout, exponential backoff+jitter, auth refresh, and explicit user logout.
+
+## Resume and gaps
+
+Messages need monotonic sequence/event ID. Client persists last applied cursor; reconnect requests events after cursor or performs snapshot sync. If server retention gap exists, discard partial assumptions and fetch full snapshot.
+
+At-least-once delivery means duplicates: deduplicate by event ID. Out-of-order delivery requires version comparison/buffering. “Connected” does not mean application state is synchronized.
+
+## Backpressure
+
+If producer outruns client, unbounded channel/list exhausts memory. Choose bounded queue and policy: conflate state updates, drop low-value telemetry, batch, disconnect/resync, or apply server flow control. Never drop financial/chat events silently.
+
+## Source of truth integration
+
+Socket event should update repository/database transaction; UI observes source of truth. Rendering socket payload directly creates divergence after reconnect/process death.
+
+## Security
+
+Use TLS, authenticate handshake/refresh, validate every message schema/authorization, cap message size/rate, avoid secrets in URL query, and treat server text as untrusted. Rotate token without reconnect storm.
+
+<Admonition type="tip" title="Architect takeaway">
+Realtime transport is an acceleration path, not durable truth. Design snapshot recovery, cursoring, deduplication, backpressure, and background limitations first.
+</Admonition>
+
+## Exercises
+
+1. Recover chat events after a 30-minute disconnect.
+2. Choose SSE, WebSocket, push, or polling for four products.
+3. Design bounded backpressure for stock prices versus messages.

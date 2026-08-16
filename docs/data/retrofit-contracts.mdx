@@ -1,0 +1,76 @@
+---
+id: retrofit-contracts
+title: Retrofit service contracts and error handling
+---
+import Admonition from '@theme/Admonition';
+
+# Retrofit service contracts and error handling
+
+```kotlin
+interface OrdersApi {
+    @GET("v1/orders/{id}")
+    suspend fun order(@Path("id") id: String): OrderDto
+
+    @POST("v1/orders")
+    suspend fun place(
+        @Header("Idempotency-Key") key: String,
+        @Body request: PlaceOrderRequest,
+    ): Response<PlaceOrderResponse>
+}
+```
+
+Returning DTO directly throws `HttpException` for non-2xx and serialization/network exceptions. `Response<T>` exposes status/headers/error body for deliberate mapping but pushes protocol handling to caller. Choose one team convention and central adapter/mapping.
+
+## Suspend and cancellation
+
+Retrofit suspend calls integrate cancellation with OkHttp call. Cancellation of client does not guarantee server stopped after bytes were sent. Mutation safety still requires idempotency/status recovery.
+
+## URL safety
+
+- `@Path` is encoded path segment by default.
+- `@Query` handles encoding; do not concatenate raw user input into URL.
+- `@Url` permits dynamic URLs and is a security boundary—restrict scheme/host to prevent SSRF-style requests or token leakage.
+
+## Empty/nullable bodies
+
+204 has no body. A 200 with malformed/missing body is a protocol failure, not automatically null. Model `Response<Unit>` for no content and explicit optional semantics where API promises them.
+
+## Error mapping
+
+```kotlin
+suspend fun <T> apiCall(block: suspend () -> T): DataResult<T> = try {
+    DataResult.Success(block())
+} catch (e: CancellationException) {
+    throw e
+} catch (e: HttpException) {
+    mapHttp(e)
+} catch (e: IOException) {
+    DataResult.Failure(DataFailure.Network(e))
+} catch (e: SerializationException) {
+    DataResult.Failure(DataFailure.Protocol(e))
+}
+```
+
+Do not catch `Throwable` and erase programming errors/cancellation. Error-body parsing itself can fail and should be bounded/redacted.
+
+## Service design
+
+Keep Retrofit DTO/protocol interface inside remote data source. Repository receives mapped application models/failures. Avoid passing Android Context or UI state into service.
+
+## Testing
+
+Use MockWebServer to assert method/path/query/headers/body and simulate status, malformed JSON, disconnect, delay, chunked body, redirects, and cancellation. Mocking interface alone misses converters/interceptors/HTTP integration.
+
+<Admonition type="warning" title="Successful HTTP is not valid domain data">
+2xx can contain schema-invalid values. Validate mapping and business invariants before persistence/use.
+</Admonition>
+
+## Sources
+
+- [Retrofit declarations](https://square.github.io/retrofit/declarations/)
+
+## Exercises
+
+1. Choose direct DTO versus Response for three endpoints.
+2. Handle 204 and malformed 200 correctly.
+3. Secure a dynamic `@Url` image download.

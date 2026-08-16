@@ -1,0 +1,61 @@
+---
+id: networking-interview
+title: Networking interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Networking interview lab
+
+## Rapid answers
+
+<details><summary><strong>Interceptor versus Authenticator?</strong></summary><p>Interceptor transforms/observes requests and responses. Authenticator responds to authentication challenges such as 401 by producing a follow-up request or null. Refresh coordination must prevent loops/storms.</p></details>
+
+<details><summary><strong>Connect/read/write/call timeout?</strong></summary><p>Connect bounds connection setup; read/write bound inactivity for I/O; call bounds entire logical call including redirects/retries/queue where supported.</p></details>
+
+<details><summary><strong>Does cancelling Retrofit cancel server work?</strong></summary><p>It cancels local call/transport where possible. If request reached server, mutation may have completed; use idempotency and status recovery.</p></details>
+
+## Scenario: 50 requests refresh token together
+
+Implement single-flight refresh, compare failed token with current, exclude refresh endpoint, cap follow-ups, atomically update session, retry once, and propagate logout on terminal refresh failure. Test concurrency with MockWebServer.
+
+## Scenario: upload reaches 100%, then app says failure
+
+100% counted outbound bytes; response timed out. Treat outcome unknown, query upload session by stable ID, never start unrelated duplicate upload.
+
+## Scenario: new server field crashes old client
+
+Deserializer was strict to unknown keys. Decide forward-compatible unknown-field policy; keep required/semantic validation in mapping. Unknown enum needs explicit policy.
+
+## System design: reliable messaging
+
+- HTTP snapshot/history and cursor are durable recovery API.
+- WebSocket accelerates foreground bidirectional updates.
+- FCM wakes/notifies; app syncs authoritative data.
+- DB is client source of truth.
+- event IDs provide dedupe/order/gap detection.
+- bounded queue/backpressure differs by event type.
+- auth refresh avoids storm; logout clears connections/data.
+- TLS/no cleartext; pinning only with documented operational plan.
+
+## Review checklist
+
+- [ ] HTTP method/status/cache/idempotency semantics are correct.
+- [ ] Retrofit errors/cancellation/empty bodies are mapped deliberately.
+- [ ] OkHttp client/pools are reused and response bodies closed.
+- [ ] Auth refresh has single-flight and loop prevention.
+- [ ] Timeouts match endpoint and ambiguous mutation recovery.
+- [ ] Serialization handles missing/null/unknown/evolution safely.
+- [ ] Transfers stream with limits, progress throttling, and resumability.
+- [ ] Realtime path has cursor, dedupe, gap, backpressure, and snapshot recovery.
+- [ ] Cleartext/debug trust is absent from release.
+- [ ] Retries have one bounded budget and mutation idempotency.
+
+<Admonition type="tip" title="Interview framing">
+Explain protocol semantics, client execution, failure ambiguity, cancellation/retry/idempotency, compatibility, security, resource limits, observability, and integration tests.
+</Admonition>
+
+## Exercises
+
+1. Design MockWebServer matrix for checkout.
+2. Calculate worst-case attempts across all retry layers.
+3. Threat-model dynamic URL and multipart upload endpoints.

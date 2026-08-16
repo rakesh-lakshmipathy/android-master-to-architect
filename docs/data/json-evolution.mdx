@@ -1,0 +1,72 @@
+---
+id: json-evolution
+title: JSON serialization and API evolution
+---
+import Admonition from '@theme/Admonition';
+
+# JSON serialization and API evolution
+
+Kotlin serialization, Moshi, and Gson differ in code generation/reflection, Kotlin null/default handling, adapters, polymorphism, and multiplatform support. Choose by contract/tooling rather than fashion and test the exact configuration.
+
+```kotlin
+val json = Json {
+    ignoreUnknownKeys = true
+    explicitNulls = true
+    isLenient = false
+}
+
+@Serializable
+data class ProductDto(
+    val id: String,
+    val title: String,
+    val status: String? = null,
+)
+```
+
+## Missing versus explicit null
+
+These may mean different things, especially PATCH:
+
+```json
+{}                 // leave unchanged/default
+{"nickname":null}  // clear nickname
+```
+
+Some serializers/configurations collapse them. Model optional patch fields with a tri-state wrapper if API distinguishes absent/null/value.
+
+`explicitNulls=false` can make encode/decode asymmetric when nullable property has non-null default. Understand behavior before changing global config.
+
+## Compatibility
+
+- Readers generally ignore new unknown fields for forward compatibility.
+- New required field breaks older payloads unless default/nullable/version strategy exists.
+- Removing/renaming field needs compatibility window.
+- Unknown enum value should not crash an entire feed; preserve raw or map `Unknown` unless security/business requires fail-closed.
+- Numeric precision/overflow must be validated; JSON number into Double can corrupt money/large IDs.
+
+## Polymorphism
+
+Use explicit discriminator and allowlist known subtypes. Never instantiate arbitrary class names from untrusted JSON. Unknown subtype needs policy: ignore item, preserve opaque payload, or fail.
+
+## Defaults can hide server regressions
+
+`val price: Long = 0` converts missing price into free product. Defaults are product policy, not parser convenience. Required safety-critical values should fail mapping.
+
+## Serialization boundaries
+
+DTO remains at network edge. Map into validated models before DB/UI. Do not persist raw DTO JSON indefinitely without schema/version/migration/retention plan.
+
+<Admonition type="tip" title="Compatibility test matrix">
+Test old client/new server, new client/old cached payload, missing/null/unknown/extra fields, reordered fields, overflow, malformed Unicode/date, and polymorphic unknown subtype.
+</Admonition>
+
+## Sources
+
+- [Kotlin JSON configuration](https://kotlinlang.org/docs/serialization-json-configuration.html)
+- [Serialization customization](https://kotlinlang.org/docs/serialization-customization-options.html)
+
+## Exercises
+
+1. Model absent/null/value PATCH field.
+2. Prevent missing price default corruption.
+3. Design unknown enum/subtype handling for payments and feeds.

@@ -1,0 +1,70 @@
+---
+id: http-semantics
+title: HTTP semantics, caching, and idempotency
+---
+import Admonition from '@theme/Admonition';
+
+# HTTP semantics, caching, and idempotency
+
+## Methods communicate intent
+
+- GET reads and should be safe/idempotent.
+- PUT replaces/upserts known resource and is normally idempotent.
+- PATCH partially changes resource; idempotency depends on patch semantics.
+- POST creates/commands and is not inherently idempotent.
+- DELETE is idempotent in intended final state, though responses may differ.
+
+Never mutate on GET; browsers/proxies/retries/prefetch may repeat it.
+
+## Status is protocol, not UI text
+
+```text
+2xx success (200 body, 201 created, 202 accepted async, 204 no body)
+304 cache validator says reuse representation
+400 malformed request; 401 authentication; 403 authorization
+404 absent; 409 conflict; 412 precondition failed; 422 validation
+429 throttled; 5xx server/upstream failure
+```
+
+Parse structured error bodies safely; proxies may return HTML/empty content. Do not turn every non-2xx into “No internet.”
+
+## Headers carry contracts
+
+- `Authorization` credentials
+- `Content-Type` body representation
+- `Accept` desired response
+- `Cache-Control`, `ETag`, `Last-Modified` caching
+- `If-Match` optimistic concurrency
+- `Retry-After` throttling/service recovery
+- trace/request IDs for diagnostics
+
+Redact tokens/cookies/personal data from logs.
+
+## HTTP cache
+
+Server directives determine freshness. `no-cache` means revalidate before reuse, not “do not store”; `no-store` prevents storage. Conditional request sends ETag and accepts 304, saving body transfer.
+
+HTTP cache and Room solve different problems: HTTP cache stores representations by request; Room is application source of truth/query model. They can coexist.
+
+## Idempotent mutation
+
+```http
+POST /orders
+Idempotency-Key: 8fa...
+```
+
+Client persists stable key with operation. Retries reuse it. Server stores key + request fingerprint + result atomically and rejects same key with different payload. A random key per retry defeats deduplication.
+
+## Timeouts and ambiguity
+
+Timeout after sending request means outcome may be unknown. Do not tell user payment failed and submit a new key; query operation/order status using same identity.
+
+<Admonition type="tip" title="Architect takeaway">
+Design API semantics for retries, cache validators, concurrency, and ambiguous outcomes before choosing Retrofit annotations.
+</Admonition>
+
+## Exercises
+
+1. Classify retry safety for GET/PUT/PATCH/POST.
+2. Recover from payment timeout after server commit.
+3. Explain `no-cache` versus `no-store`.

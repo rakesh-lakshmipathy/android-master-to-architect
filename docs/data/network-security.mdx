@@ -1,0 +1,67 @@
+---
+id: network-security
+title: Network security configuration and pinning
+---
+import Admonition from '@theme/Admonition';
+
+# Network security configuration and pinning
+
+## Default to TLS and no cleartext
+
+```xml
+<network-security-config>
+  <base-config cleartextTrafficPermitted="false" />
+  <debug-overrides>
+    <trust-anchors><certificates src="user" /></trust-anchors>
+  </debug-overrides>
+</network-security-config>
+```
+
+Declare config in manifest. Debug overrides allow local inspection without trusting user CAs in release.
+
+## Trust anchors
+
+Use system CAs normally. Private enterprise CA needs scoped domain configuration and rotation plan. Do not install permissive hostname verifier or trust-all manager; that removes authentication even though traffic appears encrypted.
+
+## Certificate pinning tradeoff
+
+Pinning restricts accepted certificate/public keys, reducing some CA compromise risk but creates availability/rotation risk. Android guidance cautions that server certificate/CA changes can strand clients that cannot update quickly.
+
+If threat model justifies pinning:
+
+- pin public keys with current + backup keys
+- overlap rotation windows
+- choose expiration/recovery/update plan
+- monitor failures by app version/domain without leaking data
+- test CDN/disaster-recovery certificates
+- never add trust-all fallback
+
+## Environment configuration
+
+Release must not accept staging hosts/debug CAs/cleartext/logging. Separate build variants and add release artifact/config tests. Endpoint from remote config is untrusted unless host allowlisted; tokens must not follow redirects to different host.
+
+## TLS is not authorization
+
+TLS authenticates endpoint/confidentiality in transit. Server still validates user authorization and object ownership; client still validates response schema. HTTPS does not make payload trustworthy or prevent compromised endpoint.
+
+## Secrets
+
+API keys embedded in APK can be extracted. Treat public-client identifiers as non-secret and enforce server-side restrictions. User tokens use secure session handling and redacted logs; never put bearer tokens in URL query where histories/proxies/logs expose them.
+
+## WebView/custom networking
+
+Network Security Config coverage varies by stack/platform behavior; verify library integration. WebView has separate mixed-content/navigation/bridge concerns covered in security chapter.
+
+<Admonition type="warning" title="Pinning decision">
+Document assets, attacker, likelihood, operational ownership, backup pins, recovery, and why platform TLS is insufficient. “More secure” without availability analysis is not architecture.
+</Admonition>
+
+## Sources
+
+- [Network Security Configuration](https://developer.android.com/privacy-and-security/security-config)
+
+## Exercises
+
+1. Review a trust-all debug workaround.
+2. Write a pin rotation/recovery plan.
+3. Prevent release from using staging endpoint/debug CA.
