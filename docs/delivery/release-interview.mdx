@@ -1,0 +1,42 @@
+---
+id: release-interview
+title: Release engineering case study and interview preparation
+---
+
+# Release engineering case study and interview preparation
+
+## Case study: a checkout release fails at 10%
+
+The release build passes unit tests but payment callbacks fail only for Play-installed production users. First segment by version, installer, signing certificate, API environment, and shrinker mapping. Likely causes include wrong app-signing fingerprint at the payment provider, removed callback code, malformed production manifest placeholders, or an App Link mismatch.
+
+Halt further rollout, protect transactions server-side, disable new entry if safe, preserve idempotency, and prepare a higher-version forward fix. Do not rebuild an artifact under the same version or assume halting repairs recipients.
+
+## Interview questions
+
+1. **CI versus CD?** CI verifies integrated changes; delivery produces a releasable artifact; deployment promotes it.
+2. **Why build once?** Rebuilds can differ; promotion preserves evidence attached to tested bytes.
+3. **Build cache versus configuration cache?** One reuses task outputs; the other reuses configuration state.
+4. **Build type versus flavor?** Build type controls build/package behavior; flavor models a product dimension; combinations form variants.
+5. **Upload versus app-signing key?** Developer/CI uses upload key; Play signs delivered APKs with app-signing key.
+6. **Does halting equal rollback?** No; installed recipients remain. Mitigate and forward-fix.
+7. **What belongs in release provenance?** Bytes/digest, source/toolchain/dependencies, tests, signing, mappings/symbols, approvals, and distribution identity.
+8. **How choose rollout stages?** Blast radius, traffic needed for signal, risk, detection latency, background/business cycles, and recovery capability.
+
+## Release checklist
+
+- [ ] Exact release variant tested, shrunk, signed, and installable.
+- [ ] Version code unique; artifact/digest immutable.
+- [ ] Production endpoints, identity, links, billing, push, and certificates verified.
+- [ ] Mappings/symbols and reports retained.
+- [ ] Secrets confined to protected jobs and logs inspected for leakage.
+- [ ] Upgrade, migration, offline, and old-backend compatibility tested.
+- [ ] Go/no-go metrics, owners, communications, and recovery runbook ready.
+- [ ] Play policy/store declarations match actual behavior.
+
+## Exercises
+
+1. Design a CI matrix for three modules, two environments, and debug/release without testing every combination on every PR.
+2. Write a recovery plan for a release that corrupts only newly created local cache data.
+3. Explain which signing fingerprint OAuth needs for local debug, CI sideload, and Play production.
+4. Define evidence required before increasing a 5% rollout to 25%.
+

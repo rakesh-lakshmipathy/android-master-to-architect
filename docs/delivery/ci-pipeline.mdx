@@ -1,0 +1,64 @@
+---
+id: ci-pipeline
+title: Android CI/CD pipeline
+---
+
+# Android CI/CD pipeline
+
+Continuous integration proves that a reviewed commit satisfies automated gates. Continuous delivery creates a releasable artifact. Continuous deployment promotes it without a manual production decision. Do not use the terms as synonyms.
+
+## A trustworthy pipeline
+
+```text
+pull request
+  -> format/lint/static analysis
+  -> unit and contract tests
+  -> compile selected variants
+  -> device/UI tests
+  -> dependency/security checks
+  -> signed immutable AAB
+  -> internal track verification
+  -> approval and staged production rollout
+  -> operational observation
+```
+
+Run fast deterministic checks first. Expensive emulator suites run after compilation/unit gates or in parallel shards. A failed security or signing gate must block publication, not merely add a warning.
+
+```yaml
+jobs:
+  verify:
+    steps:
+      - run: ./gradlew ktlintCheck detekt lint testDebugUnitTest
+      - run: ./gradlew pixel2api35DebugAndroidTest
+  bundle:
+    needs: verify
+    steps:
+      - run: ./gradlew bundleProductionRelease
+```
+
+Pin action/plugin versions, use least-privilege short-lived credentials where supported, protect production environments, and retain logs without leaking secrets.
+
+## Build once, promote the same bytes
+
+Do not rebuild for each environment: source, dependency resolution, clock, or runner can change. Produce one immutable artifact, record its digest, test it, and promote that artifact. Environment-specific endpoints should be a deliberate build contract or safe runtime configuration—not an ad-hoc edit after testing.
+
+## Failure scenarios
+
+- PR checks pass but release shrinking breaks reflection: run release-variant smoke tests.
+- CI is green because no device test started: verify result count and fail on zero tests.
+- A flaky test is retried until green: quarantine with owner/expiry; retain first-failure evidence.
+- Main changes after approval: bind approval to commit/artifact digest.
+
+## Practical mistakes
+
+- ❌ Publish directly from a developer laptop.
+- ✅ Publish an audited CI-produced artifact.
+- ❌ Use `continue-on-error` for quality gates.
+- ✅ Explicitly classify advisory versus blocking checks.
+- ❌ Call a compile-only job “release verified.”
+- ✅ Test the release variant and generated install artifacts.
+
+## Exercise
+
+Draw a pipeline for a banking app. Mark which checks are PR, nightly, pre-release, and post-release; identify credentials and approval boundaries.
+

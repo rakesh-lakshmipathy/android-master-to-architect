@@ -1,0 +1,43 @@
+---
+id: signing
+title: Signing keys, Play App Signing, and rotation
+---
+
+# Signing keys, Play App Signing, and rotation
+
+Android verifies updates using signing identity. Losing or compromising key material can threaten the app's lifetime.
+
+## Two-key model
+
+With Play App Signing:
+
+1. CI signs the AAB with the **upload key**.
+2. Play verifies that upload identity.
+3. Play generates optimized APKs and signs them with the protected **app-signing key**.
+
+The upload certificate and app-signing certificate are different. Register the correct fingerprint with OAuth, Maps, App Links, or other API providers. An upload-key reset does not mean users receive APKs signed by a new app-signing identity.
+
+## Secure CI design
+
+- Limit release secrets to protected branches/environments.
+- Require reviewed approval and bind it to the artifact digest.
+- Prefer hardware/KMS-backed or short-lived access where the tooling permits.
+- Keep encrypted backups and a tested recovery runbook.
+- Audit use and rotate/reset when exposure is suspected.
+- Never print keystore bytes, passwords, or encoded secrets to logs.
+
+Key rotation/upgrade requires compatibility planning across Android versions, stores, API providers, signature-level permissions, app-to-app trust, and backup/restore assumptions. Test generated APKs, not only the AAB.
+
+## Practical mistakes
+
+- ❌ Store a release keystore in the repository because it has a password.
+- ✅ Treat private key and password as separate protected secrets.
+- ❌ Register only the local debug SHA fingerprint.
+- ✅ Register appropriate debug, upload, and app-signing certificates by use case.
+- ❌ Let every CI job access release signing.
+- ✅ Isolate a minimal protected signing/publish job.
+
+## Source
+
+- [Sign your Android app and Play App Signing](https://developer.android.com/studio/publish/app-signing)
+

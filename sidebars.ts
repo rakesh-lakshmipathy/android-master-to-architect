@@ -601,7 +601,29 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Parts IX-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part IX - Delivery and Platform Expansion',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'CI/CD and Release Engineering',
+          collapsed: true,
+          items: [
+            'delivery/ci-pipeline',
+            'delivery/build-speed-devices',
+            'delivery/variants-secrets',
+            'delivery/signing',
+            'delivery/artifacts-tracks',
+            'delivery/release-rollout',
+            'delivery/release-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Part X - Android Architect Mastery', items: ['roadmap']},
   ],
 };
 

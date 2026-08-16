@@ -1,0 +1,40 @@
+---
+id: release-rollout
+title: Staged rollout, recovery, and Play delivery
+---
+
+# Staged rollout, recovery, and Play delivery
+
+A staged rollout limits initial exposure to an update. It is an observation and decision process, not a timer that automatically proves safety.
+
+## Release ladder
+
+1. Define go/no-go criteria and owners.
+2. Verify the exact AAB/generated APKs in internal testing.
+3. Start a small production percentage appropriate to risk/traffic.
+4. Observe for enough time to cover startup, background jobs, upgrades, and business cycles.
+5. Compare crash/ANR, performance, backend errors, conversion, support, and policy signals by version.
+6. Increase deliberately; record the decision.
+
+Halting stops further rollout but does not uninstall the update from existing recipients. If impact continues, use compatible server mitigation/kill switches and ship a higher-`versionCode` forward fix. A database migration generally cannot be undone merely by halting distribution.
+
+## AAB and dynamic delivery
+
+An AAB is a publishing format; Play generates device-specific APKs. Feature/asset delivery can reduce initial download but adds module installation states, failures, storage/network requirements, navigation fallback, and testing across split combinations. Keep the base app functional and handle unavailable modules explicitly.
+
+Release work also includes policy declarations, Data safety accuracy, permissions, target API requirements, content rating, store metadata/localization, accessibility evidence, and reviewer access. Treat policy as an ongoing product constraint, not a final upload form.
+
+## Practical mistakes
+
+- ❌ Roll 1% for ten minutes and infer safety from zero crashes.
+- ✅ Require meaningful users/sessions and risk-relevant observation time.
+- ❌ Say “rollback” when only halting future installs.
+- ✅ State exactly what happens to already-updated devices and data.
+- ❌ Update store screenshots before users receive matching behavior.
+- ✅ Coordinate listing and binary rollout deliberately.
+
+## Sources
+
+- [Release updates with staged rollouts](https://support.google.com/googleplay/android-developer/answer/6346149)
+- [Prepare an Android app for release](https://developer.android.com/studio/publish/preparing)
+

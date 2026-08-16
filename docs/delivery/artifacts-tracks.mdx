@@ -1,0 +1,44 @@
+---
+id: artifacts-tracks
+title: Versions, artifacts, provenance, and Play tracks
+---
+
+# Versions, artifacts, provenance, and Play tracks
+
+`versionCode` is the monotonically increasing integer Play/Android uses to order releases. `versionName` is user-facing. Never derive operational identity from version name alone.
+
+For every release retain:
+
+- AAB and cryptographic digest;
+- version code/name, commit, build ID, runner/toolchain;
+- dependency lock/verification and provenance/SBOM where required;
+- R8 mapping, native symbols, baseline profiles, test/lint reports;
+- release notes, approvals, flag/config snapshot, and Play release ID.
+
+Mapping and symbols must match exact bytes; “mapping from approximately the same commit” cannot deobfuscate reliably.
+
+## Distribution tracks
+
+| Track | Purpose |
+|---|---|
+| Internal testing | Fast trusted-team verification with Play-installed behavior |
+| Closed testing | Controlled named groups/organizations |
+| Open testing | Broad opt-in feedback |
+| Production | General availability, often staged for updates |
+
+Promote the tested release when possible rather than creating an unverified replacement. Test billing, updates, splits, asset/feature delivery, authentication fingerprints, and install/upgrade from the Play-generated artifact.
+
+## Practical mistakes
+
+- ❌ Overwrite artifacts named `app-release.aab` with no metadata.
+- ✅ Use immutable storage keyed by version/build/digest.
+- ❌ Upload symbols but ignore upload failure.
+- ✅ Make symbol/mapping association a release gate and test crash decoding.
+- ❌ Assume internal testers represent production devices/accounts.
+- ✅ Combine track progression with device, version, and backend compatibility testing.
+
+## Sources
+
+- [Upload an app bundle and inspect generated APKs](https://developer.android.com/studio/publish/upload-bundle)
+- [Set up Play testing tracks](https://support.google.com/googleplay/android-developer/answer/9845334)
+

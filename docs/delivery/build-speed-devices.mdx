@@ -1,0 +1,50 @@
+---
+id: build-speed-devices
+title: Build caching, managed devices, and sharding
+---
+
+# Build caching, managed devices, and sharding
+
+Optimize only after measuring configuration, dependency resolution, compilation, tests, packaging, and queue time separately.
+
+## Gradle mechanisms
+
+- **Parallel execution** runs independent projects/tasks concurrently; it cannot fix serialized dependencies.
+- **Build cache** reuses task outputs only when inputs and outputs are correctly declared.
+- **Configuration cache** reuses configuration state; custom plugins/tasks must be compatible.
+- **Remote cache** helps clean CI runners, but untrusted branches should not poison a shared writable cache.
+
+```properties
+org.gradle.parallel=true
+org.gradle.caching=true
+org.gradle.configuration-cache=true
+```
+
+These are candidates, not magic switches. Validate correctness and compare build scans/metrics before and after. Avoid dynamic dependency versions and undeclared environment/file inputs, which damage reproducibility and cache hits.
+
+## Device-test portfolio
+
+Use Gradle-managed virtual devices for reproducible API/configuration coverage, physical-device labs for OEM/hardware behavior, and targeted matrices rather than every model on every PR.
+
+Shard by historical duration, not merely test count. One shard with two 10-minute tests and another with 100 tiny tests is not balanced. Preserve a stable mapping when diagnosing flakes and combine reports with unique test identifiers.
+
+## Corner cases
+
+- Empty shard exits successfully: assert discovered/executed count.
+- Emulator boot consumes the timeout: separate infrastructure failure from assertion failure.
+- Cached output contains machine paths or secrets: fix task inputs/outputs and sanitize artifacts.
+- UI tests share account/backend data: generate isolated namespaces and idempotent cleanup.
+
+## Practical mistakes
+
+- ❌ Run `clean` before every cached CI build.
+- ✅ Let incremental/cache mechanisms work unless cleanliness is the subject of the test.
+- ❌ Give forks write access to trusted remote cache or signing secrets.
+- ✅ Separate trust zones and permissions.
+
+## Sources
+
+- [Gradle build cache](https://docs.gradle.org/current/userguide/build_cache.html)
+- [Gradle configuration cache](https://docs.gradle.org/current/userguide/configuration_cache.html)
+- [Gradle-managed devices](https://developer.android.com/studio/test/gradle-managed-devices)
+
