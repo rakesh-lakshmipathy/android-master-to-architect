@@ -1,0 +1,87 @@
+---
+id: data-background-tests
+title: Room, HTTP, WorkManager, and migration tests
+---
+import Admonition from '@theme/Admonition';
+
+# Room, HTTP, WorkManager, and migration tests
+
+Fakes test policy quickly. Real adapters test the contracts fakes cannot reproduce: SQL, serialization, HTTP details, scheduler mapping, and schema evolution.
+
+## Room DAO behavior
+
+Use an isolated test database and verify actual query semantics:
+
+```kotlin
+@Test
+fun latestOrders_areTenantScopedAndDeterministic() = runTest {
+    dao.insertAll(order("B", tenant="T1", at=instant),
+                  order("A", tenant="T1", at=instant),
+                  order("X", tenant="T2", at=instant))
+
+    assertEquals(listOf("A", "B"), dao.latest("T1").map { it.id })
+}
+```
+
+Test empty/null, conflicts, transactions/rollback, foreign keys/cascade, ordering ties, pagination, Flow invalidation, concurrent operations, and account isolation. Android/device SQLite tests provide higher fidelity than mocking DAO.
+
+## Migration tests
+
+Export schemas in version control. Build each supported old schema/database fixture, insert representative and boundary data, run migration to current, validate schema, and assert data/invariants/indexes/defaults.
+
+```text
+v3 -> current
+v4 -> current
+v5 -> current
+```
+
+Testing only v5→v6 misses users upgrading from older installed versions. Include destructive migration only when data loss is an explicit acceptable product decision.
+
+## MockWebServer
+
+```kotlin
+server.enqueue(
+    MockResponse()
+        .setResponseCode(200)
+        .setHeader("Content-Type", "application/json")
+        .setBody(orderJson)
+)
+
+val result = api.order("O-1")
+val request = server.takeRequest()
+assertEquals("/orders/O-1", request.path)
+assertEquals("Bearer test-access", request.getHeader("Authorization"))
+```
+
+Test headers/path/query/body/encoding, unknown/missing/null fields, non-2xx error body, empty body, timeout/disconnect, large/streamed response, redirects, retry/idempotency, cancellation, and sensitive-header logging. TLS/config integration may need an additional higher-fidelity test.
+
+## WorkManager
+
+Separate:
+
+- use-case unit test (business result);
+- Worker adapter test (input → use case → `Result` mapping/progress/cancellation);
+- scheduling test (unique name/policy, constraints, tags, backoff, chain);
+- integration/device test (constraints/lifecycle if risk warrants).
+
+Use WorkManager testing helpers to initialize test driver/executor and mark constraints/delay as met. Verify retryable versus permanent failures and idempotency across repeated execution.
+
+## Integration fixture hygiene
+
+Each test owns server/database/files/account/time. Close database/server/dispatchers; delete temporary data; never share sequence-dependent fixtures. Emit useful artifacts on failure (requests/schema/state) without secrets.
+
+<Admonition type="danger" title="Migration tests protect user data">
+A migration that “builds successfully” can still drop rows, change null/default semantics, remove indexes, or violate tenant boundaries. Test data meaning, not only schema validation.
+</Admonition>
+
+## Sources
+
+- [Test Room database](https://developer.android.com/training/data-storage/room/testing-db)
+- [Test Room migrations](https://developer.android.com/training/data-storage/room/migrating-db-versions#test)
+- [Test Worker implementation](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/test-worker-implementation)
+- [MockWebServer](https://square.github.io/okhttp/5.x/mockwebserver/index.html)
+
+## Exercise
+
+Test offline order sync where server accepts a mutation then disconnects: worker retries, idempotency prevents duplicate, Room moves outbox to confirmed, and migration preserves pending rows.
+

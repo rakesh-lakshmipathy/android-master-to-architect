@@ -1,0 +1,78 @@
+---
+id: quality-flakes-reports
+title: Flakes, reports, coverage, and mutation testing
+---
+import Admonition from '@theme/Admonition';
+
+# Flakes, reports, coverage, and mutation testing
+
+A flaky test produces different results without a relevant code change. Flakes train teams to ignore red builds and hide real regressions.
+
+## Diagnose, do not add retries first
+
+Classify:
+
+- time/sleep/race/async work after test;
+- shared global/database/account/port/files;
+- test order/dependency;
+- network/external service;
+- device/emulator health/thermal/storage;
+- animations/rendering/screenshot environment;
+- locale/time zone/current date/random seed;
+- resource leak/process left dirty;
+- genuine production concurrency bug.
+
+Capture failure seed, test/device/API/build/commit, screenshots/video, logs, trace, hierarchy/semantics, requests, database state, and timing. Redact secrets.
+
+## Quarantine policy
+
+Quarantine only with owner, issue, reason, evidence, expiry, and visibility. It must not silently make release green forever. Track flake rate and time-to-repair; delete low-value tests that cannot justify maintenance.
+
+Retries can measure flake and reduce transient infrastructure noise, but they can also mask correctness. Preserve first failure and mark retried pass as flaky—not clean.
+
+## Reports as diagnosis
+
+Publish per-module/suite duration, failures, flakes, skipped/quarantined, device matrix, screenshots/traces, coverage trends, and changed-test impact. Make the first actionable cause obvious; avoid dumping 100 MB of logs.
+
+## Coverage
+
+Line/branch coverage reveals unexecuted code; it does not prove correct assertions, boundaries, concurrency, or requirements. Use it to find gaps, not as a quality score. Excluding generated/trivial code may improve signal; gaming the number destroys it.
+
+```text
+100% coverage:
+fun canWithdraw(balance: Int, amount: Int) = true
+
+Test calls function but never asserts policy -> covered, catastrophically wrong.
+```
+
+## Mutation testing
+
+Mutation tools alter code (flip condition, remove call, change boundary). A strong test suite should fail—“kill” the mutant. Surviving mutants expose missing assertions/test gaps or equivalent mutations.
+
+Use mutation testing selectively on pure, high-risk domain modules; Android/Compose-generated code and broad projects can be costly/noisy. Review surviving meaningful mutations, not chase 100% score blindly.
+
+## CI tiers
+
+```text
+pre-commit/PR: lint + unit + component + selected integration/contract
+merge: broader device/UI/migration/security
+nightly: device matrix, E2E, fuzz/property, screenshots
+release: candidate smoke, upgrade/migration, performance/accessibility
+production: staged rollout + vitals/observability
+```
+
+Shard by historical duration, cache safely, fail fast where useful, but always preserve all failures/artifacts for diagnosis. Assign suite runtime budgets.
+
+<Admonition type="warning" title="A green build is evidence within scope">
+It proves only the scenarios/assertions/environments executed. Record scope and gaps; production monitoring and staged rollout remain part of quality.
+</Admonition>
+
+## Sources
+
+- [Test in Android Studio](https://developer.android.com/studio/test)
+- [Android testing strategies](https://developer.android.com/training/testing/fundamentals/strategies)
+
+## Exercise
+
+Take five flaky tests. For each, gather evidence, classify root cause, remove sleep/shared state, add semantic waits, and define a quarantine SLA plus regression metric.
+

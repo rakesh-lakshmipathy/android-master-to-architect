@@ -1,0 +1,72 @@
+---
+id: test-levels-contracts
+title: Unit, integration, component, UI, E2E, and contract tests
+---
+
+# Unit, integration, component, UI, E2E, and contract tests
+
+Teams should define these terms in repository documentation; names vary. Scope, environment, dependencies, and purpose matter more than labels.
+
+## Example: checkout
+
+- Unit: `PriceCalculator` handles tax/discount/rounding boundaries.
+- Component: `CheckoutViewModel` maps cart/submit outcomes to UI state.
+- Integration: repository talks to Room + MockWebServer and reconciles outbox.
+- UI component: Compose checkout renders loading/error/price and emits submit intent.
+- Application UI: cart → checkout navigation with fake backend.
+- Contract: Android request/response fixtures conform to API/OpenAPI/provider behavior.
+- End-to-end: one sandbox payment journey across app/backend/provider.
+
+## Contract testing
+
+An Android consumer depends on method, path, headers, auth, JSON field type/nullability/defaults, enums, error format, pagination, idempotency, and compatibility rules. Test those assumptions independently of a brittle full environment.
+
+```kotlin
+@Test
+fun `unknown optional field and enum are handled safely`() {
+    val json = """{
+      "id":"O-1",
+      "status":"FUTURE_STATUS",
+      "newServerField":{"ignored":true}
+    }"""
+    val dto = tolerantJson.decodeFromString<OrderDto>(json)
+    assertEquals(OrderStatus.Unknown("FUTURE_STATUS"), dto.toDomain().status)
+}
+```
+
+Provider/consumer contracts do not replace integration tests: gateway/auth/database/runtime configuration may still fail.
+
+## Test boundaries, not private methods
+
+Assert observable outputs/state/effects at a stable public boundary. A test that verifies private call ordering often breaks during safe refactoring while missing the business invariant.
+
+Bad:
+
+```text
+verify repository.get() called exactly once before analytics.track()
+```
+
+Better:
+
+```text
+given duplicate submit events, one idempotent order exists,
+UI shows confirmed state, and a permitted analytics outcome is emitted
+```
+
+## E2E discipline
+
+Keep E2E journeys few and valuable. Own test accounts/data/environment reset, external provider stubs/sandboxes, timeouts, observability correlation, and artifact capture. Avoid assertions on every text pixel; verify the critical business result.
+
+## Negative and recovery paths
+
+For each happy path add the highest-risk alternatives: timeout after server commit, malformed/unknown response, permission revoked, process recreation, disk full, duplicate event, stale account, offline/online, and retry cancellation.
+
+## Sources
+
+- [Android testing fundamentals](https://developer.android.com/training/testing/fundamentals)
+- [Test in Android Studio](https://developer.android.com/studio/test)
+
+## Exercise
+
+Take one existing E2E test and split its policy checks into unit/component tests, wire/schema checks into integration/contracts, leaving only the cross-system journey in E2E.
+

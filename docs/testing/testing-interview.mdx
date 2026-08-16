@@ -1,0 +1,72 @@
+---
+id: testing-interview
+title: Testing architecture and interview lab
+---
+
+# Testing architecture and interview lab
+
+## Case study: offline checkout
+
+1. Pure unit tests cover money rounding, validation, state reducer, idempotency policy, conflict resolution, and retry classification.
+2. ViewModel component tests use fake repositories/clock/dispatchers and verify state/event/cancellation/recreation.
+3. Room device tests cover transactions, tenant scoping, ordering, Flow invalidation, and every supported migration path.
+4. MockWebServer/contract tests cover HTTP headers/schema/errors/timeouts and ambiguous post-commit disconnect.
+5. Worker tests cover input/result/backoff; scheduler tests cover unique work/constraints/tags.
+6. Compose screen tests render state matrix and semantic user intents; screenshot/accessibility tests cover representative configurations.
+7. Few application/E2E tests prove DI/navigation/auth and one sandbox checkout.
+8. Macrobenchmarks protect startup/checkout; production metrics and staged rollout cover real-world gaps.
+
+## Failure-injection checklist
+
+- duplicate tap and server success with lost response;
+- malformed/unknown JSON and 401/403/429/500;
+- rotating refresh concurrency;
+- database full/transaction rollback/migration from oldest supported version;
+- process death during pending checkout;
+- account switch while work is queued;
+- Flow subscriber absent/late and stale result after `flatMapLatest`;
+- permission denied/revoked and offline/online transition;
+- RTL/large font/dark/expanded window/TalkBack;
+- slow emulator, animation, locale/time/random ordering;
+- external sandbox unavailable;
+- fake diverges from real adapter contract.
+
+## Interview questions
+
+1. **Pyramid or portfolio?** Pyramid guides cost distribution; portfolio maps specific product risks to cheapest sufficient fidelity, including hardware/performance/security/production.
+2. **Unit versus integration?** Isolated functional unit versus multiple real collaborators/boundary behavior; define team terminology explicitly.
+3. **Why not E2E everything?** Slow, brittle, difficult diagnosis/data/environment; move decisions to narrow tests and keep critical wiring journeys.
+4. **When fake versus mock?** Stateful reusable behavior versus verifying an interaction contract; prefer observable outcomes unless call itself matters.
+5. **Why can fake be dangerous?** It may omit SQL/server/scheduler semantics; run shared contracts and real adapter tests.
+6. **What makes concurrency testable?** injected scheduler/dispatcher/clock, structured scopes, explicit state/events, no sleeps/global work.
+7. **`runTest` benefit?** structured test scope, shared scheduler, virtual delays, child exception/leak handling.
+8. **Why can StateFlow test hang?** Infinite collection is a child of `runTest`; use finite operators or cancellable `backgroundScope` collector.
+9. **Why subscribe to `stateIn(WhileSubscribed)` in test?** Upstream may remain inactive without collector even when reading current value.
+10. **How test Room migration?** Export schemas, create each supported old version with representative data, migrate/validate schema and semantic data/indexes.
+11. **MockWebServer value?** Verifies actual HTTP request/serialization/error/timeout behavior without an external environment.
+12. **Espresso versus UI Automator?** In-app synchronized View interaction versus cross-app/system UI automation.
+13. **Robolectric trade-off?** Fast host framework simulation; not full device/OEM/render/Binder/hardware fidelity.
+14. **Why semantics-based Compose tests?** Stable user meaning and accessibility contract rather than layout implementation.
+15. **Screenshot limitation?** Pixel fidelity depends on environment and cannot prove behavior/accessibility.
+16. **How fix flakes?** Preserve evidence, classify nondeterminism, control time/state/environment, semantic waits, cleanup; retries/quarantine are managed temporary tools.
+17. **Coverage limitation?** Execution does not prove assertions or requirements; use for gaps, combined with risk/quality evidence.
+18. **Mutation testing?** Deliberately changes code to see whether tests detect behavioral faults; useful selectively for high-risk pure logic.
+
+## Review checklist
+
+- [ ] Risks map to explicit test layers/environments and no layer duplicates blindly.
+- [ ] Time, IDs, dispatchers, external effects, and state are controllable.
+- [ ] Doubles model important semantics and share contracts with real adapters.
+- [ ] Coroutines/Flow tests use one scheduler, virtual time, finite/background collection, and cancellation assertions.
+- [ ] Room/API/Worker/migration tests cover real boundary failure semantics.
+- [ ] UI tests use semantics/observable idleness; system UI uses appropriate cross-app tool.
+- [ ] Compose state/configuration/accessibility/screenshot matrices are intentional.
+- [ ] Flakes/quarantines have evidence, owner, expiry, and metric.
+- [ ] Coverage/mutation/performance/security reports complement—not replace—requirements.
+- [ ] CI tiers are fast, diagnosable, sharded, artifact-rich, and production-connected.
+
+## Exercises
+
+1. Produce a test strategy ADR for a payments app with suite budgets and release gates.
+2. Convert a sleep-based UI test to deterministic fake server + semantic idling.
+3. Add a mutation run to the money module and analyze five meaningful survivors.

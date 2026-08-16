@@ -1,0 +1,86 @@
+---
+id: coroutines-flow
+title: JUnit, coroutine tests, Flow, and virtual time
+---
+import Admonition from '@theme/Admonition';
+
+# JUnit, coroutine tests, Flow, and virtual time
+
+`runTest` provides a test scope and scheduler, skips virtual delays, waits for its child coroutines, and reports uncaught exceptions. All test dispatchers in one test should share its scheduler.
+
+```kotlin
+@Test
+fun `retry uses exponential delays and succeeds`() = runTest {
+    val api = ScriptedApi(Failure, Failure, Success(order))
+    val subject = RetryingLoader(api, StandardTestDispatcher(testScheduler))
+
+    val result = async { subject.load() }
+    runCurrent()                 // start first attempt
+    advanceTimeBy(1_000)
+    runCurrent()
+    advanceTimeBy(2_000)
+    runCurrent()
+
+    assertEquals(order, result.await())
+    assertEquals(3, api.calls)
+}
+```
+
+- `StandardTestDispatcher`: queued execution; tests explicitly yield/run/advance.
+- `UnconfinedTestDispatcher`: eagerly starts coroutines, useful in some tests but can hide ordering differences; not identical to production Main.
+- `advanceUntilIdle`: completes all scheduled work; avoid when testing intermediate timing because it can skip past the state under assertion.
+
+## Replace Main carefully
+
+Use a JUnit rule/extension calling `Dispatchers.setMain(testDispatcher)` and reset afterward. Create all test dispatchers after/shared with the same scheduler. Prefer production classes that are main-safe and inject non-main dispatchers where they perform blocking work.
+
+## Test Flow as output
+
+```kotlin
+@Test
+fun `state changes loading to content`() = runTest {
+    val repo = FakeRepo()
+    val vm = OrdersViewModel(repo)
+    val states = mutableListOf<OrdersUiState>()
+    val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+        vm.uiState.take(3).toList(states)
+    }
+
+    repo.emit(listOf(order))
+    runCurrent()
+
+    assertEquals(OrdersUiState.Content(listOf(order)), states.last())
+    job.cancel()
+}
+```
+
+Libraries such as Turbine can express `awaitItem`, no-event, completion, and error clearly. Always cancel finite test collection or use `backgroundScope`; infinite StateFlow collection can hang `runTest`.
+
+## Test Flow as input
+
+Expose a controllable fake `MutableSharedFlow`/`MutableStateFlow`, then emit values and assert the consumer. Configure replay/buffer deliberately. `emit` may suspend if no collector/buffer; start consumer and `runCurrent` first.
+
+## Hot-flow activation
+
+`stateIn(WhileSubscribed)` may not collect upstream unless a subscriber exists—even if test reads `.value`. Start a background collector to activate it. Test initial value, stop timeout, replay expiry, and resubscription when those semantics matter.
+
+## Cancellation and exceptions
+
+- Re-throw `CancellationException`; assert cleanup in `finally`.
+- Use supervisor behavior tests for sibling failures.
+- Verify stale `flatMapLatest` work is cancelled and cannot overwrite latest state.
+- Capture uncaught child exceptions; do not bury in `launch` after test ends.
+
+<Admonition type="warning" title="Virtual time covers coroutine delays, not every clock">
+`System.currentTimeMillis`, `Instant.now`, real executors, Rx schedulers, callbacks, and network time remain real unless injected/controlled.
+</Admonition>
+
+## Sources
+
+- [Test Kotlin coroutines](https://developer.android.com/kotlin/coroutines/test)
+- [Test Kotlin Flow](https://developer.android.com/kotlin/flow/test)
+
+## Exercise
+
+Test debounce + `flatMapLatest`: queries A/B/C, A returns last, only C reaches UI; then verify cancellation cleanup and no event after ViewModel clear.
+

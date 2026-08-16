@@ -1,0 +1,92 @@
+---
+id: testable-architecture
+title: Testable architecture and deterministic concurrency
+---
+import Admonition from '@theme/Admonition';
+
+# Testable architecture and deterministic concurrency
+
+Testability follows explicit inputs, outputs, ownership, time, randomness, scheduling, and side effects—not adding interfaces to every class.
+
+## Inject nondeterminism
+
+```kotlin
+interface AppClock { fun now(): Instant }
+interface IdGenerator { fun newId(): String }
+
+class CreateDraft(
+    private val clock: AppClock,
+    private val ids: IdGenerator,
+    private val store: DraftStore,
+) {
+    suspend operator fun invoke(text: String): Draft {
+        val draft = Draft(ids.newId(), text, clock.now())
+        store.save(draft)
+        return draft
+    }
+}
+```
+
+Also abstract filesystem/network/database/sensors only at meaningful boundaries. Do not wrap `String.length` or mirror huge third-party APIs.
+
+## Inject execution context at ownership boundary
+
+```kotlin
+class OrderRepository(
+    private val api: OrderApi,
+    private val dao: OrderDao,
+    private val io: CoroutineDispatcher,
+) {
+    suspend fun refresh() = withContext(io) {
+        dao.replaceAll(api.orders().map(OrderDto::toEntity))
+    }
+}
+```
+
+The caller should not need real threads/sleeps. For lifecycle scopes, inject dependencies/dispatchers and observe outputs rather than replacing `viewModelScope` casually.
+
+## State machine over callbacks
+
+```kotlin
+data class CheckoutState(
+    val phase: Phase,
+    val error: CheckoutError? = null,
+)
+
+sealed interface CheckoutEvent {
+    data object Submit : CheckoutEvent
+    data class Completed(val orderId: String) : CheckoutEvent
+    data class Failed(val cause: CheckoutError) : CheckoutEvent
+}
+
+fun reduce(state: CheckoutState, event: CheckoutEvent): CheckoutState = TODO()
+```
+
+Pure reducers make duplicate/out-of-order/cancellation/recreation scenarios enumerable. Side-effect handlers execute commands separately.
+
+## No sleeps and polling
+
+- ❌ `Thread.sleep(1000); assertTrue(done)`
+- ✅ virtual time or await a semantic condition with timeout.
+- ❌ shared global singleton altered by test order.
+- ✅ fresh fixture and explicit reset/DI scope.
+- ❌ `Dispatchers.IO` hardcoded everywhere.
+- ✅ inject dispatcher/executor where scheduling affects test.
+
+## Deterministic data
+
+Builders/factories should produce explicit defaults; random/property generation uses captured seeds. Freeze locale/time zone/clock where relevant, but add matrix tests for real variations. Do not let tests depend on current date or device language accidentally.
+
+<Admonition type="warning" title="Testability must not distort production design">
+Use seams at volatility/side-effect boundaries. An interface per one-line class and test-only public setters increase complexity without confidence.
+</Admonition>
+
+## Sources
+
+- [Build local unit tests](https://developer.android.com/training/testing/local-tests)
+- [Test doubles in Android](https://developer.android.com/training/testing/fundamentals/test-doubles)
+
+## Exercise
+
+Refactor code using `Instant.now()`, UUID, singleton API, `GlobalScope`, and `delay` into explicit collaborators, then test duplicate submit and timeout without real time.
+

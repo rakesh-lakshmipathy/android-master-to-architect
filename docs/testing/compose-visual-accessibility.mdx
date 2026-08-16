@@ -1,0 +1,85 @@
+---
+id: compose-visual-accessibility
+title: Compose UI, semantics, screenshots, and accessibility tests
+---
+import Admonition from '@theme/Admonition';
+
+# Compose UI, semantics, screenshots, and accessibility tests
+
+Compose tests interact with the semantics tree—the same meaning layer used by accessibility—not implementation function names.
+
+```kotlin
+@get:Rule val composeRule = createComposeRule()
+
+@Test
+fun retry_movesErrorToLoading() {
+    composeRule.setContent {
+        OrdersScreen(
+            state = OrdersUiState.Error("Offline"),
+            onRetry = onRetry,
+        )
+    }
+
+    composeRule.onNodeWithText("Offline").assertIsDisplayed()
+    composeRule.onNodeWithText("Retry").performClick()
+    assertEquals(1, onRetry.calls)
+}
+```
+
+Prefer role/text/state/content description and stable business-purpose test tags only when semantics cannot express identity. Overusing tags couples tests to internal layout.
+
+## Merged versus unmerged semantics
+
+Buttons/clickable containers merge descendants. Inspect with:
+
+```kotlin
+composeRule.onRoot(useUnmergedTree = true).printToLog("SEMANTICS")
+```
+
+Do not force unmerged matching to bypass a broken accessible experience. Fix role/label/state/click action/merging first.
+
+## State matrix
+
+Render a screen with pure inputs:
+
+- loading/content/empty/error/offline/stale;
+- long text, RTL, large font, dark/high contrast;
+- compact/expanded window, keyboard, orientation;
+- permission denied, partial data, destructive confirmation;
+- list reorder/stable keys and restoration.
+
+Test behavior separately from navigation/integration where possible.
+
+## Test clock
+
+Compose test clock can control animation/frame advancement. Disable auto-advance to assert intermediate states; avoid wall-clock sleeps. External coroutines/network still require their own controlled scheduler/idling.
+
+## Screenshot tests
+
+Screenshot/golden tests catch visual regressions but are sensitive to font rendering, OS, density, GPU, animation, locale, time, dynamic content, and library changes. Pin environment, deterministic data/assets, disable animations, review diffs, and keep goldens focused on high-value components/screens.
+
+A pixel match cannot prove semantic accessibility or interaction correctness.
+
+## Accessibility
+
+Automated checks can flag missing labels, touch targets, contrast, traversal, and semantics issues. Compose rules can enable accessibility checks where supported. Also manually test TalkBack, Switch Access, keyboard, magnification, font/display scaling, and real task completion—automation cannot judge every announcement/order/cognitive issue.
+
+```kotlin
+composeRule.enableAccessibilityChecks()
+composeRule.onRoot().tryPerformAccessibilityChecks()
+```
+
+<Admonition type="tip" title="Semantics are product behavior">
+A test that can find “Pay $42, Button, disabled” by role/name/state is more robust and accessible than one finding `testTag=btn_7`.
+</Admonition>
+
+## Sources
+
+- [Test Compose layouts](https://developer.android.com/develop/ui/compose/testing)
+- [Compose semantics](https://developer.android.com/develop/ui/compose/accessibility/semantics)
+- [Compose accessibility testing](https://developer.android.com/develop/ui/compose/accessibility/testing)
+
+## Exercise
+
+Create behavior, screenshot, and accessibility matrices for checkout across large font, RTL, dark mode, offline error, loading, expired price, and destructive confirmation.
+

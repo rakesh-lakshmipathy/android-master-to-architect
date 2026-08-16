@@ -1,0 +1,84 @@
+---
+id: test-doubles
+title: Fakes, stubs, mocks, and spies
+---
+import Admonition from '@theme/Admonition';
+
+# Fakes, stubs, mocks, and spies
+
+“Mock” is often used for every double, but each has different trade-offs.
+
+| Double | Behavior | Use |
+|---|---|---|
+| dummy | passed but unused | satisfy irrelevant parameter |
+| stub | returns configured answer | force success/error branch |
+| fake | working simplified implementation | realistic stateful dependency |
+| mock | asserts expected interactions | side-effect protocol matters |
+| spy | records/delegates real behavior | rare observation of existing collaborator |
+
+## Stateful fake
+
+```kotlin
+class FakeOutboxStore : OutboxStore {
+    private val rows = linkedMapOf<String, OutboxItem>()
+
+    override suspend fun insert(item: OutboxItem) {
+        check(item.id !in rows) { "duplicate id" }
+        rows[item.id] = item
+    }
+
+    override suspend fun pending(): List<OutboxItem> =
+        rows.values.filter { it.state == Pending }
+}
+```
+
+A good fake implements important semantics (unique IDs, ordering, state transitions), otherwise tests pass while Room/server fails. Periodically validate the fake against shared contract tests.
+
+## Interaction verification only when interaction is contract
+
+Useful mock examples:
+
+- audit event must be emitted once after successful transfer;
+- email/push sender must not run on validation failure;
+- transaction gateway receives idempotency key.
+
+Brittle example: verify mapper and repository internal methods in exact refactoring order when only final state matters.
+
+## Capturing side effects
+
+Often a recording fake is clearer than a framework mock:
+
+```kotlin
+class RecordingAnalytics : Analytics {
+    val events = mutableListOf<SafeEvent>()
+    override fun record(event: SafeEvent) { events += event }
+}
+```
+
+Assert event schema and absence of sensitive fields, not the internal call stack.
+
+## Do not mock what you need to learn
+
+- Testing SQL query/migration? Use real Room/SQLite.
+- Testing JSON/HTTP headers? Use serializer + MockWebServer/contract server.
+- Testing WorkManager constraints? Use WorkManager test tools.
+- Testing Compose semantics? Render Compose.
+
+Mocks of these libraries tend to confirm your assumptions rather than reality.
+
+## Failure scripting
+
+Fakes should support timeout, cancellation, partial success, duplicate/out-of-order data, stale response, and “server succeeded but response lost.” Avoid a single Boolean `shouldFail`; model domain outcomes.
+
+<Admonition type="tip" title="Prefer behavior confidence">
+Start with state/output assertions and small fakes. Add mocks where the interaction itself is the externally important contract.
+</Admonition>
+
+## Sources
+
+- [Use test doubles in Android](https://developer.android.com/training/testing/fundamentals/test-doubles)
+
+## Exercise
+
+Implement the same repository test using a stub, stateful fake, and mock. Compare which catches duplicate writes, ordering errors, and internal-refactor noise.
+

@@ -1,0 +1,67 @@
+---
+id: test-portfolio
+title: From test pyramid to risk portfolio
+---
+import Admonition from '@theme/Admonition';
+
+# From test pyramid to risk portfolio
+
+The pyramid suggests many fast narrow tests and fewer slow broad tests. Useful—but architecture, hardware, compliance, migration risk, and failure cost determine the real portfolio.
+
+## Optimize feedback and confidence
+
+| Test | Speed/isolation | Fidelity | Best at |
+|---|---|---|---|
+| pure unit | highest | low runtime fidelity | policies, boundaries, state machines |
+| component | high | one component | ViewModel/screen/module behavior |
+| integration | medium | real adapters/boundaries | SQL, HTTP serialization, DI wiring |
+| UI | medium/slow | Android/UI runtime | semantics, interaction, navigation |
+| end-to-end | slowest | broad system | few critical journeys/configuration |
+| contract | medium | interface fidelity | consumer/provider compatibility |
+
+Use the **lowest-cost test that can falsify the risk**. A currency rounding rule belongs in a unit test; Room migration needs real SQLite/Room; App Link routing needs device/manifest integration; BLE reliability needs protocol unit tests plus selected real hardware.
+
+## Risk inventory
+
+For each feature, score impact, likelihood/change frequency, detectability, and testability:
+
+```text
+money transfer duplication -> idempotency unit + API integration + E2E smoke
+Room schema migration       -> exported schema migration tests on upgrade paths
+button color                -> screenshot/design review, not 20 E2E tests
+camera OEM behavior         -> CameraX component + real-device matrix
+```
+
+## Good portfolio properties
+
+- Fast pre-merge suite catches most logic/regressions near the change.
+- Adapter/contract tests cover places fakes could lie.
+- A small stable journey suite proves packaging, DI, navigation, backend environment.
+- Performance/accessibility/security/migration tests are first-class, not afterthoughts.
+- Production monitoring covers conditions laboratory tests cannot enumerate.
+- Every test has owner, purpose, failure diagnostics, and retirement/update path.
+
+## Anti-patterns
+
+- ❌ 1,000 mocked implementation tests and no real SQL/HTTP schema test.
+- ✅ domain tests plus selected real boundary integration.
+- ❌ duplicate the same happy path at every layer.
+- ✅ distribute distinct risks across layers.
+- ❌ chase 100% line coverage.
+- ✅ cover decisions, invariants, boundaries, failures, and high-risk journeys.
+- ❌ make nightly E2E the first signal.
+- ✅ move feedback to unit/component/contract tests before merge.
+
+<Admonition type="tip" title="Tests are an economic portfolio">
+Confidence gained must exceed runtime, maintenance, diagnosis, environment, and opportunity cost. A flaky broad test can consume more trust than it creates.
+</Admonition>
+
+## Sources
+
+- [Android testing strategies](https://developer.android.com/training/testing/fundamentals/strategies)
+- [What to test](https://developer.android.com/training/testing/fundamentals/what-to-test)
+
+## Exercise
+
+Build a risk-to-test matrix for login, offline order creation, database upgrade, push navigation, checkout, and camera scanning. Explain why each risk belongs at its chosen layer.
+

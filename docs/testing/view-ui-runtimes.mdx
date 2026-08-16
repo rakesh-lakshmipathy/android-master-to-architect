@@ -1,0 +1,70 @@
+---
+id: view-ui-runtimes
+title: Espresso, UI Automator, Robolectric, and devices
+---
+import Admonition from '@theme/Admonition';
+
+# Espresso, UI Automator, Robolectric, and devices
+
+## Espresso
+
+Espresso interacts inside your app process/view hierarchy and synchronizes with the main looper and registered idling resources. Use it for Views and hybrid app behavior where matching/action/assertion fits.
+
+```kotlin
+onView(withId(R.id.email)).perform(typeText("user@example.com"))
+onView(withId(R.id.submit)).perform(click())
+onView(withText("Welcome")).check(matches(isDisplayed()))
+```
+
+Synchronization does not automatically know custom executors, coroutines not integrated with idling, sockets, WorkManager, or animations. Expose semantic app-idle conditions/idling resources rather than add sleeps.
+
+## UI Automator
+
+UI Automator works across apps/system UI. Use it for permission dialogs, Settings, notification shade, chooser, App Links/browser, process/task journeys, and full-app Macrobenchmark interactions.
+
+System text/layout varies by API/OEM/locale; prefer resource IDs/semantic selectors and isolate platform adapters. Do not use UI Automator for every in-app button—it is broader and more brittle.
+
+## Robolectric
+
+Robolectric runs Android-like framework behavior on host JVM, fast and convenient for component tests. It is useful when the shadowed behavior matches the risk, but not proof of actual Binder, rendering/GPU, OEM, SQLite/filesystem/network security, hardware, process death, or performance.
+
+Use device/instrumented tests when runtime fidelity matters. A balanced suite can run many Robolectric component tests pre-merge and a targeted device matrix for critical platform behavior.
+
+## Instrumented/device tests
+
+Control:
+
+- test application/DI and fake backend;
+- animations, locale, font scale, dark mode, orientation/window size;
+- permission and notification state;
+- account/data reset;
+- emulator snapshot/device API and vendor matrix;
+- process kill/recreation and background restrictions;
+- screenshots/video/logcat/test trace on failure.
+
+Never depend on test execution order or a previous test’s login. Use per-test accounts/data or deterministic reset API.
+
+## Idling by observable state
+
+- UI node appears because repository state completed;
+- fake server receives expected request;
+- database row reaches confirmed;
+- WorkInfo terminal state;
+- Compose test clock advances animation.
+
+Bound every await with diagnostics. A global 60-second sleep both slows success and obscures failure.
+
+<Admonition type="warning" title="Choose fidelity by risk">
+A host test that passes cannot validate system permission dialog or OEM camera behavior; a device E2E test is unnecessarily expensive for a pure price function.
+</Admonition>
+
+## Sources
+
+- [Espresso](https://developer.android.com/training/testing/espresso)
+- [UI Automator](https://developer.android.com/training/testing/other-components/ui-automator)
+- [Robolectric](https://robolectric.org/)
+
+## Exercise
+
+Assign runtime/tool for: form validation, Fragment behavior, permission denial, notification tap, database migration, chooser share, process death, and BLE OEM compatibility.
+
