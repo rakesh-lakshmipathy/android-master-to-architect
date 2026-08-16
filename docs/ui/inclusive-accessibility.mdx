@@ -1,0 +1,64 @@
+---
+id: inclusive-accessibility
+title: Practical Android accessibility
+---
+import Admonition from '@theme/Admonition';
+
+# Practical Android accessibility
+
+Accessibility is not a final audit. It changes component choice, information hierarchy, error recovery, motion, and test strategy from the start.
+
+## A control needs five things
+
+1. Understandable name
+2. Correct role
+3. Current state/value
+4. Available action
+5. Operable target and focus behavior
+
+```kotlin
+IconButton(onClick = onDelete) {
+    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_invoice))
+}
+```
+
+“Delete” alone may be ambiguous in a list. “Delete invoice 1042” gives context. Decorative icons use a null description so they do not become noise.
+
+## Touch, contrast, and non-color signals
+
+- Interactive targets should normally provide at least a 48dp target even if the visual icon is smaller.
+- Text and meaningful controls need sufficient contrast in every theme/state.
+- Never encode failure/success only with red/green; add text, icon shape, and semantics.
+- Do not disable zoom or assume normal font scale.
+
+❌ Fixed-height card clips translated or 200% font-scale text.
+
+✅ Let content determine height, constrain only where the product can safely truncate, and expose the full information elsewhere.
+
+## Focus and dynamic updates
+
+Focus order must follow task order, not merely drawing order. After validation, move focus only when it helps; unexpected focus jumps disorient users. For async errors, expose an appropriate live-region announcement without repeatedly announcing on every recomposition.
+
+Custom gestures need an equivalent click/custom accessibility action. Drag-only reorder must offer move up/down actions.
+
+## Manual test journey
+
+Test with screen off or eyes closed:
+
+1. Launch via TalkBack.
+2. Traverse in reading order.
+3. Complete the primary task.
+4. Trigger validation/network failure and recover.
+5. Repeat with large font/display size, Switch Access, keyboard, dark theme, and reduced motion.
+
+Automated checks catch classes of errors, but cannot judge whether labels, grouping, and task flow make sense.
+
+<Admonition type="tip" title="Architect responsibility">
+Put accessibility acceptance criteria in the design system and definition of done. Otherwise each feature rediscovering them creates inconsistent quality and expensive remediation.
+</Admonition>
+
+## Interview questions
+
+1. Why is a content description insufficient for a custom switch?
+2. How would a blind user reorder a drag-only list?
+3. Design accessible validation for a five-field form.

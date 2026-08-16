@@ -1,0 +1,55 @@
+---
+id: foldables-multiwindow
+title: Foldables, tablets, multi-window, and resizable activities
+---
+import Admonition from '@theme/Admonition';
+
+# Foldables, tablets, multi-window, and resizable activities
+
+## Posture is additional information
+
+Window size determines available area. Folding features describe occlusion/separation and posture. Do not assume every hinge blocks content; some are flat, some separate panes, and geometry changes.
+
+For a book-like posture, place panes on safe regions only when the hinge is separating. For a tabletop posture, controls may belong below the fold and content above. Always retain a size-based fallback.
+
+## Multi-window changes lifecycle assumptions
+
+Multiple activities/apps may be visible or resumed. Do not treat `onPause` as “fully invisible” or stop essential visible playback blindly. Use lifecycle plus actual product needs, audio focus, PiP state, and visibility APIs.
+
+Resizable activities must handle continuous configuration changes without recreating repositories, losing drafts, or repeatedly re-fetching because a composable re-entered.
+
+## Configuration change versus process death
+
+Resize can recreate UI depending on configuration handling; system pressure can later kill the process. The same ownership rules apply:
+
+- ViewModel: configuration continuity
+- saved state: small reconstruction inputs
+- Room/DataStore/server: durable truth
+- remember: current composition only
+
+## Resource and performance considerations
+
+Larger windows may render more rows, higher-resolution images, and two live panes. Memory/network work can rise sharply. Size image requests to rendered bounds, page large datasets, and measure simultaneous pane work.
+
+## Anti-patterns
+
+- ❌ lock portrait to avoid layout work
+- ❌ use screen pixels captured once at launch
+- ❌ duplicate phone and tablet ViewModels with drifting rules
+- ❌ place a dialog or important control under a hinge
+- ✅ one domain state with adaptive presentation and posture-aware placement
+
+<Admonition type="warning" title="Runtime change">
+Folding, docking, rotation, split-screen, and desktop resizing can occur while a task is active. Test transitions, not only static previews.
+</Admonition>
+
+## Sources
+
+- [Build adaptive apps](https://developer.android.com/develop/ui/compose/build-adaptive-apps)
+- [Support different display sizes](https://developer.android.com/develop/adaptive-apps/guides/support-different-display-sizes)
+
+## Interview exercises
+
+1. Handle a video editor moving into split screen during export.
+2. Where should a draft live while a foldable changes posture?
+3. Plan memory tests for two-pane product browsing.

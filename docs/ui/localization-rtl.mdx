@@ -1,0 +1,80 @@
+---
+id: localization-rtl
+title: Localization, formatting, plurals, and RTL
+---
+import Admonition from '@theme/Admonition';
+
+# Localization, formatting, plurals, and RTL
+
+## Translate messages, not fragments
+
+❌ Concatenation assumes English order:
+
+```kotlin
+Text("Hello " + userName + ", you have " + count + " messages")
+```
+
+✅ Give translators one complete resource with placeholders:
+
+```xml
+<string name="inbox_greeting">Hello %1$s, you have %2$d messages</string>
+```
+
+For quantities, use plurals because grammatical rules differ by locale:
+
+```xml
+<plurals name="message_count">
+    <item quantity="one">%d message</item>
+    <item quantity="other">%d messages</item>
+</plurals>
+```
+
+```kotlin
+val label = pluralStringResource(R.plurals.message_count, count, count)
+```
+
+Zero is not universally a special plural category; use Android/CLDR rules rather than `if (count == 1)` scattered through code.
+
+## Formatting belongs to locale-aware APIs
+
+Do not hardcode `"$1,234.50"`, `dd/MM/yyyy`, commas, or string capitalization. Use currency/number/date formatting with the intended locale and time zone. Store instants and numeric values structurally; format at the presentation edge.
+
+```kotlin
+val priceLabel = NumberFormat.getCurrencyInstance(locale).apply {
+    currency = Currency.getInstance(currencyCode)
+}.format(amount)
+```
+
+The currency code must come from business data; device locale alone cannot tell whether a transaction is USD or INR.
+
+## RTL is more than mirrored text
+
+- Use start/end, not left/right, for layout intent.
+- Directional icons such as back/forward often mirror; clocks, media play, and brand marks often do not.
+- Test mixed-direction content such as Arabic text containing an email or phone number.
+- Avoid baking text into images.
+
+## Pseudolocales expose bugs early
+
+`en-XA` expands/accentuates text and exposes hardcoding. `ar-XB` simulates RTL. Enable them in debug builds and include screenshots/UI checks in CI for important screens.
+
+```kotlin
+android {
+    buildTypes.debug { isPseudoLocalesEnabled = true }
+}
+```
+
+<Admonition type="warning" title="Resource completeness">
+Every referenced resource needs a default value. A translated directory may be partial; the unqualified default set must remain complete or some configurations can crash.
+</Admonition>
+
+## Sources
+
+- [Localize your app](https://developer.android.com/guide/topics/resources/localization)
+- [Test with pseudolocales](https://developer.android.com/guide/topics/resources/pseudolocales)
+
+## Interview exercises
+
+1. Localize “1 file deleted” and “5 files deleted.”
+2. Explain why device locale cannot choose a transaction currency.
+3. Review a checkout UI for RTL and text-expansion failures.

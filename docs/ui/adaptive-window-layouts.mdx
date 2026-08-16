@@ -1,0 +1,74 @@
+---
+id: adaptive-window-layouts
+title: Window size classes and adaptive layouts
+---
+import Admonition from '@theme/Admonition';
+
+# Window size classes and adaptive layouts
+
+## Adapt to the app window, not a device label
+
+“Tablet” is not a stable layout fact. A tablet can run a narrow split-screen window; a foldable can change size while the app runs; desktop windows resize freely.
+
+```kotlin
+@Composable
+fun CatalogApp(
+    windowSizeClass: WindowSizeClass = currentWindowAdaptiveInfo().windowSizeClass,
+) {
+    val expanded = windowSizeClass.isWidthAtLeastBreakpoint(
+        WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND
+    )
+    CatalogLayout(showListAndDetail = expanded)
+}
+```
+
+Centralize high-level adaptation and pass meaningful decisions (`showListAndDetail`) down. Do not scatter raw width checks throughout components.
+
+## Canonical layouts
+
+- List-detail: messages, products, settings categories
+- Supporting pane: editor plus tools/properties
+- Feed: content cards that use larger area effectively
+
+Expanded layout is not a stretched phone. It should improve task throughput, preserve context, and avoid a narrow column floating in unused space.
+
+## State continuity during resize
+
+When compact becomes expanded:
+
+- selected entity remains the same
+- list scroll remains useful
+- draft and validation remain intact
+- focus moves only if necessary
+- back behavior is recalculated without losing history
+
+Keep selection/business state outside the conditional pane branches; otherwise changing layout removes the composable and its remembered state.
+
+## Width and height both matter
+
+A landscape phone may have medium width but compact height. Two full panes plus app bars and keyboard may be unusable. Test width/height combinations and IME visibility rather than width alone for height-sensitive experiences.
+
+## Practical test matrix
+
+- 360 × 800 compact portrait
+- compact landscape with short height
+- 600/840dp breakpoint boundaries minus/at/plus 1dp
+- expanded tablet portrait/landscape
+- live drag-resize and split screen
+- unfolded/folded posture changes
+- large font + keyboard/IME
+
+<Admonition type="tip" title="Architect takeaway">
+Adaptive UI is a state transition problem. Separate persistent task state from replaceable pane arrangement so configuration changes do not restart the user's work.
+</Admonition>
+
+## Sources
+
+- [Use window size classes](https://developer.android.com/develop/adaptive-apps/guides/use-window-size-classes)
+- [Canonical layouts](https://developer.android.com/develop/ui/views/layout/canonical-layouts)
+
+## Interview exercises
+
+1. Why is `isTablet` weaker than current window size?
+2. Design list-detail state when resizing between one and two panes.
+3. What do you test at 599dp, 600dp, 839dp, and 840dp?

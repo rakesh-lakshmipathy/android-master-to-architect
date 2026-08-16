@@ -1,0 +1,60 @@
+---
+id: inclusive-adaptive-interview
+title: Inclusive and adaptive UI interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Inclusive and adaptive UI interview lab
+
+## Rapid questions
+
+<details><summary><strong>Why not detect tablets?</strong></summary><p>The current app window, not physical device category, determines available layout space. Multi-window, folding, orientation, and desktop resize can change it at runtime.</p></details>
+
+<details><summary><strong>Why not concatenate translated strings?</strong></summary><p>Languages reorder words and apply grammar differently. One complete resource with typed placeholders gives translators the necessary context and freedom.</p></details>
+
+<details><summary><strong>Do automated accessibility checks prove accessibility?</strong></summary><p>No. They find certain mechanical violations; manual assistive-technology testing and user/task evaluation are still needed.</p></details>
+
+## System-design scenario: adaptive messaging
+
+Requirements: phone, foldable, tablet, desktop window, TalkBack, keyboard, offline drafts.
+
+- Repository owns conversations/messages and sync.
+- ViewModel owns selected conversation ID and screen state.
+- Drafts are saved durably per conversation.
+- Compact layout shows list or detail; expanded shows both.
+- Hinge geometry prevents content occlusion.
+- Keyboard shortcuts dispatch the same intents as buttons.
+- Message rows merge semantics carefully; independent actions remain separately reachable.
+- Dates/plurals use locale-aware formatters/resources.
+- Resize preserves selection, draft, scroll anchors, and focus intent.
+
+## Failure review
+
+- ❌ Fixed 56dp row clips at large font.
+- ✅ Minimum size expands with content and preserves target.
+- ❌ `if (screenWidthPx > 1000)` captured at startup.
+- ✅ Observe current window class and transition layouts.
+- ❌ Save draft only in `rememberSaveable`.
+- ✅ Persist valuable draft to local storage.
+- ❌ Drag attachment trusts `.jpg` filename.
+- ✅ Validate/limit streamed content from URI.
+
+## Completion checklist
+
+- [ ] Primary tasks work with TalkBack, Switch Access, and keyboard.
+- [ ] Text survives large font and localization expansion.
+- [ ] Plurals, numbers, dates, currencies, and RTL are correct.
+- [ ] Layout adapts to current window and posture changes.
+- [ ] State survives pane changes, resize, and required restoration.
+- [ ] Mouse/stylus/drag features have accessible alternatives.
+- [ ] Tests cover boundary sizes and live transitions.
+
+<Admonition type="tip" title="Interview framing">
+Start from user capability and runtime window conditions, then explain state continuity, semantic contract, localization, input equivalence, failure handling, and test evidence.
+</Admonition>
+
+## Exercises
+
+1. Audit one existing app screen using this checklist.
+2. Whiteboard resize transitions for compact/expanded chat.
+3. Create a locale, font-scale, input, and window-size test matrix.

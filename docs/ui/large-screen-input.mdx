@@ -1,0 +1,66 @@
+---
+id: large-screen-input
+title: Keyboard, mouse, stylus, and drag-and-drop
+---
+import Admonition from '@theme/Admonition';
+
+# Keyboard, mouse, stylus, and drag-and-drop
+
+Large screens are often used with keyboards, trackpads, mice, and styluses. A touch-only UI may technically render yet remain inefficient.
+
+## Keyboard contract
+
+- Logical Tab/Shift+Tab focus order
+- Enter/Space activation for controls
+- Escape closes transient surfaces where expected
+- Direction keys for lists/grids where appropriate
+- Documented shortcuts for frequent actions
+- No shortcut that conflicts with text entry or accessibility
+
+```kotlin
+Modifier.onPreviewKeyEvent { event ->
+    if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.S) {
+        onSave()
+        true
+    } else false
+}
+```
+
+Use preview interception sparingly; consuming keys too early can break child text fields and accessibility.
+
+## Mouse and hover
+
+Hover must not be the only way to discover an action. Pointer icons and tooltips can improve precision, but touch and keyboard equivalents remain required. Right-click/context click should map to an accessible menu action.
+
+## Drag and drop is a protocol
+
+Define:
+
+1. accepted MIME/data types
+2. visual affordance and valid targets
+3. permission/lifetime of shared URIs
+4. behavior when data is huge, missing, or malicious
+5. cancellation and rollback
+6. keyboard/accessibility alternative
+
+Never trust a dropped URI's filename, MIME declaration, size, or continued availability. Open through `ContentResolver`, validate content, stream with limits, and persist permission only when allowed/needed.
+
+## Stylus and precision
+
+Drawing apps need pressure/tilt/history handling, palm rejection strategy, undo boundaries, and off-main-thread processing without delaying visual ink. General apps should still support stylus as a pointer and avoid tiny targets.
+
+## Practical scenarios
+
+- Email: multi-select with keyboard, drag attachments, context menus.
+- Editor: Ctrl+S, undo/redo, resize-safe panes, stylus annotation.
+- Catalog: keyboard traversal, hover previews that are not required, drag to cart plus accessible Add button.
+
+<Admonition type="tip" title="Architect takeaway">
+Input methods are alternate routes to the same user intent. Central event handling prevents mouse, keyboard, touch, and accessibility behavior from diverging.
+</Admonition>
+
+## Interview exercises
+
+1. Securely accept an image dropped from another app.
+2. Debug a global shortcut that breaks a TextField.
+3. Design accessible alternatives for drag-to-reorder.
