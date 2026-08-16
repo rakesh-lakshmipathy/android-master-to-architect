@@ -388,6 +388,18 @@ const sidebars: SidebarsConfig = {
             'data/offline-first-interview',
           ],
         },
+        {
+          type: 'category',
+          label: 'Paging 3',
+          collapsed: true,
+          items: [
+            'data/paging-foundations',
+            'data/paging-remote-mediator',
+            'data/paging-transform-cache',
+            'data/paging-loadstates',
+            'data/paging-testing-interview',
+          ],
+        },
         'roadmap',
       ],
     },

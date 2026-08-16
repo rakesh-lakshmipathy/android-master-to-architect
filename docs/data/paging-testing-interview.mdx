@@ -1,0 +1,84 @@
+---
+id: paging-testing-interview
+title: Paging 3 testing and interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Paging 3 testing and interview lab
+
+## Test layers
+
+- PagingSource: keys, load sizes/types, end, error, refresh key, cancellation
+- RemoteMediator: REFRESH/APPEND/PREPEND, scoped keys, atomic writes, errors, freshness initialize
+- transformation: mapping/filter/separators/order
+- UI: initial/append/refresh loading, cached failure, empty, retry
+- end-to-end: fake server + real Room + Pager + UI
+
+```kotlin
+val snapshot = repository.products(query).asSnapshot {
+    scrollTo(index = 40)
+}
+assertEquals(expectedIds, snapshot.map(Product::id))
+```
+
+Use `TestPager` for PagingSource and `asSnapshot` from paging-testing for Flow. RemoteMediator with Room generally uses Android test/in-memory DB. Assert DB rows and remote keys, not just `MediatorResult.Success`.
+
+## Duplicate-request tests
+
+Count requests and verify cursors under:
+
+- two collectors/configuration recreation
+- rapid scroll near boundary
+- invalidation during append
+- refresh while append active
+- retry after failure
+- repeated empty page
+- query switch/cancellation
+
+Ensure fake server respects realistic cursor/end semantics; a fake returning same page can make production code appear broken or hide dedupe flaws.
+
+## Interview scenarios
+
+<details><summary><strong>Why cachedIn?</strong></summary><p>It shares/caches PagingData events in a scope, allows reuse/recollection and avoids repeated upstream load/transform across configuration. It is not disk cache.</p></details>
+
+<details><summary><strong>PagingSource versus RemoteMediator?</strong></summary><p>PagingSource reads one source into pages. RemoteMediator reacts to boundary/refresh needs, fetches remote data, and writes DB; a Room PagingSource then reads database truth.</p></details>
+
+<details><summary><strong>Why store remote keys transactionally?</strong></summary><p>Data and continuation position must advance together. Otherwise crash can skip or duplicate pages.</p></details>
+
+## Case study: offline product search
+
+- query/account/sort scope both products and remote key
+- Room ordered by score/time + unique ID
+- Pager constructed per debounced query and cached in ViewModel
+- RemoteMediator refreshes/appends into DB transaction
+- pending favorites survive refresh deletion
+- cached results remain visible on network failure
+- UI distinguishes source rows from mediator update state
+- tests kill/invalidate between response and transaction, switch queries, and retry cursor failures
+
+## Review checklist
+
+- [ ] Key/end/refresh behavior follows backend contract.
+- [ ] PagingSource factory creates a new source.
+- [ ] Ordering is deterministic with unique tie-break.
+- [ ] Remote keys include all query/account dimensions.
+- [ ] Rows and keys commit atomically.
+- [ ] Refresh preserves local-only/pending state.
+- [ ] Transformations and cachedIn order are intentional.
+- [ ] Load states distinguish usable content and source/mediator.
+- [ ] Process recreation rebuilds from durable inputs/data.
+- [ ] Tests assert requests, DB, keys, UI, and concurrency.
+
+<Admonition type="tip" title="Interview framing">
+Explain the key protocol, generation/invalidation, local truth and mediator transaction, cache scope, load-state UX, process recovery, and deterministic tests.
+</Admonition>
+
+## Sources
+
+- [Test Paging implementations](https://developer.android.com/topic/libraries/architecture/paging/test)
+
+## Exercises
+
+1. Write a duplicate-request test matrix.
+2. Test cursor/row atomicity failure.
+3. Design load-state UI for cached data plus failed refresh.

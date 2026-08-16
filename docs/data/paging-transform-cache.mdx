@@ -1,0 +1,70 @@
+---
+id: paging-transform-cache
+title: Paging transformations, separators, invalidation, and cachedIn
+---
+import Admonition from '@theme/Admonition';
+
+# Paging transformations, separators, invalidation, and `cachedIn`
+
+Transform incrementally inside each PagingData:
+
+```kotlin
+val feed: Flow<PagingData<FeedItem>> = pager.flow
+    .map { paging ->
+        paging
+            .filter { !it.hidden }
+            .map { FeedItem.Product(it.toUi()) }
+            .insertSeparators { before, after ->
+                if (after != null && before?.date != after.date) {
+                    FeedItem.DateHeader(after.date)
+                } else null
+            }
+    }
+    .cachedIn(viewModelScope)
+```
+
+Transformations before `cachedIn` are cached/shared. Expensive per-item formatting after it repeats per collector/recreation. But transformations depending on current rapidly changing UI selection may belong after cache or be represented separately; otherwise cache freezes wrong context.
+
+## Separators are items
+
+Use sealed UI type with stable unique keys and content types. Header key must not collide with domain item ID.
+
+```kotlin
+items(
+    count = lazyItems.itemCount,
+    key = lazyItems.itemKey { item -> item.stableKey },
+    contentType = lazyItems.itemContentType { it::class },
+) { /* ... */ }
+```
+
+## Filtering changes paging economics
+
+Client filtering can produce visually empty pages and trigger many loads to find displayable items. Prefer server/database query for large/selective filters. UI-only tiny filters are fine.
+
+## `cachedIn` lifetime
+
+`cachedIn(viewModelScope)` survives configuration and permits PagingData reuse within destination ViewModel. Activity/application scope may retain pages/queries too long; composable scope loses on recreation/navigation. Choose based on screen ownership.
+
+`cachedIn` is last transformation normally because it caches upstream work. It is in-memory, not process persistence or offline storage.
+
+## Combine external state
+
+Do not rebuild Pager for row selection/favorite UI if data identity/query unchanged. Combine IDs/state at item rendering or map with observable generation deliberately. Recreating source on every toggle causes scroll/load churn.
+
+## Stable order
+
+Database query must have deterministic ORDER BY with unique tie-break. Equal timestamps without ID can shuffle across invalidation and cause duplicate/missing perception.
+
+<Admonition type="warning" title="Cache misunderstanding">
+`cachedIn` shares loaded paging events; it does not make network data durable, guarantee freshness, or replace Room/HTTP cache.
+</Admonition>
+
+## Sources
+
+- [Transform Paging streams](https://developer.android.com/topic/libraries/architecture/paging/v3-transform)
+
+## Exercises
+
+1. Create stable keys for products/date headers.
+2. Move expensive transformations relative to cachedIn.
+3. Fix client filter causing endless page loads.

@@ -1,0 +1,76 @@
+---
+id: paging-remote-mediator
+title: RemoteMediator and database-backed paging
+---
+import Admonition from '@theme/Admonition';
+
+# RemoteMediator and database-backed paging
+
+`RemoteMediator` fetches network pages and stores them in DB. Room `PagingSource` remains UI read path.
+
+```kotlin
+Pager(
+    config = PagingConfig(pageSize = 30),
+    remoteMediator = ProductsRemoteMediator(query, db, api),
+    pagingSourceFactory = { db.productDao().pagingSource(query) },
+).flow
+```
+
+## Load types
+
+- REFRESH: initial/manual/new generation around current position
+- APPEND: need data after end
+- PREPEND: need before beginning; many feeds return end immediately
+
+## Remote key table
+
+Keys must be scoped by query/filter/account/sort/version. One global `nextCursor` causes categories/users to consume each other's pagination.
+
+```text
+remote_keys(scope_key PRIMARY KEY, next_cursor, updated_at, end_reached)
+```
+
+## Atomic page write
+
+```kotlin
+db.withTransaction {
+    if (loadType == LoadType.REFRESH) {
+        productDao.deleteForScope(scope)
+        keyDao.delete(scope)
+    }
+    productDao.upsertAll(response.items.map { it.toEntity(scope) })
+    keyDao.upsert(RemoteKey(scope, response.nextCursor))
+}
+```
+
+Data and key commit together. Crash cannot leave cursor advanced without rows. However, clearing on refresh can erase useful offline data or pending local edits—only clear server-owned scoped cache and reconcile local pending state.
+
+## initialize()
+
+Return `SKIP_INITIAL_REFRESH` when cache freshness policy says usable; otherwise `LAUNCH_INITIAL_REFRESH`, which blocks boundary loads until refresh succeeds. Device wall clock/TTL caveats apply.
+
+## Duplicate requests
+
+Paging coordinates loads per generation, but duplicate Pagers/collectors, wrong key persistence, invalidation loops, or repeated recreation can still duplicate network work. Create Pager once in repository/ViewModel path and `cachedIn` correct scope.
+
+## Transaction and network
+
+Network call outside DB transaction. Fetch then transact response; use server versions to prevent older response overwriting newer refresh/mutation. A Mutex is not durable/version proof.
+
+## Empty/end
+
+Empty page may be temporary filtering/server issue; follow explicit `nextCursor`/end flag. Returning `endOfPaginationReached=true` permanently stops boundary load for that generation.
+
+<Admonition type="tip" title="Architect takeaway">
+RemoteMediator is a synchronization trigger. Correctness still depends on scoped remote keys, stable server ordering, atomic DB/key writes, versioning, and refresh deletion policy.
+</Admonition>
+
+## Sources
+
+- [Page from network and database](https://developer.android.com/topic/libraries/architecture/paging/v3-network-db)
+
+## Exercises
+
+1. Scope keys for account + query + sort.
+2. Refresh without deleting pending favorites.
+3. Diagnose cursor advanced but page rows missing.

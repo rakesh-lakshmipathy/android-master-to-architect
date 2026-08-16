@@ -1,0 +1,55 @@
+---
+id: paging-loadstates
+title: Paging load states, retry, empty UI, and recreation
+---
+import Admonition from '@theme/Admonition';
+
+# Paging load states, retry, empty UI, and recreation
+
+Load state exists per load type and source (`source` PagingSource, `mediator` RemoteMediator). Combined states require deliberate UI policy.
+
+```kotlin
+when {
+    items.loadState.refresh is LoadState.Loading && items.itemCount == 0 -> FullScreenLoading()
+    items.loadState.refresh is LoadState.Error && items.itemCount == 0 -> FullScreenError(onRetry = items::retry)
+    items.itemCount == 0 && items.loadState.refresh is LoadState.NotLoading -> EmptyState()
+    else -> ProductList(items)
+}
+```
+
+Append loading/error belongs footer; refresh with existing content can show pull indicator/banner instead of replacing content.
+
+## Source versus mediator
+
+With Room + RemoteMediator, source may successfully display cached rows while mediator refresh fails. UI should retain rows and show “Could not update.” Checking only combined refresh without understanding origin can hide useful data.
+
+## Retry versus refresh
+
+- `retry()` retries failed load with same generation/params.
+- `refresh()` invalidates current generation and creates new initial load.
+
+User retry after transient append error should call retry. Changed query/account/sort needs new Pager/generation. Pull-to-refresh invokes refresh and repository freshness behavior.
+
+## Empty correctness
+
+Do not declare empty while refresh still loading. Placeholder count can make `itemCount` nonzero with null items. Remote mediator might be loading even after local source initially returns empty.
+
+## Process recreation
+
+ViewModel + cachedIn handles configuration, not process death. Room-backed Pager recreates from DB; saved query/filter/selected anchor reconstructs. Network-only Paging reloads; exact in-memory page state is not durable.
+
+Scroll restoration needs stable keys/order and saveable LazyList state. Restored index can point to different entity after sync; anchor by ID when product requires exact continuity.
+
+## Error messages
+
+Map exceptions into user recovery without exposing raw HTTP. Preserve retry eligibility. Authentication error routes through session policy; schema error should not retry endlessly.
+
+<Admonition type="tip" title="UX rule">
+Load state answers “which operation/source is doing what?” Combine it with whether usable items exist. That yields full-screen, inline, footer, or silent behavior.
+</Admonition>
+
+## Exercises
+
+1. Render cached data while mediator refresh fails.
+2. Choose retry versus refresh in six cases.
+3. Avoid false empty state during mediator load.

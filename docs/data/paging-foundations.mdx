@@ -1,0 +1,80 @@
+---
+id: paging-foundations
+title: PagingSource, Pager, PagingData, and refresh keys
+---
+import Admonition from '@theme/Admonition';
+
+# PagingSource, Pager, PagingData, and refresh keys
+
+```text
+Pager -> creates PagingSource -> LoadParams(key,size,type) -> LoadResult
+      -> Flow<PagingData<Item>> -> UI adapter/LazyPagingItems
+```
+
+`PagingSource<Key, Value>` loads one source. `Pager` controls configuration/generations and exposes Flow. `PagingData` is a generation of incremental events, not a normal list.
+
+```kotlin
+class SearchPagingSource(
+    private val api: SearchApi,
+    private val query: String,
+) : PagingSource<String, Product>() {
+    override suspend fun load(params: LoadParams<String>): LoadResult<String, Product> = try {
+        val page = api.search(query, cursor = params.key, limit = params.loadSize)
+        LoadResult.Page(
+            data = page.items.map(ProductDto::toDomain),
+            prevKey = page.previousCursor,
+            nextKey = page.nextCursor,
+        )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IOException) {
+        LoadResult.Error(e)
+    }
+
+    override fun getRefreshKey(state: PagingState<String, Product>): String? =
+        state.anchorPosition?.let(state::closestPageToPosition)?.prevKey
+}
+```
+
+Cursor refresh key depends on server contract; blindly returning previous cursor may not center correctly. For positional keys, derive around anchor; Room can handle refresh positioning.
+
+## PagingConfig
+
+- `pageSize`: backend/query efficient size
+- `prefetchDistance`: how early to load near edge
+- `initialLoadSize`: often multiple pages
+- `maxSize`: in-memory page retention; must allow enough around viewport/prefetch
+- placeholders: require count support/stable positions and UI placeholder design
+
+Backend may return fewer than requested. `loadSize` is a hint. End reached is usually `nextKey == null`/protocol marker, not simply `items.size < requested` unless API guarantees.
+
+## Invalidation creates a new generation
+
+A PagingSource is single-use generation. Room invalidates on relevant table changes; Pager creates a new source. Custom source calls `invalidate()` when its underlying dataset becomes obsolete.
+
+## Query switching
+
+```kotlin
+val products = query
+    .debounce(300)
+    .distinctUntilChanged()
+    .flatMapLatest { q -> repository.search(q) }
+    .cachedIn(viewModelScope)
+```
+
+`flatMapLatest` cancels stale generation. Keep query in Pager/PagingSource identity; reusing source with mutable query causes mixed pages.
+
+<Admonition type="warning" title="Key correctness">
+Duplicate/missing pages usually come from key/cursor assumptions, unstable ordering, or concurrent dataset changes—not Compose list code.
+</Admonition>
+
+## Sources
+
+- [Load and display paged data](https://developer.android.com/topic/libraries/architecture/paging/v3-paged-data)
+- [Paging overview](https://developer.android.com/topic/libraries/architecture/paging/v3-overview)
+
+## Exercises
+
+1. Implement page-number and cursor key sources.
+2. Test API returning fewer items before true end.
+3. Explain why each query needs a new Pager generation.
