@@ -1,0 +1,47 @@
+---
+id: offline-at-scale
+title: Offline-first behavior across features
+---
+
+# Offline-first behavior across features
+
+Independent feature repositories still share device storage, network, identity, battery and user expectations. Without platform policy, each feature creates incompatible “offline” semantics.
+
+## Shared policy, domain-owned conflicts
+
+Platform provides connectivity hints, durable scheduling, account partitioning, retry/backoff, queue observability, storage quotas, transaction/idempotency primitives and common sync states. Domains own merge/conflict rules because cart quantity, chat edits and bank transfers have different semantics.
+
+```kotlin
+data class PendingMutation(
+    val id: MutationId,
+    val accountId: AccountId,
+    val domain: String,
+    val idempotencyKey: String,
+    val createdAt: Instant,
+)
+```
+
+Persist payload/version and state transitions too; never put secrets in generic diagnostic fields. Schedule fairly so a noisy media upload queue cannot starve a small checkout command. Apply per-domain concurrency, priority, network/battery constraints and backend rate limits.
+
+## Cross-feature invariants
+
+- account switch isolates/cancels the correct queued data;
+- logout and deletion handle pending/private data;
+- storage pressure evicts rebuildable cache before irreplaceable user intent;
+- sync is idempotent and process/device-restart safe;
+- conflict is surfaced honestly, not overwritten silently;
+- global diagnostics reveal backlog by domain without high-cardinality/PII.
+
+## Practical mistakes
+
+- ❌ one generic last-write-wins sync engine for every domain.
+- ✅ share mechanics; keep domain conflict policy explicit.
+- ❌ each feature observes `ConnectivityManager` and retries immediately.
+- ✅ centralize constrained scheduling/backoff while treating connectivity as a hint.
+- ❌ clear all storage on quota pressure.
+- ✅ classify durability/value and use governed eviction.
+
+## Exercise
+
+Design fair offline scheduling for chat messages, photo uploads, cart edits and payment intent under low battery and intermittent network.
+

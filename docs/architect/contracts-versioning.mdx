@@ -1,0 +1,40 @@
+---
+id: contracts-versioning
+title: Stable contracts and dependency direction
+---
+
+# Stable contracts and dependency direction
+
+Teams gain autonomy when they depend on small, stable semantics rather than another team's implementation models.
+
+```kotlin
+@JvmInline value class OrderId(val value: String)
+
+interface OrderReader {
+    fun observe(id: OrderId): Flow<OrderSummary>
+}
+```
+
+The contract must specify threading, hot/cold behavior, initial state, errors, cancellation, freshness, authorization and compatibility. Do not expose Room entities, Retrofit DTOs, navigation controllers or vendor types.
+
+## API/implementation split
+
+Use a separate API artifact/module when independent teams, multiple implementations, build isolation or versioned distribution justify the cost. Keep visibility minimal. Enforce allowed graph edges and cycles in CI.
+
+For published contracts use semantic/version policy appropriate to consumers, API/ABI checks, changelog, deprecation period, migration guide, owner and usage telemetry. Prefer additive evolution; old installed apps and independently released modules cannot upgrade atomically.
+
+Events are also contracts: define name/schema, producer meaning, ordering, delivery/duplication, privacy, version and ownership. “Loose coupling” without schema governance creates runtime coupling that the compiler cannot see.
+
+## Practical mistakes
+
+- ❌ Share a giant `core-model` across every feature.
+- ✅ publish narrow domain views/IDs and let features own presentation models.
+- ❌ change an interface and fix all consumers in one monorepo, assuming external compatibility.
+- ✅ test/version every released consumer boundary.
+- ❌ use an event bus to avoid dependencies.
+- ✅ make mediation, schema and delivery semantics explicit.
+
+## Source
+
+- [Android modularization patterns](https://developer.android.com/topic/modularization/patterns)
+

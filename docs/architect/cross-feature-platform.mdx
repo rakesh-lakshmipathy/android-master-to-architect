@@ -1,0 +1,46 @@
+---
+id: cross-feature-platform
+title: Navigation, identity, and configuration at scale
+---
+
+# Navigation, identity, and configuration at scale
+
+Cross-feature mechanisms need central policy but decentralized integration.
+
+## Navigation
+
+Features expose destination contracts or commands using stable IDs/serializable arguments, not their internal screen classes or domain graphs. The app shell composes the graph and owns global links, tabs and authentication gates.
+
+```kotlin
+sealed interface AppDestination {
+    data class OrderDetails(val orderId: OrderId) : AppDestination
+    data class SignIn(val returnTo: ReturnToken) : AppDestination
+}
+```
+
+Validate external deep links, handle absent/on-demand features, version routes, preserve return intent and avoid leaking secrets/PII in URLs or saved arguments.
+
+## Authentication/session
+
+One identity platform owns token storage/refresh, account switching, logout propagation, step-up authentication and session state. Features request authorized capabilities; they do not read raw refresh tokens. Server remains authoritative. Logout is a cross-feature transaction: cancel/account-scope work, clear protected caches, revoke tokens and prevent stale UI reappearance.
+
+## Configuration
+
+Use a typed registry with owner/default/expiry/scope. Separate build environment, operational flag, experiment, user setting, entitlement and enterprise managed configuration. Define precedence explicitly:
+
+```text
+server authorization > enterprise policy > account entitlement
+> operational safety config > user preference > packaged default
+```
+
+The exact precedence is product-specific; document conflicts and offline behavior. No feature should invent its own config client/cache.
+
+## Practical mistakes
+
+- ❌ feature A directly imports feature B implementation.
+- ✅ navigate through app-owned contracts and stable IDs.
+- ❌ every feature refreshes tokens independently.
+- ✅ serialize/deduplicate refresh in the identity layer.
+- ❌ one Boolean mixes entitlement, experiment and release.
+- ✅ separate decisions with distinct guarantees.
+

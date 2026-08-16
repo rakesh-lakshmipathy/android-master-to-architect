@@ -1,0 +1,38 @@
+---
+id: budgets-governance
+title: Performance, build, and release governance
+---
+
+# Performance, build, and release governance
+
+A budget turns a quality goal into an allocation and feedback loop.
+
+| Budget | Example evidence |
+|---|---|
+| Startup | cold-start p50/p95 on reference tiers |
+| Frame rendering | slow/frozen frames or benchmark percentile |
+| Memory | steady/peak by journey; low-memory recovery |
+| Binary | base and per-feature download delta |
+| Battery/network | work/bytes per active/offline journey |
+| Build | clean, incremental, IDE sync and critical path |
+| Release | crash/ANR/API/business guardrails by version |
+
+Allocate a product budget to features/shared infrastructure; include measurement environment, variance, owner and exception process. Prevent regression in CI where deterministic (Macrobenchmark, size/API/dependency tests), observe real cohorts in production, and review trends.
+
+An exception states reason, user/business value, measured delta, mitigation, owner and expiry. Permanent unexplained waivers destroy governance. Platform teams should help diagnose and provide paved-road fixes rather than only reject changes.
+
+Release governance uses risk tiers. A copy change and encryption migration do not need identical approval. Define required testing/security review, staged rollout, monitoring window, rollback/forward-fix and incident authority by risk.
+
+## Practical mistakes
+
+- ❌ one flagship-device average as a performance budget.
+- ✅ percentiles across representative device tiers and journeys.
+- ❌ make every regression an absolute blocker despite measurement noise.
+- ✅ calibrated thresholds, repeated samples and owned exceptions.
+- ❌ central change board approves every release.
+- ✅ automate low-risk paths and focus humans on irreversible/high-blast-radius change.
+
+## Exercise
+
+Allocate startup and binary budgets across app shell, identity, design system and five features; define what happens when checkout needs an exception.
+

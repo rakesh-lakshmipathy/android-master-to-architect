@@ -1,0 +1,45 @@
+---
+id: enterprise
+title: Enterprise security, compliance, and device management
+---
+
+# Enterprise security, compliance, and device management
+
+Enterprise architecture adds organization policy, managed devices/profiles, audit evidence, regulated data and controlled distribution. Compliance is demonstrable process/control evidence—not a security guarantee by itself.
+
+## Trust and data model
+
+Classify data; map collection, purpose, storage, transfer, processors, retention/deletion, backup, logs/analytics and regional boundaries. Enforce least privilege, server authorization, hardware-backed keys where appropriate, TLS/network policy, step-up auth, session revocation and tamper/risk signals as inputs—not sole trust.
+
+Work profiles separate managed work data from personal profile. Device/profile owners and a DPC can enforce policies. Managed configurations let administrators configure approved apps. Your app must validate types/ranges, define defaults and react to policy changes; enterprise config is not a place for secrets.
+
+```kotlin
+data class ManagedPolicy(
+    val copyToPersonalAllowed: Boolean = false,
+    val sessionMinutes: Int = 15,
+)
+
+fun sanitize(rawMinutes: Int?) =
+    (rawMinutes ?: 15).coerceIn(5, 480)
+```
+
+## Auditability
+
+Security audit events are server-authoritative, access-controlled, tamper-evident/retained per policy, time-correlated and separate from product analytics. Record actor, action, target, result and correlation—not credentials, tokens or unnecessary sensitive payloads. Support legal hold/deletion conflicts through approved policy.
+
+Test managed/unmanaged, work-profile pause/removal, key rotation, certificate/network changes, remote logout/wipe, offline/revoked user, backup/restore, device clock and policy conflict. Document incident roles, evidence export and customer/admin communication.
+
+## Practical mistakes
+
+- ❌ trust “managed device” as authorization.
+- ✅ server authorizes every sensitive operation.
+- ❌ log full records for audit completeness.
+- ✅ minimize and structure audit evidence with protected access.
+- ❌ hardcode one customer's policy in shared code.
+- ✅ typed policy contract with precedence, validation and ownership.
+
+## Sources
+
+- [Build a device policy controller](https://developer.android.com/work/dpc/build-dpc)
+- [Android design for safety](https://developer.android.com/quality/privacy-and-security)
+

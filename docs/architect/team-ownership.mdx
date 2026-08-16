@@ -1,0 +1,43 @@
+---
+id: team-ownership
+title: Multi-team ownership and platform teams
+---
+
+# Multi-team ownership and platform teams
+
+At scale, architecture must let teams change cohesive product areas independently while preserving system-wide safety.
+
+## Ownership model
+
+Assign each module/domain a primary and backup owner responsible for API evolution, tests, incidents, dependencies, documentation, deprecation and health metrics. `CODEOWNERS` can route review but does not create operational ownership.
+
+```text
+app composition -> release/platform team
+feature:checkout -> checkout team
+orders-api/impl -> commerce data team
+design-system -> UI platform
+identity/security -> identity platform + security reviewers
+```
+
+A platform team supplies paved roads: convention plugins, CI/device testing, design system, navigation contracts, identity/session, networking/observability, release tooling and reference implementations. Treat them as internal products with users, roadmap, SLO/support, docs, compatibility policy, adoption/feedback and migration assistance.
+
+Federated governance defines non-negotiable security/data/release constraints centrally while allowing domain decisions locally. Escalate only cross-domain, irreversible or high-blast-radius choices.
+
+## Failure modes
+
+- Central platform approves everything and blocks delivery.
+- Features fork shared infrastructure because support is slow.
+- “Shared” modules have no owner and grow every dependency.
+- Ownership matches code folders but not incidents/data/business capability.
+
+## Practical mistakes
+
+- ❌ Measure platform success by mandated adoption.
+- ✅ measure lead time, reliability, support load, satisfaction and escaped workarounds.
+- ❌ centralize all experts in one review queue.
+- ✅ grow domain maintainers and documented decision boundaries.
+
+## Exercise
+
+Create an ownership map and escalation path for a 12-team super-app. Include incident and deprecation responsibility.
+

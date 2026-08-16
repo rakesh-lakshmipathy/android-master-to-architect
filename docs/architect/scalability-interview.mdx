@@ -1,0 +1,42 @@
+---
+id: scalability-interview
+title: Scalable architecture case study and interview preparation
+---
+
+# Scalable architecture case study and interview preparation
+
+## Case study: evolve a 15-team commerce super-app
+
+Organize teams/modules around catalog, cart, checkout, orders, identity and media. App shell owns composition/global navigation. Platform teams own build/release, design system, identity/session, observability and sync mechanics as internal products. Domains publish narrow API modules and own implementation/data/conflicts.
+
+Use ID-based navigation contracts, server-authorized session/entitlements, typed configuration registry and fair durable offline scheduler. Enforce dependency graph/API compatibility, startup/binary/build budgets and risk-tiered releases. Multi-brand app modules own package/signing/store identity while semantic tokens/capabilities share features. Enterprise policy overrides user preference only where documented and never replaces server authorization.
+
+## Interview questions
+
+1. **What scales mobile architecture?** Independent cohesive ownership plus stable contracts, feedback and operations—not module count alone.
+2. **Platform-team purpose?** Paved roads that reduce cognitive load; operated as products, not approval bureaucracy.
+3. **How version internal contracts?** Minimal APIs, additive evolution, API/ABI tests, deprecation/migration and known consumers.
+4. **How coordinate navigation/auth/config?** App/platform policy with feature-owned integrations and typed boundaries.
+5. **How scale offline-first?** Share scheduling/idempotency/storage mechanics; domains own conflict semantics.
+6. **How govern budgets?** Representative measurable allocations, automated/production feedback, owner and expiring exceptions.
+7. **How model white-label?** Compile-time distribution identity, semantic runtime variation, capability composition and generated release matrix.
+8. **What does enterprise management not prove?** User authorization, device integrity forever, or secure server action.
+
+## Checklist
+
+- [ ] Domain/module ownership includes incidents, APIs and deprecation.
+- [ ] Platform services have SLO/support/adoption and escape strategy.
+- [ ] Dependency direction/contracts/events are enforced and versioned.
+- [ ] Shared UI/infrastructure limits startup/binary coupling.
+- [ ] Navigation, session and config precedence are explicit.
+- [ ] Offline fairness, account isolation, conflict and eviction are governed.
+- [ ] Performance/build/release budgets have calibrated evidence.
+- [ ] Brand and enterprise matrices cover signing, policy, privacy and operations.
+
+## Exercises
+
+1. Split ownership for a super-app without creating a giant `core` team.
+2. Design a backward-compatible checkout contract used by five independently releasing apps.
+3. Create governance for a startup regression caused by three platform SDKs.
+4. Threat-model managed-config and audit behavior for a healthcare work-profile app.
+

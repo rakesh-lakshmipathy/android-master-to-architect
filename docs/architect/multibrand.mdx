@@ -1,0 +1,41 @@
+---
+id: multibrand
+title: White-label and multi-brand architecture
+---
+
+# White-label and multi-brand architecture
+
+Multi-brand apps vary identity, theme, content, features, legal policy, endpoints and store releases. Avoid a forest of `if (brand == ...)` throughout domain/UI code.
+
+## Configuration layers
+
+```kotlin
+data class BrandSpec(
+    val id: BrandId,
+    val theme: BrandTheme,
+    val capabilities: Set<Capability>,
+    val legalDocuments: LegalDocumentSet,
+)
+```
+
+Compile-time product flavors/app modules suit package name, signing, store identity, resources and truly different dependencies. Typed runtime config suits validated content/operational variation. Server entitlements remain authoritative. Do not ship every customer's secrets/endpoints in every binary.
+
+Use semantic design tokens and capability composition. Brand modules provide assets/tokens/legal metadata; shared features consume contracts. For genuinely divergent workflows, separate implementations behind the capability rather than nesting brand conditions.
+
+## Operational matrix
+
+Each application ID has version/signing, Play listing/policy, Firebase/OAuth/App Links, environments, release tracks, analytics segregation, privacy/legal, support and deprecation. Generate and validate the matrix; test representative pairwise combinations plus every brand's critical smoke journey.
+
+## Practical mistakes
+
+- ❌ duplicate the whole repository per customer.
+- ✅ share stable capabilities and isolate governed variation.
+- ❌ create all brand × environment × build-type variants in every CI job.
+- ✅ define supported variants, filter invalid combinations and risk-test the matrix.
+- ❌ remote-config package identity/signing/legal fundamentals.
+- ✅ choose compile-time boundaries for immutable distribution identity.
+
+## Exercise
+
+Design three banking brands with different theme, biometric policy, transfer limits, countries and store identities. Separate client config from server authority.
+

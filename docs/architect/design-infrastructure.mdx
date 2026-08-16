@@ -1,0 +1,40 @@
+---
+id: design-infrastructure
+title: Design systems and shared infrastructure
+---
+
+# Design systems and shared infrastructure
+
+A design system is tokens, components, behavior, accessibility, content guidance, tooling and governance—not a collection of buttons.
+
+## Layer it
+
+```text
+brand-neutral primitives/tokens
+ -> semantic tokens (surface, critical, spacing, type role)
+ -> accessible components
+ -> reusable patterns
+ -> feature composition
+```
+
+Components define state, semantics, focus/keyboard, touch targets, loading/error, RTL, large text, adaptive behavior and screenshot/interaction tests. Version changes with migration notes and deprecation. Provide escape hatches for valid product needs, then use repeated escapes as roadmap evidence.
+
+Shared infrastructure—network, auth, analytics, database utilities, experimentation, test fixtures—needs the same product discipline. Keep base dependencies light; avoid auto-initializing every SDK at startup. Offer stable capability APIs, health dashboards, reference usage and fault injection.
+
+## Governance
+
+Represent design, Android, accessibility and consuming features. Review additions for cross-product reuse rather than prematurely centralizing one feature's special case. Track adoption, duplicate components, accessibility defects, binary/startup impact, migration time and support tickets.
+
+## Practical mistakes
+
+- ❌ Fork a button for each brand/feature.
+- ✅ model semantic variants/tokens with governed exceptions.
+- ❌ shared module depends on every vendor SDK.
+- ✅ separate narrow APIs and optional implementations.
+- ❌ break all screens in a “design system v2” release.
+- ✅ additive migration, compatibility window and visual regression evidence.
+
+## Exercise
+
+Design ownership and compatibility for a shared authenticated image component used by 20 features and three brands.
+
