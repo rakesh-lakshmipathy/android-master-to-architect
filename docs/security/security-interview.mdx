@@ -1,0 +1,70 @@
+---
+id: security-interview
+title: Android security review and interview lab
+---
+
+# Android security review and interview lab
+
+## Case study: mobile banking transfer
+
+1. Threat model assets and trust boundaries: credentials, payee, amount, session, device, API, logs, notifications.
+2. OAuth/OIDC flow establishes session; server authorizes every account/payee/limit.
+3. App Link input is syntax-validated and becomes a typed destination, never a transaction command.
+4. Beneficiary/amount shown for explicit confirmation; biometric only unlocks a local/server-bound step-up flow.
+5. Request uses TLS, short-lived token, idempotency key, challenge/transaction binding, and optional integrity evidence.
+6. Server validates current authorization, replay, amount/payee invariants, risk, and challenge before atomic commit.
+7. Keystore protects local key operations/cached credential material; no server secret ships in APK.
+8. Notifications contain minimal private content and route through immutable PendingIntent, then re-authorize current account.
+9. Logs/analytics record trace/outcome codes without token, balance, payee details, or raw integrity token.
+10. Rotation/revocation/logout/account switch and ambiguous network outcomes have explicit recovery.
+
+## Abuse and failure tests
+
+- invoke every exported component directly with malformed/oversized values;
+- change object IDs to another user/tenant;
+- replay PendingIntent, App Link reset token, transfer request, and integrity token;
+- intercept/redirect network traffic and test release cleartext policy;
+- restore encrypted data without Keystore key;
+- corrupt/truncate ciphertext and reuse GCM nonce in a test detector;
+- load untrusted WebView redirects/scripts and invoke bridge methods;
+- import traversal ZIP, deep JSON, huge image, SQL sort string;
+- inspect logs, analytics, crash reports, clipboard, notification, backup, and shared files;
+- run modified/rooted/hooked client and verify server remains authoritative;
+- rotate certificates, pins, keys, signing certs, and backend credentials;
+- deny/timeout integrity service and exercise tiered fallback.
+
+## Interview questions
+
+1. **What does Android sandbox protect?** It isolates app UIDs/files/process resources by default; exported IPC, grants, shared/system services, root, and backend APIs remain boundaries.
+2. **Is `android:exported=false` enough?** It blocks ordinary external component invocation, not compromised same-UID code or direct backend calls; server authorization remains necessary.
+3. **Intent filter as security check?** No. Validate actual received data because explicit invocation can bypass filter matching expectations.
+4. **Why immutable PendingIntent?** It constrains delegated token holders from filling/changing intent semantics; re-authorize business action on execution.
+5. **Keystore versus encrypted preferences?** Keystore manages cryptographic keys/non-exportability; encrypted storage holds ciphertext. Both need lifecycle, invalidation, backup, and compromise analysis.
+6. **Encryption versus authenticated encryption?** Encryption hides plaintext; AEAD also detects modification and can bind context through AAD.
+7. **Why is GCM nonce reuse dangerous?** Uniqueness failure under one key can reveal plaintext relationships and enable forgery.
+8. **Why avoid trust-all TLS in debug code?** Configuration can leak to release and removes server authentication; use scoped debug trust configuration.
+9. **When pin certificates?** Only after threat/availability analysis with backup pins, rotation, expiry, old-client, monitoring, and emergency plans.
+10. **Why is WebView bridge risky?** Web JavaScript obtains native capability; origin/script/navigation compromise can invoke privileged methods.
+11. **How prevent SQL injection with dynamic sort?** Bind values and map an enum to fixed allowlisted SQL fragments—never concatenate raw user grammar.
+12. **Does obfuscation protect an API secret?** No. It slows extraction but the app must access the value; backend secrets stay server-side.
+13. **Does Play Integrity prove a user is legitimate?** No. It supplies app/device/account/risk signals for server-side, action-bound, tiered decisions.
+14. **How do you log security events safely?** Structured allowlisted metadata, redaction, access/retention controls, stable trace IDs, and no secrets/raw sensitive payloads.
+
+## Review checklist
+
+- [ ] Threat model names assets, attackers, boundaries, controls, residual risk, owners, and tests.
+- [ ] Exported components and URI/file grants are minimal and protected.
+- [ ] All external input has allowlisted grammar, size/time bounds, and authorization.
+- [ ] Server enforces every protected object/action and replay/invariant rule.
+- [ ] Keystore/crypto has nonce, version, rotation, invalidation, backup, and corruption handling.
+- [ ] Cleartext is denied; release trust/debug trust/pinning lifecycle are reviewed.
+- [ ] WebView capabilities, origins, redirects, bridge, cookies, and files are minimized.
+- [ ] Logs/analytics/crashes/backups/notifications/clipboard/shared files are leak-reviewed.
+- [ ] Root/tamper/integrity signals use server-side tiered policy, not absolute client trust.
+- [ ] Dependency/SBOM/scanning, signing-key access, incident response, and secret rotation have owners.
+
+## Exercises
+
+1. Run a manifest and data-flow security review on one existing app feature.
+2. Write negative tests for exported components, object authorization, replay, and parser bounds.
+3. Produce an incident plan for leaked refresh tokens and a compromised TLS private key.

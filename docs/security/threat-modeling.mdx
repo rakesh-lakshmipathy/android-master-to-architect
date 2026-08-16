@@ -1,0 +1,88 @@
+---
+id: threat-modeling
+title: Practical threat modelling for Android
+---
+import Admonition from '@theme/Admonition';
+
+# Practical threat modelling for Android
+
+Security is not “add encryption.” It is deciding which assets matter, how data crosses trust boundaries, what attackers can do, and which controls reduce realistic harm.
+
+## Start with a concrete flow
+
+For “view bank statement”:
+
+```text
+User -> Android UI -> app process -> local cache
+                         |
+                         v TLS
+                    API gateway -> auth -> statement service -> database
+                         |
+                    logs / analytics / support exports
+```
+
+Every arrow is a trust boundary or data transfer worth questioning.
+
+## Threat-model worksheet
+
+| Question | Banking example |
+|---|---|
+| Assets | session token, balance, statement PDF, user identity |
+| Actors | legitimate user, malicious app, network attacker, stolen-device holder, compromised backend account, insider |
+| Entry points | App Link, exported component, API, WebView, shared file, backup, logs |
+| Abuse goals | read another statement, replay transfer, steal token, alter payee, deny access |
+| Assumptions | server authorizes every object; TLS validates hostname; device may be hostile |
+| Controls | short-lived tokens, object authorization, secure sharing, redaction, rate limits, audit |
+| Residual risk | screen capture/camera, rooted runtime manipulation, social engineering |
+
+## STRIDE as a prompt, not paperwork
+
+- **Spoofing:** can an attacker pretend to be a user/device/app?
+- **Tampering:** can input, APK, local state, or network messages be altered?
+- **Repudiation:** can high-impact actions be disputed without trustworthy audit?
+- **Information disclosure:** where can secrets/PII leak?
+- **Denial of service:** can resources, retries, parsers, or quotas be exhausted?
+- **Elevation of privilege:** can a low-privilege caller reach internal functionality?
+
+## Prioritize by risk
+
+```text
+risk ≈ likelihood × impact × exposure
+```
+
+Do not assign fake mathematical precision. Use a consistent rubric, identify prerequisites, affected users/data, detectability, and recovery. Fix authorization flaws before spending weeks obfuscating UI strings.
+
+## Turn threats into verifiable requirements
+
+Bad: “Use secure storage.”
+
+Good:
+
+- refresh token never appears in logs, backups, clipboard, notification, or exported storage;
+- server rejects a statement ID belonging to another account;
+- statement share grant is read-only and temporary;
+- cached statements are deleted on logout/account removal according to policy;
+- a modified client cannot authorize a transfer without server validation.
+
+<Admonition type="tip" title="Threat models must evolve">
+Review them when adding an SDK, exported component, authentication flow, payment, WebView bridge, new data class, or deployment architecture—not only before release.
+</Admonition>
+
+## Common mistakes
+
+- ❌ Model only “a hacker steals the phone.”
+- ✅ include malicious apps, remote abuse, supply chain, insiders, accidental disclosure, and compromised clients.
+- ❌ Trust the mobile app to enforce business authorization.
+- ✅ enforce authorization and transaction invariants on trusted servers.
+- ❌ List generic threats without owner/test.
+- ✅ create actionable requirements, abuse tests, monitoring, and residual-risk decisions.
+
+## Sources
+
+- [Android security best practices](https://developer.android.com/privacy-and-security/security-tips)
+- [OWASP MASVS](https://mas.owasp.org/MASVS/)
+
+## Exercise
+
+Threat-model password reset from App Link through token validation, password change, session revocation, logging, analytics, and support tooling. Identify at least three trust boundaries and five abuse cases.
+

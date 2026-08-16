@@ -1,0 +1,72 @@
+---
+id: integrity-tamper
+title: Root, tamper resistance, and Play Integrity
+---
+import Admonition from '@theme/Admonition';
+
+# Root, tamper resistance, and Play Integrity
+
+The APK and client device are ultimately controlled by the user/attacker. Obfuscation, root detection, anti-debugging, native code, and integrity signals can increase cost and improve risk decisions; they cannot make client-side secrets or authorization absolute.
+
+## Correct trust placement
+
+```text
+Client proposes action + evidence
+        ↓ authenticated TLS
+Server validates identity, authorization, invariants, replay, risk
+        ↓
+Server commits authoritative result
+```
+
+Never trust a boolean like `isPremium`, transfer amount limit, coupon eligibility, game score, or “biometric passed” solely because the client reports it.
+
+## Play Integrity as a server-verified signal
+
+At a protected moment:
+
+1. server creates/binds a request challenge or request hash;
+2. app obtains integrity token;
+3. app sends token with intended action;
+4. server decodes/verifies through trusted integration;
+5. server verifies freshness, package/app recognition, account/device verdicts, and binding;
+6. policy combines verdict with account/action risk and decides allow, step-up, limit, review, or deny.
+
+Do not decode a token on-device and trust the result; a modified client controls its local decision. Prevent replay by binding verdict to the exact action/challenge and enforcing freshness/idempotency server-side.
+
+## Tiered enforcement
+
+| Risk | Example response |
+|---|---|
+| low | allow read-only browsing, monitor |
+| medium | require reauthentication/OTP, lower limits |
+| high | block transfer, hold for review, require trusted channel |
+
+A hard “rooted = ban” policy can exclude legitimate users, accessibility/research environments, non-Play distribution, emulators, or devices with transient evaluation failures. Match response to harm and support recovery/appeal.
+
+## Local defenses
+
+- R8/obfuscation reduces easy reverse engineering, not motivated analysis.
+- Anti-debug/hook/root indicators are bypassable and can false-positive.
+- Native code raises effort but is still inspectable.
+- Runtime integrity and checksum checks can be patched.
+- Screenshot/overlay protections reduce accidental leakage and some attacks but have UX/accessibility limits.
+- Server rate limits, anomaly detection, transaction signing/binding, and audit are usually more consequential.
+
+## Secrets in APK
+
+Anything shipped in an APK can be extracted or used through the app. Keep service-account keys, private signing keys, unrestricted vendor secrets, and server master credentials off-device. Restrict unavoidable client API keys by package/signature/API/quota and assume exposure.
+
+<Admonition type="warning" title="Integrity is evidence, not identity">
+A strong device verdict does not prove the human is legitimate; a weak/missing verdict does not prove fraud. Combine signals with authentication, authorization, transaction context, behavior, and recovery policy.
+</Admonition>
+
+## Sources
+
+- [Play Integrity overview](https://developer.android.com/google/play/integrity/overview)
+- [Play Integrity setup and verdicts](https://developer.android.com/google/play/integrity/setup)
+- [Android anti-abuse guidance](https://developer.android.com/privacy-and-security)
+
+## Exercise
+
+Design tiered enforcement for a banking balance view, add-beneficiary action, and $10,000 transfer. Include missing verdict, network failure, non-Play install, accessibility tooling, replay, and customer support recovery.
+

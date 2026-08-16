@@ -1,0 +1,85 @@
+---
+id: webview
+title: WebView and JavaScript bridge security
+---
+import Admonition from '@theme/Admonition';
+
+# WebView and JavaScript bridge security
+
+A WebView combines remote content, browser behavior, app cookies/session, local resources, and possibly native capabilities. Treat it as a strong trust boundary, not a normal TextView.
+
+## Prefer safer alternatives
+
+- external browser for arbitrary/open-web content;
+- Custom Tabs for an authenticated web journey needing browser security/cookies;
+- native UI for high-trust transactions;
+- WebView only when embedded control is a real requirement.
+
+## Least-capability configuration
+
+```kotlin
+with(webView.settings) {
+    javaScriptEnabled = false              // enable only if required
+    allowFileAccess = false
+    allowContentAccess = false
+    setSupportMultipleWindows(false)
+}
+WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+```
+
+Actual settings depend on content, but each enabled capability needs a reason. Do not enable universal file-URL access or mixed content to “make a page work.”
+
+## Navigation allowlist
+
+```kotlin
+override fun shouldOverrideUrlLoading(
+    view: WebView,
+    request: WebResourceRequest,
+): Boolean {
+    val uri = request.url
+    val allowed = uri.scheme == "https" &&
+        uri.host in setOf("account.example.com", "help.example.com")
+    if (!allowed) {
+        openExternallyOrReject(uri)
+        return true
+    }
+    return false
+}
+```
+
+Validate scheme, normalized host, port, and path purpose. `host.endsWith("example.com")` incorrectly accepts `evil-example.com`; use exact hosts or a safe dot-boundary rule.
+
+Never proceed past an SSL error. Do not expose file/content URIs or credentials to navigations that can escape the trusted origin.
+
+## JavaScript interfaces
+
+`addJavascriptInterface` exposes annotated native methods to JavaScript running in the WebView. If any untrusted script or navigation can run, it may invoke those methods.
+
+Safer design:
+
+- avoid bridge entirely;
+- keep methods minimal and non-privileged;
+- allowlist trusted origins and control every navigation/redirect/pop-up;
+- validate message schema, size, nonce/session, and current user authorization;
+- never expose generic “open intent,” “read file,” “execute,” or token-returning methods;
+- remove bridge before loading untrusted content.
+
+Even a trusted page can include compromised third-party scripts. Content Security Policy and server supply-chain controls matter.
+
+## File upload/download and cookies
+
+Treat selected/uploaded files as untrusted and use scoped pickers. Validate downloads before sharing/opening. Decide whether cookies should persist, be third-party, or clear on logout; WebView cookie storage is separate operational state that can outlive app UI.
+
+<Admonition type="danger" title="Do not build an authentication bridge">
+Passing access/refresh tokens to JavaScript turns web-content compromise into account compromise. Prefer standards-based browser flows and server-bound sessions with narrow origin controls.
+</Admonition>
+
+## Sources
+
+- [WebView security guidance](https://developer.android.com/privacy-and-security/risks/webview)
+- [Security checklist: WebView](https://developer.android.com/privacy-and-security/security-tips#webview)
+
+## Exercise
+
+Threat-model a WebView help center that includes third-party analytics, file attachments, `tel:` links, login cookies, redirects, and a proposed native “share token” bridge.
+

@@ -1,0 +1,83 @@
+---
+id: input-logging
+title: Injection, traversal, deserialization, and logging leaks
+---
+import Admonition from '@theme/Admonition';
+
+# Injection, traversal, deserialization, and logging leaks
+
+Every external value—intent extra, URL, QR/NFC/BLE payload, file, server JSON, clipboard, database import—is untrusted. Validation should define an allowlisted grammar, bounds, and business authorization.
+
+## SQL injection
+
+```kotlin
+// ❌ User input changes query grammar.
+db.rawQuery("SELECT * FROM users WHERE name = '$name'", null)
+
+// ✅ Parameters keep data separate from SQL syntax.
+db.rawQuery("SELECT * FROM users WHERE name = ?", arrayOf(name))
+```
+
+Room parameters are safe for values, but dynamic table/column/order clauses cannot be parameterized the same way. Map an enum to fixed SQL fragments; never paste arbitrary sort/filter expressions.
+
+## Path traversal
+
+```kotlin
+fun safeChild(base: File, untrustedName: String): File {
+    require(untrustedName.matches(Regex("[A-Za-z0-9._-]{1,80}")))
+    val child = File(base, untrustedName).canonicalFile
+    val root = base.canonicalFile
+    require(child.toPath().startsWith(root.toPath()))
+    return child
+}
+```
+
+For ZIP extraction, validate every entry’s canonical destination, entry count, compressed/expanded bytes, nested depth, symlinks, and total time. URL encoding and alternate separators complicate naive `contains("..")` checks.
+
+## Unsafe deserialization
+
+Do not deserialize attacker-controlled polymorphic class names or Java serialization graphs. Parse into constrained DTOs, disable unknown polymorphic types unless explicitly required, bound nesting/collections/string sizes, and map DTOs through business validation.
+
+```kotlin
+@Serializable
+data class ImportRow(val id: String, val amountMinor: Long)
+
+fun ImportRow.validate() {
+    require(id.matches(Regex("[A-Z0-9-]{1,40}")))
+    require(amountMinor in 0..10_000_000)
+}
+```
+
+Schema-valid is not authorized: an amount within range may still exceed the current user’s limit.
+
+## Logging leaks
+
+```kotlin
+// ❌
+logger.info("login token=$token email=$email response=$body")
+
+// ✅
+logger.info("login completed accountHash={} result={} traceId={}",
+    stableNonReversibleMetricId, resultCode, traceId)
+```
+
+Redact tokens, cookies, passwords, OTPs, full URLs/query strings, financial/health/location data, message bodies, file paths/names, BLE/NFC payloads, and cryptographic material. Crash reporters, analytics, network interceptors, screenshots, clipboard, notifications, and support exports are also data egress.
+
+<Admonition type="warning" title="Debug builds still touch real data">
+Developers/testers may sign into production-like accounts. Make redaction the logger’s default and require explicit safe fields; do not rely only on “release logging is off.”
+</Admonition>
+
+## Denial-of-service bounds
+
+Limit request/file/body size, image pixels, archive expansion, JSON depth, list counts, regex complexity, concurrent operations, retries, and processing time. A parser that is injection-safe can still exhaust memory/CPU/disk.
+
+## Sources
+
+- [Unsafe deserialization risk](https://developer.android.com/privacy-and-security/risks/unsafe-deserialization)
+- [Path traversal risk](https://developer.android.com/privacy-and-security/risks/path-traversal)
+- [Log information disclosure](https://developer.android.com/privacy-and-security/risks/log-info-disclosure)
+
+## Exercise
+
+Design an offline ZIP/JSON import pipeline. Specify byte/count/depth/time limits, extraction rules, DTO validation, database transaction behavior, duplicate policy, logging, and cleanup after process death.
+

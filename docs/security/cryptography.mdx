@@ -1,0 +1,80 @@
+---
+id: cryptography
+title: Encryption, keys, nonces, authentication, and rotation
+---
+import Admonition from '@theme/Admonition';
+
+# Encryption, keys, nonces, authentication, and rotation
+
+Encryption without integrity can allow undetected modification. Prefer authenticated encryption such as AES-GCM or a maintained library’s AEAD primitive.
+
+## Versioned envelope
+
+```kotlin
+data class CipherEnvelope(
+    val version: Int,
+    val keyId: String,
+    val nonce: ByteArray,
+    val ciphertextAndTag: ByteArray,
+)
+```
+
+Include a format version and key ID so data can migrate. Authenticate context as associated data (AAD) where useful:
+
+```kotlin
+val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+cipher.init(Cipher.ENCRYPT_MODE, key) // provider creates fresh random IV
+cipher.updateAAD("account=$accountId;purpose=statement-cache;v=2".toByteArray())
+val ciphertext = cipher.doFinal(plaintext)
+val nonce = cipher.iv
+```
+
+The same AAD must be supplied during decryption. It binds ciphertext to context without encrypting that context.
+
+## Nonce/IV rule
+
+GCM requires nonce uniqueness per key. Reuse can catastrophically reveal relationships/plaintext and enable forgery. Do not derive a nonce only from timestamps, user IDs, row IDs, or counters unless a formally safe uniqueness design exists. Let a secure provider generate it and store it beside ciphertext.
+
+## Passwords are not encryption keys
+
+Human passwords have low entropy. On a server, store password verifiers using a modern password-hashing function and tuned parameters/salt. For client-side password-derived encryption, use a reviewed KDF design with salt/parameters and a recovery story; do not apply one SHA-256 and call it a key.
+
+## Key rotation is a state machine
+
+```text
+introduce key v2 -> encrypt all new writes with v2
+       ↓
+decrypt v1/v2 -> lazily or batch re-encrypt v1
+       ↓
+observe remaining v1 -> retire v1 only after safe completion
+```
+
+Rotation must survive partial migration, rollback, offline devices, backup/restore, and process death. Deleting old key too early destroys data; keeping compromised keys forever defeats rotation.
+
+## Encryption scope
+
+Database/file encryption protects some at-rest threats. It does not protect:
+
+- plaintext in process memory/UI/screenshots;
+- logs, analytics, notifications, backups, temp files;
+- authorized-but-malicious application code;
+- insecure server APIs;
+- metadata such as sizes/timestamps/access patterns.
+
+<Admonition type="danger" title="Do not create custom crypto protocols">
+Choose well-reviewed primitives/libraries and obtain expert review for high-impact systems. Correct algorithm names do not guarantee correct nonce, key, encoding, error, and lifecycle handling.
+</Admonition>
+
+## Failure behavior
+
+Authentication-tag failure means data is corrupt, wrong-key, or tampered. Never return partially decrypted data or silently continue. Classify whether to delete a cache, restore/re-fetch, alert, or preserve evidence.
+
+## Sources
+
+- [Android cryptography](https://developer.android.com/privacy-and-security/cryptography)
+- [Tink Java](https://developers.google.com/tink)
+
+## Exercise
+
+Design encryption and rotation for offline medical forms across application upgrades, logout, backup/restore, a corrupted row, and a compromised v1 key.
+

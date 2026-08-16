@@ -1,0 +1,84 @@
+---
+id: components-intents
+title: Sandbox, exported components, intents, and PendingIntent
+---
+import Admonition from '@theme/Admonition';
+
+# Sandbox, exported components, intents, and PendingIntent
+
+Android assigns apps a UID and sandbox. Crossing into another app happens through controlled IPC, shared capabilities, or OS-mediated resources. An exported component is an API surface—even if you created it “for navigation.”
+
+## Inventory every component
+
+```xml
+<activity android:name=".InternalDebugActivity" android:exported="false" />
+
+<service
+    android:name=".PartnerService"
+    android:exported="true"
+    android:permission="com.example.permission.PARTNER" />
+
+<permission
+    android:name="com.example.permission.PARTNER"
+    android:protectionLevel="signature" />
+```
+
+Use explicit `android:exported`. If external access is unnecessary, set false. If required, document caller, data grammar, permission/signature policy, rate limits, and business authorization.
+
+An intent filter routes intents; it is not validation and not an access-control boundary. An attacker can explicitly invoke an exported component with values that never match its filter.
+
+## Validate incoming intent data
+
+```kotlin
+fun parseOrderIntent(intent: Intent): String? {
+    if (intent.action != Intent.ACTION_VIEW) return null
+    val uri = intent.data ?: return null
+    if (uri.scheme != "https" || uri.host != "shop.example.com") return null
+    val parts = uri.pathSegments
+    return parts.takeIf { it.size == 2 && it[0] == "orders" }
+        ?.get(1)
+        ?.takeIf { it.matches(Regex("[A-Za-z0-9-]{1,64}")) }
+}
+```
+
+Then authorize the current user’s access to that order. Syntax validation and authorization are separate.
+
+## Intent redirection
+
+```kotlin
+// ❌ Attacker controls target/flags/extras.
+val nested = intent.getParcelableExtra<Intent>("next")
+startActivity(nested)
+```
+
+Prefer a typed destination allowlist. If nested intents are unavoidable, sanitize allowed component/action/data/type/extras, clear URI grant flags, and reject everything else. Never deserialize arbitrary internal class/route names.
+
+## Dynamic receivers
+
+Use `RECEIVER_NOT_EXPORTED` for internal broadcasts. Protect intended cross-app broadcasts with explicit packages and permissions. Do not send secrets through global implicit broadcasts.
+
+## Binder/services/providers
+
+- Validate caller UID/signature for privileged partner IPC; package name alone can be spoofed by a differently signed app.
+- Use declarative permissions where possible.
+- Providers require query/insert/update/delete authorization and path/projection validation.
+- Never rely on an Activity being visible as proof a call is user-authorized.
+
+## PendingIntent is delegated authority
+
+Use explicit immutable PendingIntents by default, unique operation identity, and one-shot where replay is unsafe. Mutable PendingIntent is an exception (for example inline reply) and must still target an explicit component. Re-authorize domain actions when invoked because account/session may have changed.
+
+<Admonition type="danger" title="Client-side checks are not server authorization">
+An unexported screen hides UI from ordinary IPC; it does not stop a modified client from calling your backend. Every protected object/action still requires server enforcement.
+</Admonition>
+
+## Sources
+
+- [Security checklist: IPC and components](https://developer.android.com/privacy-and-security/security-tips#interprocess-communication)
+- [Intent redirection risk](https://developer.android.com/privacy-and-security/risks/intent-redirection)
+- [PendingIntent risks](https://developer.android.com/privacy-and-security/risks/pending-intent)
+
+## Exercise
+
+Audit a manifest containing 20 components. For each exported item, state caller, permission, input schema, authorization, sensitive output, denial behavior, and test case.
+

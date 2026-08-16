@@ -480,7 +480,31 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Parts VII-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part VII - Security and Privacy',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'Android Application Security',
+          collapsed: true,
+          items: [
+            'security/threat-modeling',
+            'security/components-intents',
+            'security/keystore',
+            'security/cryptography',
+            'security/network-security',
+            'security/webview',
+            'security/input-logging',
+            'security/integrity-tamper',
+            'security/security-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Parts VIII-X - Android to Architect', items: ['roadmap']},
   ],
 };
 

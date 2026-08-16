@@ -1,0 +1,76 @@
+---
+id: network-security
+title: TLS, Network Security Config, and pinning trade-offs
+---
+import Admonition from '@theme/Admonition';
+
+# TLS, Network Security Config, and pinning trade-offs
+
+TLS protects confidentiality/integrity in transit and authenticates the server according to trust/hostname rules. It does not authorize users, validate business inputs, prevent compromised endpoints, or make response data true.
+
+## Deny cleartext deliberately
+
+```xml
+<application
+    android:networkSecurityConfig="@xml/network_security_config"
+    android:usesCleartextTraffic="false" />
+```
+
+```xml title="res/xml/network_security_config.xml"
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
+```
+
+Debug trust must not leak into release. Avoid “trust all certificates,” permissive hostname verifiers, and ignoring TLS errors.
+
+## Pinning: added control, added outage risk
+
+Pinning limits accepted public keys/certificates beyond platform trust. It may reduce some CA/on-path risks, but it can brick connectivity during certificate/key/CA rotation, disaster recovery, CDN changes, enterprise interception, or long-unupdated clients.
+
+If risk analysis justifies pins:
+
+- pin SPKI/public keys rather than leaf certificate where appropriate;
+- ship backup pins controlled by a separately protected key path;
+- plan overlapping rotations and emergency recovery;
+- monitor expiry/handshake failures before enforcement;
+- test clock errors, old app versions, alternate chains, and disaster failover;
+- never add an “accept anything if pin fails” production bypass.
+
+## Custom CAs
+
+Scope private trust anchors to precise domains/flavors. Bundling a private CA expands trust to anything it signs; protect issuance and rotation. Do not globally trust user CAs in release merely to help debugging.
+
+## Request/response safety beyond TLS
+
+- authenticate and authorize every request server-side;
+- avoid tokens/PII in URLs (logs/history/referrers);
+- use timeouts and bounded response bodies;
+- validate content type/schema/size;
+- use idempotency/replay protection for mutations;
+- redact HTTP logs and disable verbose bodies in production;
+- reject redirects to unexpected hosts when credentials could follow.
+
+<Admonition type="warning" title="Pinning is not a default checkbox">
+For many apps, platform TLS plus secure backend/account design is safer operationally. Adopt pinning only when the incremental threat reduction exceeds lifecycle and availability risk.
+</Admonition>
+
+## Sources
+
+- [Network Security Configuration](https://developer.android.com/privacy-and-security/security-config)
+- [Security with network protocols](https://developer.android.com/privacy-and-security/security-ssl)
+
+## Interview question
+
+**Should every banking app pin certificates?** There is no universal yes. Explain threat model, backup pins, rotation/emergency recovery, old clients, monitoring, and whether operational outage risk outweighs incremental protection.
+
