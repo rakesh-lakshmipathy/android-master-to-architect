@@ -1,0 +1,84 @@
+---
+id: navigation-architecture
+title: Navigation architecture, deep links, and back stacks
+---
+import Admonition from '@theme/Admonition';
+
+# Navigation architecture, deep links, and back stacks
+
+Navigation is persisted application UI state, not a collection of button callbacks.
+
+## Typed routes and minimal arguments
+
+```kotlin
+@Serializable data class OrderDetails(val orderId: String)
+
+composable<OrderDetails> { entry ->
+    val route = entry.toRoute<OrderDetails>()
+    OrderRoute(orderId = OrderId(route.orderId))
+}
+```
+
+Pass identifiers and reload authoritative data. Validate untrusted deep-link arguments and represent missing/unauthorized content.
+
+## Nested graph scope
+
+A checkout graph may share one flow ViewModel for address, delivery, review, and result. Scope it to the graph back-stack entry so it clears when the flow is removed—not to the Activity forever.
+
+## Multiple back stacks
+
+Bottom destinations often preserve an independent stack:
+
+```text
+Home: Home -> Article
+Search: Search -> Filters -> Result
+Profile: Profile -> Settings
+```
+
+Define product behavior explicitly:
+
+- reselect top tab: pop to root or scroll to top?
+- back from secondary stack: within stack, switch home, or exit?
+- auth logout: clear protected stacks?
+- memory/process restoration: which entries and state return?
+
+## Authentication flow
+
+Do not sprinkle “if logged in navigate login” across destinations. Centralize access policy. Preserve a safe pending destination, authenticate, revalidate authorization, then navigate with stack-clearing rules that prevent returning to login or protected stale screens.
+
+## Deep links and app links
+
+Treat URI as external input:
+
+1. parse/type-check
+2. normalize and reject ambiguous forms
+3. check auth/authorization
+4. load referenced data
+5. render not-found/offline/error states
+6. build meaningful Up/Back behavior
+
+Never trust a deep link to grant access simply because a destination is reachable.
+
+## Results
+
+Small navigation results can use a previous back-stack entry's saved state. Important business outcomes belong in repository state so they survive process death and can be observed by any screen.
+
+❌ Returning `paymentSucceeded=true` is the only truth.
+
+✅ Order repository exposes accepted order status; navigation result may only prompt refresh/focus.
+
+<Admonition type="warning" title="Navigation event duplication">
+Replayed state can navigate twice after recreation. Use an acknowledged transition or make navigation a deterministic consequence of durable state plus current destination.
+</Admonition>
+
+## Sources
+
+- [Navigation deep links](https://developer.android.com/guide/navigation/design/deep-link)
+- [Multiple back stacks recipe](https://developer.android.com/guide/navigation/navigation-3/recipes/multiple-backstacks)
+- [Pass data between destinations](https://developer.android.com/guide/navigation/use-graph/pass-data)
+
+## Interview exercises
+
+1. Design logout stack clearing for three bottom tabs.
+2. Handle a deep link to an unauthorized/deleted order.
+3. Scope checkout state across nested destinations without Activity leakage.

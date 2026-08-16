@@ -1,0 +1,79 @@
+---
+id: savedstate-reconstruction
+title: SavedStateHandle and process reconstruction
+---
+import Admonition from '@theme/Admonition';
+
+# SavedStateHandle and process reconstruction
+
+## Rebuild, do not serialize the world
+
+`SavedStateHandle` uses saved-state Bundle machinery. Store small inputs needed to recreate screen state: IDs, query, selected tab, small draft fields, and scroll/navigation anchors.
+
+```kotlin
+class SearchViewModel(
+    private val saved: SavedStateHandle,
+    private val repository: SearchRepository,
+) : ViewModel() {
+    val query = saved.getStateFlow("query", "")
+    val results = query
+        .debounce(300)
+        .flatMapLatest(repository::search)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun updateQuery(value: String) { saved["query"] = value }
+}
+```
+
+After process recreation, query returns and results reload from authoritative data.
+
+## What not to save
+
+- database result lists or bitmaps
+- Retrofit responses/large Parcelable graphs
+- repository/cache objects
+- coroutine jobs, callbacks, open files
+- secrets/tokens that belong in secure durable storage
+
+Large serialization occurs on the main thread and can cause jank or transaction-size failures.
+
+## Navigation arguments are reconstruction inputs
+
+Pass a product ID, not `Product`. A deep link or restored back stack can recreate the destination independently; repository reload handles fresh/deleted/offline states.
+
+```kotlin
+sealed interface ProductUiState {
+    data object Loading : ProductUiState
+    data class Ready(val product: ProductUi) : ProductUiState
+    data object NotFound : ProductUiState
+    data class Failed(val retryable: Boolean) : ProductUiState
+}
+```
+
+## Important timing corner case
+
+Saved-state registry captures writes when the host stops. Writes performed while already stopped are not necessarily captured unless it starts and stops again. Critical background business state therefore belongs in durable storage, not SavedStateHandle.
+
+## Test matrix
+
+1. Rotation/configuration recreation
+2. Destination remains on back stack then returns
+3. System process death with task restoration
+4. User removes task/force stops (saved state should not be treated as durable)
+5. Argument references deleted or unauthorized data
+6. Schema/app upgrade with old durable records
+
+<Admonition type="warning" title="Common confusion">
+SavedStateHandle is a reconstruction cache tied to saved task state. It is not a database, backup system, or guarantee after explicit task removal.
+</Admonition>
+
+## Sources
+
+- [Saved State module for ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-savedstate)
+- [Save UI states](https://developer.android.com/topic/libraries/architecture/saving-states)
+
+## Interview exercises
+
+1. Choose what to save for a 12-field checkout form.
+2. Recover a product route after its entity was deleted.
+3. Explain why background upload progress cannot live only in SavedStateHandle.

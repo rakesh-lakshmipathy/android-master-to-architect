@@ -1,0 +1,66 @@
+---
+id: architecture-components-interview
+title: Android architecture components interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Android architecture components interview lab
+
+## Rapid answers
+
+<details><summary><strong>When is ViewModel cleared?</strong></summary><p>When its ViewModelStoreOwner is permanently removed: Activity finishes, destination/graph entry is popped, or a custom owner is cleared—not ordinary configuration recreation.</p></details>
+
+<details><summary><strong>repeatOnLifecycle versus launchWhenStarted?</strong></summary><p>repeatOnLifecycle cancels and restarts its block as lifecycle crosses the state; it is preferred for collections whose upstream work should stop. launchWhen APIs suspend and can retain active upstream resources.</p></details>
+
+<details><summary><strong>Why pass IDs in routes?</strong></summary><p>They are small, typeable reconstruction inputs. Authoritative objects can be reloaded, refreshed, access-checked, and handled when deleted.</p></details>
+
+## Case study: three-tab commerce app
+
+- Each top tab preserves its own navigation stack.
+- Product destination ViewModel is entry-scoped.
+- Checkout flow state is graph-scoped.
+- Cart repository/Room is cross-screen source of truth.
+- Product/order IDs are typed route arguments.
+- Deep links validate auth and entity access.
+- Logout clears protected stacks and local sensitive state.
+- Durable order processing is observed, not represented only by navigation events.
+
+## Debug scenarios
+
+### Network call repeats on rotation
+
+Likely work starts in Activity/composable body or ViewModel is created under the wrong owner/key. Move screen work into correctly scoped state production and make refresh semantics explicit.
+
+### Fragment crashes updating binding after navigation
+
+Collector used Fragment lifecycle instead of `viewLifecycleOwner`, so it outlived the destroyed view. Collect with repeatOnLifecycle on the view lifecycle.
+
+### Search results revert to an older query
+
+Requests run concurrently without latest-wins policy. Use `flatMapLatest`/job cancellation and ensure a cancelled transport result cannot overwrite newer state.
+
+### Payment navigates twice
+
+Completion was replayed as a transient event. Base truth on durable order status and acknowledge/guard navigation relative to current destination.
+
+## Review checklist
+
+- [ ] ViewModel owner matches sharing and cleanup lifetime.
+- [ ] No shorter-lived UI object is retained by longer-lived state holder.
+- [ ] Saved state contains reconstruction inputs only.
+- [ ] Coroutine owner/restart/cancellation semantics are explicit.
+- [ ] Navigation arguments are typed, minimal, and validated.
+- [ ] Deep links handle auth, missing data, and back behavior.
+- [ ] Repository owns a real data policy and one source of truth.
+- [ ] Use cases provide policy/reuse/orchestration rather than ceremony.
+- [ ] UI consumes immutable cohesive state.
+
+<Admonition type="tip" title="Interview framing">
+For every Jetpack component, explain its owner and lifetime. Then cover process death, concurrency, source of truth, failure recovery, and testing. APIs alone are not architecture.
+</Admonition>
+
+## Exercises
+
+1. Whiteboard scopes for a nested onboarding flow.
+2. Create a process-death test plan for checkout.
+3. Specify repository contract tests shared by fake and production implementations.

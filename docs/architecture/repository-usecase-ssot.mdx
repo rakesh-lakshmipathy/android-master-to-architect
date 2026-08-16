@@ -1,0 +1,98 @@
+---
+id: repository-usecase-ssot
+title: Repositories, use cases, and single source of truth
+---
+import Admonition from '@theme/Admonition';
+
+# Repositories, use cases, and single source of truth
+
+## Repository owns application-data policy
+
+```kotlin
+interface ProductsRepository {
+    fun observeProduct(id: ProductId): Flow<Product?>
+    suspend fun refresh(id: ProductId)
+    suspend fun updateFavorite(id: ProductId, favorite: Boolean)
+}
+```
+
+It abstracts sources, centralizes mutation, defines cache/network conflict rules, and exposes domain/application data. It should not expose DAO entities or Retrofit calls as its public contract.
+
+## Database-backed source of truth
+
+```kotlin
+fun observeProduct(id: ProductId): Flow<Product?> =
+    dao.observe(id).map { it?.toDomain() }
+
+suspend fun refresh(id: ProductId) {
+    val remote = api.getProduct(id.value)
+    dao.upsert(remote.toEntity())
+}
+```
+
+UI observes database; refresh writes database. If UI alternates between direct network and database results, two truths race and offline behavior diverges.
+
+## Mutation and optimistic UI
+
+For favorite toggle:
+
+1. persist local desired state/pending operation transactionally
+2. UI immediately observes it
+3. sync attempts network
+4. success clears pending marker
+5. failure follows explicit rollback/retry/conflict policy
+
+Do not update only ViewModel state and hope later refresh agrees.
+
+## Use cases add policy, reuse, or orchestration
+
+```kotlin
+class PlaceOrder(
+    private val cart: CartRepository,
+    private val orders: OrderRepository,
+    private val inventory: InventoryRepository,
+) {
+    suspend operator fun invoke(): OrderId { /* validate + coordinate */ }
+}
+```
+
+A pass-through `GetProductsUseCase` is optional. Add it when it creates a useful capability boundary, shared policy, or simplifies multiple consumers—not to satisfy a diagram.
+
+## Immutable UI state
+
+```kotlin
+data class ProductUiState(
+    val product: ProductUi? = null,
+    val loading: Boolean = true,
+    val refreshing: Boolean = false,
+    val failure: ProductFailure? = null,
+)
+```
+
+Expose `StateFlow<ProductUiState>`, not `MutableStateFlow`. Use atomic `update`; model mutually exclusive states with sealed types when appropriate. UI state is a presentation projection, not necessarily the application-data source of truth.
+
+## Contract details to document
+
+- cold/hot stream and replay behavior
+- threading/main safety
+- null versus not-found versus error
+- freshness and refresh semantics
+- cancellation behavior
+- ordering/deduplication
+- offline mutation/conflict behavior
+- fake implementation equivalence
+
+<Admonition type="tip" title="Architect takeaway">
+“Repository” is valuable when it owns data policy. “Use case” is valuable when it owns an operation. “SSOT” is valuable only when all writers/readers actually honor it.
+</Admonition>
+
+## Sources
+
+- [Android data layer](https://developer.android.com/topic/architecture/data-layer)
+- [Android domain layer](https://developer.android.com/topic/architecture/domain-layer)
+
+## Interview exercises
+
+1. Design a repository contract for offline favorites.
+2. Identify two truths in UI that reads network and Room independently.
+3. Decide whether three proposed pass-through use cases should exist.

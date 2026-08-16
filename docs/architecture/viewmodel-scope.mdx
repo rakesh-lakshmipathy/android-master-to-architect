@@ -1,0 +1,77 @@
+---
+id: viewmodel-scope
+title: ViewModel lifecycle, scope, factories, and memory
+---
+import Admonition from '@theme/Admonition';
+
+# ViewModel lifecycle, scope, factories, and memory
+
+`ViewModel` is a screen-level business-state holder whose lifetime is controlled by a `ViewModelStoreOwner`.
+
+## Scope determines identity
+
+| Owner | Same instance until | Use case |
+|---|---|---|
+| Activity | Activity finishes | app-shell/shared Activity state |
+| Fragment | Fragment permanently removed | one Fragment screen |
+| Nav destination | entry popped | destination state |
+| Navigation graph | graph entry removed | multi-step flow sharing |
+
+Rotation recreates Activity/Fragment objects but retains the owner's store. Process death destroys the process and ViewModel; reconstruction needs saved/durable state.
+
+```kotlin
+@Composable
+fun CheckoutRoute(vm: CheckoutViewModel = hiltViewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    CheckoutContent(state, vm::onAction)
+}
+```
+
+Keep ViewModel acquisition at the route boundary. Pass values/callbacks to reusable content instead of passing the ViewModel through the tree.
+
+## Scope mistakes
+
+❌ Activity-scoping every ViewModel retains finished feature state, couples screens, and makes back-stack behavior surprising.
+
+❌ Creating a ViewModel for every lazy-list row can create hundreds of lifecycle objects and unstable identity unless ownership/keys are deliberately managed.
+
+✅ Choose the narrowest owner that must share and retain the state.
+
+## Memory rules
+
+ViewModel can outlive an Activity instance. It should not hold Activity, Fragment, View, `NavController`, or UI callback references.
+
+```kotlin
+// ❌ Activity may be destroyed while ViewModel remains.
+class BadViewModel(val activity: Activity) : ViewModel()
+```
+
+Application context is safer technically but still often signals misplaced UI/resource work. Expose semantic errors; let UI resolve localized strings.
+
+`viewModelScope` cancels when `onCleared` runs. It does not make work durable beyond the screen/process; use repository/application scope or WorkManager when required.
+
+## Creation and runtime inputs
+
+Constructor injection supplies stable dependencies. Navigation/runtime identifiers come from typed route arguments/SavedStateHandle or an assisted factory. Do not use a global service locator inside the ViewModel; hidden dependencies harm tests and lifecycle clarity.
+
+```kotlin
+class ProductViewModel(
+    savedStateHandle: SavedStateHandle,
+    private val products: ProductRepository,
+) : ViewModel() {
+    private val productId = ProductId(requireNotNull(savedStateHandle["productId"]))
+}
+```
+
+Validate arguments once and fail with a useful boundary error or render an invalid-link state.
+
+## Sources
+
+- [ViewModel overview](https://developer.android.com/topic/libraries/architecture/viewmodel)
+- [ViewModel scoping APIs](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-apis)
+
+## Interview exercises
+
+1. Choose scopes for checkout steps and shared cart state.
+2. Explain why ViewModel surviving rotation does not mean process persistence.
+3. Find lifecycle leaks in a ViewModel holding callbacks and Resources.

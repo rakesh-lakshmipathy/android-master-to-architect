@@ -1,0 +1,74 @@
+---
+id: lifecycle-concurrency
+title: Lifecycle-aware concurrency
+---
+import Admonition from '@theme/Admonition';
+
+# Lifecycle-aware concurrency
+
+Lifecycle-aware collection controls observation; it does not decide ownership of the underlying work.
+
+## Views: restart collection with lifecycle
+
+```kotlin
+viewLifecycleOwner.lifecycleScope.launch {
+    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        launch { viewModel.state.collect(::render) }
+        launch { viewModel.effects.collect(::handleEffect) }
+    }
+}
+```
+
+The block starts at STARTED, cancels below STARTED, and restarts later. Separate `launch` calls collect concurrently; writing two sequential `collect` calls means the second is never reached until the first completes.
+
+Use `viewLifecycleOwner` in Fragments because Fragment view lifetime is shorter than Fragment lifetime.
+
+## Compose
+
+```kotlin
+val state by viewModel.state.collectAsStateWithLifecycle()
+```
+
+This is appropriate for render state. UI effects needing suspend APIs use a carefully scoped effect and explicit delivery semantics.
+
+## Work ownership table
+
+| Work | Owner |
+|---|---|
+| animate/scroll while screen exists | UI composition/view lifecycle |
+| load/transform screen state | ViewModel scope |
+| repository cache update shared by screens | repository/application scope |
+| guaranteed deferred sync | WorkManager |
+| immediate OS component handling | component scope with handoff if durable |
+
+## Cancellation contract
+
+```kotlin
+suspend fun load(): Data = withContext(ioDispatcher) { api.load() }
+```
+
+Do not swallow `CancellationException` inside `catch (Throwable)`. Cleanup belongs in `finally`; non-cancellable cleanup should be minimal and justified.
+
+For search, `flatMapLatest` cancels stale requests. For payments, cancellation of the client coroutine does not guarantee the server operation stopped—use idempotency and query durable status.
+
+## Anti-patterns
+
+- ❌ `GlobalScope` outlives ownership and tests.
+- ❌ `launchWhenStarted` suspends work that may continue retaining resources; prefer repeat APIs for Flow collection.
+- ❌ restart network mutation every time UI reaches STARTED.
+- ✅ observe durable operation state; trigger mutation once through an idempotent owner.
+
+<Admonition type="tip" title="Architect takeaway">
+For each coroutine specify owner, start trigger, cancellation effect, restart behavior, duplicate protection, and recovery after process death.
+</Admonition>
+
+## Sources
+
+- [Lifecycle-aware coroutines](https://developer.android.com/topic/libraries/architecture/coroutines)
+- [Lifecycle-aware coroutines for Views](https://developer.android.com/topic/libraries/architecture/views/coroutines-views)
+
+## Interview exercises
+
+1. Find why only the first of two flows is collected.
+2. Assign ownership for screen load, cache refresh, and durable upload.
+3. Explain cancellation semantics of an in-flight payment request.
