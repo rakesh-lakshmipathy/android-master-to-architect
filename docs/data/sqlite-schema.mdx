@@ -1,0 +1,86 @@
+---
+id: sqlite-schema
+title: SQLite schema design, indexes, joins, and transactions
+---
+import Admonition from '@theme/Admonition';
+
+# SQLite schema design, indexes, joins, and transactions
+
+## Model invariants in the database
+
+```sql
+CREATE TABLE orders (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('draft','submitted','accepted','rejected')),
+  total_minor INTEGER NOT NULL CHECK(total_minor >= 0),
+  currency TEXT NOT NULL,
+  updated_at_epoch_ms INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+Use stable IDs, explicit nullability, units in column names, uniqueness/check/foreign-key constraints, and deterministic defaults. Kotlin validation alone cannot protect writes from migrations, other processes, or future code.
+
+Store money as integer minor units plus currency, not binary floating point. Store time with explicit instant/zone semantics; “timestamp” without unit/zone invites bugs.
+
+## Normalize versus duplicate
+
+Normalize data that has one identity and changes independently. Deliberately duplicate immutable display snapshots when history must preserve what was shown at purchase time. Every denormalized field needs an update/reconciliation policy.
+
+## Index for real query shapes
+
+```sql
+CREATE INDEX idx_orders_user_updated
+ON orders(user_id, updated_at_epoch_ms DESC);
+```
+
+This helps `WHERE user_id = ? ORDER BY updated_at DESC`. Column order matters. An index costs disk, memory, and write work; indexing every column slows mutations without guaranteeing useful plans.
+
+Use `EXPLAIN QUERY PLAN` with representative volume. Watch full scans, temporary sort B-trees, non-selective indexes, expressions preventing index use, and N+1 queries.
+
+## Joins express relationships
+
+```sql
+SELECT o.id, o.status, u.display_name
+FROM orders o
+JOIN users u ON u.id = o.user_id
+WHERE o.status = :status
+ORDER BY o.updated_at_epoch_ms DESC;
+```
+
+Use `LEFT JOIN` when parent rows must remain without a child. Filters on the right table in `WHERE` can accidentally turn a left join into inner behavior; put the condition in `ON` when appropriate.
+
+## Transactions protect invariants
+
+```text
+BEGIN
+  decrement inventory if enough remains
+  create order
+  create outbox/sync operation
+COMMIT
+```
+
+All-or-nothing prevents an order without inventory change or a local mutation without sync record. Keep transactions short: do not perform network calls, user prompts, or long file I/O while locks are held.
+
+## Pagination
+
+Large `OFFSET` scans/discards earlier rows and shifts under concurrent inserts. Prefer keyset pagination:
+
+```sql
+WHERE (updated_at_epoch_ms, id) < (:lastTime, :lastId)
+ORDER BY updated_at_epoch_ms DESC, id DESC
+LIMIT :limit
+```
+
+Tie-break with unique ID for deterministic order.
+
+<Admonition type="tip" title="Architect takeaway">
+Schema is executable business/data policy. Design constraints, query shapes, mutation atomicity, evolution, and recovery together.
+</Admonition>
+
+## Exercises
+
+1. Design indexes for user-filtered orders sorted by time.
+2. Find a LEFT JOIN accidentally converted to INNER JOIN.
+3. Model an atomic offline mutation plus outbox record.

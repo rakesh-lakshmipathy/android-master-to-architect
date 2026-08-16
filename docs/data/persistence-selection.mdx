@@ -1,0 +1,65 @@
+---
+id: persistence-selection
+title: Choosing Room, DataStore, files, cache, or Keystore
+---
+import Admonition from '@theme/Admonition';
+
+# Choosing Room, DataStore, files, cache, or Keystore
+
+## Decision table
+
+| Need | Primary choice | Why |
+|---|---|---|
+| query/filter/join structured records | Room | relational constraints, transactions, indexes |
+| small key-value settings | Preferences DataStore | atomic coroutine/Flow setting updates |
+| typed cohesive settings | Proto DataStore | explicit evolvable schema |
+| large binary/stream/document | file storage | streaming and direct file APIs |
+| recomputable speed layer | memory/disk cache | bounded eviction, not truth |
+| non-exportable cryptographic key | Android Keystore | OS/hardware-backed key operations where available |
+
+Most real features combine them. Photo editor: Room for project metadata, files for images, DataStore for tool preferences, memory cache for thumbnails, Keystore for encryption key.
+
+## Ask before choosing
+
+1. Is data authoritative, durable draft, cache, or secret?
+2. Is it relational/queryable?
+3. Size and update frequency?
+4. Must updates be transactional across records?
+5. Must user/other apps access it?
+6. What survives uninstall, logout, backup, restore, device transfer?
+7. Multi-process access?
+8. Encryption/key/retention/deletion requirements?
+9. Schema evolution and corruption recovery?
+
+## Cache is not a source of truth
+
+Every cache needs key, freshness, size bound, eviction, invalidation, concurrency, and miss/rebuild policy. An unbounded `HashMap` singleton is a memory leak, not architecture.
+
+## Files
+
+Use internal app-specific storage for private app files, cache directory for disposable data, MediaStore for shareable media, Storage Access Framework for user-chosen documents. Store content URI permissions/metadata appropriately; never assume a URI is a filesystem path.
+
+Atomic file replace: write temporary file, flush if durability matters, then rename/replace. Handle low storage, partial writes, cancellation, and cleanup.
+
+## Keystore is not general storage
+
+Keystore protects key material/operations. Store ciphertext elsewhere with authenticated-encryption metadata; plan key invalidation/rotation and unrecoverable-data behavior. Database encryption does not fix access-control, exported-component, logging, or compromised-runtime risks.
+
+## Backup and deletion
+
+No-backup versus backed-up storage is a product/security choice. On logout/account deletion, clear tokens, databases/files/cache and scheduled work according to policy; verify no cross-account resurrection from backup/sync.
+
+<Admonition type="warning" title="Security language">
+“Internal/private storage” means app sandbox access under normal OS guarantees, not magical safety on a compromised device or from your own exported/logging bugs.
+</Admonition>
+
+## Sources
+
+- [Android data and file storage overview](https://developer.android.com/training/data-storage/)
+- [Storage use cases](https://developer.android.com/training/data-storage/use-cases)
+
+## Exercises
+
+1. Select storage for offline maps, auth keys, user exports, and preferences.
+2. Design cache eviction for thumbnails.
+3. Plan complete multi-account logout cleanup.

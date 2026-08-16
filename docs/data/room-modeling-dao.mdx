@@ -1,0 +1,97 @@
+---
+id: room-modeling-dao
+title: Room entities, DAOs, relations, and converters
+---
+import Admonition from '@theme/Admonition';
+
+# Room entities, DAOs, relations, and converters
+
+Room verifies SQL at compile time; SQLite remains the underlying relational database.
+
+```kotlin
+@Entity(
+    tableName = "products",
+    indices = [Index("category_id"), Index(value = ["sku"], unique = true)],
+    foreignKeys = [ForeignKey(
+        entity = CategoryEntity::class,
+        parentColumns = ["id"], childColumns = ["category_id"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+)
+data class ProductEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "category_id") val categoryId: String,
+    val sku: String,
+    @ColumnInfo(name = "price_minor") val priceMinor: Long,
+    val currency: String,
+)
+```
+
+Entity is persistence schema, not automatically domain/UI model. Keep server-only nulls, sync metadata, and storage representation from leaking upward.
+
+## DAO contracts
+
+```kotlin
+@Dao
+interface ProductDao {
+    @Query("SELECT * FROM products WHERE id = :id")
+    fun observe(id: String): Flow<ProductEntity?>
+
+    @Upsert suspend fun upsertAll(items: List<ProductEntity>)
+
+    @Query("DELETE FROM products WHERE id NOT IN (:retainedIds)")
+    suspend fun deleteMissing(retainedIds: List<String>)
+}
+```
+
+Use `suspend` for one-shot work and Flow for observable queries. Define conflict semantics deliberately: replacing a row can interact with foreign keys/triggers differently than updating.
+
+## Relations
+
+Room does not place object references inside entities. Model one-to-many/many-to-many with foreign keys/junction tables and query projection/relationship data classes.
+
+```kotlin
+data class CategoryWithProducts(
+    @Embedded val category: CategoryEntity,
+    @Relation(parentColumn = "id", entityColumn = "category_id")
+    val products: List<ProductEntity>,
+)
+
+@Transaction
+@Query("SELECT * FROM categories WHERE id = :id")
+suspend fun categoryWithProducts(id: String): CategoryWithProducts?
+```
+
+`@Transaction` provides a consistent multi-query relationship snapshot.
+
+## Embedded objects
+
+`@Embedded` flattens fields into the same table. Prefix two addresses to avoid collisions:
+
+```kotlin
+@Embedded(prefix = "billing_") val billing: AddressEntity
+@Embedded(prefix = "shipping_") val shipping: AddressEntity
+```
+
+## Type converters
+
+Use converters for values with stable scalar representation (`Instant`↔epoch, enum↔code). Avoid converting complex lists/objects to JSON when you need relational query/update/integrity. Store enum stable codes, not ordinal; renaming/reordering ordinals corrupts meaning.
+
+## Projection and N+1
+
+Query only columns needed for high-volume lists. One query per row is an N+1 problem; join/project or fetch in batches. Measure generated relationship queries on real data.
+
+<Admonition type="warning" title="DAO leakage">
+Features should normally depend on repository contracts, not DAOs. Exposing DAOs lets every caller invent transaction, freshness, and mapping policy.
+</Admonition>
+
+## Sources
+
+- [Room overview](https://developer.android.com/training/data-storage/room)
+- [Room relationships](https://developer.android.com/training/data-storage/room/relationships)
+
+## Exercises
+
+1. Model playlists and songs with a junction table.
+2. Choose relation versus projection query for a list screen.
+3. Replace an unsafe enum ordinal converter.

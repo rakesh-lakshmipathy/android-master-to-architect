@@ -327,7 +327,29 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Parts V-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part V - Data, Networking, and Offline First',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'Local Persistence',
+          collapsed: true,
+          items: [
+            'data/sqlite-schema',
+            'data/room-modeling-dao',
+            'data/room-migrations',
+            'data/room-transactions-flow-performance',
+            'data/datastore',
+            'data/persistence-selection',
+            'data/persistence-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Parts VI-X - Android to Architect', items: ['roadmap']},
   ],
 };
 

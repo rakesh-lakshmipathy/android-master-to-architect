@@ -1,0 +1,79 @@
+---
+id: room-transactions-flow-performance
+title: Room transactions, Flow invalidation, and performance
+---
+import Admonition from '@theme/Admonition';
+
+# Room transactions, Flow invalidation, and performance
+
+## Transactions encode atomic operations
+
+```kotlin
+@Dao
+abstract class CartDao {
+    @Insert protected abstract suspend fun insertOrder(order: OrderEntity)
+    @Query("DELETE FROM cart_lines") protected abstract suspend fun clearCart()
+    @Insert protected abstract suspend fun enqueue(op: OutboxEntity)
+
+    @Transaction
+    open suspend fun checkout(order: OrderEntity, op: OutboxEntity) {
+        insertOrder(order)
+        enqueue(op)
+        clearCart()
+    }
+}
+```
+
+Exception rolls back. Cancellation also must not be swallowed. Keep network outside; commit local intent/outbox, then sync.
+
+Room serializes database transactions. Long CPU work inside blocks other transactions. Prepare/parse outside, transact only reads/writes that need atomicity.
+
+## Flow is invalidation-driven
+
+Room observes tables referenced by query and reruns query when invalidated. An unrelated row change in the same table can rerun a costly query even when result is equal.
+
+```kotlin
+@Query("SELECT id, title, done FROM tasks WHERE project_id=:id ORDER BY position")
+fun observeTasks(id: String): Flow<List<TaskRow>>
+```
+
+Apply `distinctUntilChanged()` when equality cost/result semantics justify it, but first optimize SQL, projection, indexes, and write frequency.
+
+Flow query is cold: each collector can register/run work. Repository `stateIn/shareIn` may share at screen/app scope when appropriate, with explicit lifetime/freshness behavior.
+
+## Concurrency and lost updates
+
+Read-modify-write outside transaction races:
+
+```text
+A reads count=5
+B reads count=5
+A writes 6
+B writes 6  // one increment lost
+```
+
+Use atomic SQL (`UPDATE ... SET count=count+1`) or transaction/version compare-and-set. Multi-process access needs multi-instance invalidation for observation, but invalidation alone does not solve business concurrency/conflicts.
+
+## Performance workflow
+
+1. Reproduce with representative row count/distribution.
+2. Capture query and `EXPLAIN QUERY PLAN`.
+3. Inspect indexes, projections, joins, sorts, N+1, invalidation frequency.
+4. Benchmark change, including write cost/storage.
+5. Retest low-end device and migration/startup paths.
+
+Use paging for large result sets. Avoid loading blobs/huge JSON into list rows. Store large binary files separately and DB metadata/URI where appropriate.
+
+## Database instance
+
+Room database is expensive; use one instance per process normally. Multi-process features require explicit builder/configuration and understanding that each process has memory/cache/lifetime cost.
+
+<Admonition type="warning" title="Main safety">
+Room prevents many main-thread accesses by default. Do not enable main-thread queries to hide architecture mistakes; disk latency is unpredictable and can cause jank/ANRs.
+</Admonition>
+
+## Exercises
+
+1. Fix a lost increment update.
+2. Diagnose a Flow query rerunning too often.
+3. Shorten a transaction containing JSON parsing and HTTP.

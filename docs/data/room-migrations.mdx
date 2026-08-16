@@ -1,0 +1,79 @@
+---
+id: room-migrations
+title: Room migrations and migration testing
+---
+import Admonition from '@theme/Admonition';
+
+# Room migrations and migration testing
+
+Migration is production code running on irreplaceable user data before the app can open.
+
+## Additive automatic change
+
+Room auto migrations handle changes it can infer; ambiguous rename/delete needs a specification or manual migration. Never model a rename as drop + add if data must survive.
+
+## Expand, migrate, contract
+
+For a complex transformation:
+
+1. add new schema while old remains
+2. backfill deterministically
+3. make code read/write compatible during transition if needed
+4. validate counts/invariants
+5. remove old schema in later version
+
+SQLite table recreation pattern:
+
+```sql
+CREATE TABLE orders_new (... desired schema ...);
+INSERT INTO orders_new (...) SELECT ... FROM orders;
+DROP TABLE orders;
+ALTER TABLE orders_new RENAME TO orders;
+CREATE INDEX ...;
+```
+
+Recreate foreign keys, indexes, triggers, defaults, nullability, and constraints. Copy in one transaction and handle malformed legacy values explicitly.
+
+## Destructive migration risk
+
+`fallbackToDestructiveMigration()` deletes local database when no path exists. Acceptable only for genuinely disposable cache that can be fully restored and does not contain offline drafts, pending sync, user choices, or costly downloads.
+
+Document which tables are authoritative/pending before enabling it. “Server-backed app” does not mean all local data is disposable.
+
+## Test every supported path
+
+Export Room schema JSON into version control. Migration tests should:
+
+- create an old-version database with representative/edge rows
+- run full migration path to current
+- validate schema
+- assert values, constraints, indexes, relationships, and queries
+- test empty, large, null/legacy malformed, Unicode, max/min values
+
+```kotlin
+helper.createDatabase(TEST_DB, 3).apply {
+    execSQL("INSERT INTO ...")
+    close()
+}
+helper.runMigrationsAndValidate(TEST_DB, CURRENT_VERSION, true, *ALL_MIGRATIONS)
+```
+
+Test direct supported paths and chained paths (`1→current`, `2→current`), not only latest one-step migration.
+
+## Operational concerns
+
+Large backfills can extend startup/ANR risk and require free disk for table copies. Measure upgrade time and storage on low-end devices/large realistic databases. Consider lazy/background data backfill only if schema and feature behavior safely support partial state.
+
+<Admonition type="tip" title="Release rule">
+Do not ship an entity schema change without exported schema, migration path policy, migration tests, rollback/data-loss analysis, and measured worst-case upgrade.
+</Admonition>
+
+## Sources
+
+- [Migrate Room databases](https://developer.android.com/training/data-storage/room/migrating-db-versions)
+
+## Exercises
+
+1. Safely split `full_name` into two nullable fields.
+2. Audit whether destructive migration is safe for an offline notes app.
+3. Build a migration test data matrix.

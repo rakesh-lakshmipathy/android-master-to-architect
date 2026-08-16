@@ -1,0 +1,62 @@
+---
+id: persistence-interview
+title: Local persistence interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Local persistence interview lab
+
+## Rapid answers
+
+<details><summary><strong>Room versus SQLite?</strong></summary><p>Room is an abstraction over SQLite that adds compile-time SQL verification, mapping/DAO conveniences, migration support, and reactive integrations while retaining SQLite schema/query/transaction semantics.</p></details>
+
+<details><summary><strong>Preferences versus Proto DataStore?</strong></summary><p>Preferences is schema-less key-value; Proto is a typed evolvable schema. Both suit small settings, not relational datasets.</p></details>
+
+<details><summary><strong>Does Flow emit only when returned rows change?</strong></summary><p>Room invalidates based on observed tables and reruns the query; unrelated writes can trigger execution. Downstream equality suppression and query optimization are separate decisions.</p></details>
+
+## Scenario: app update wipes offline drafts
+
+`fallbackToDestructiveMigration()` treated all tables as disposable cache. Classify durable local-only/pending data, supply tested paths, and reserve destructive fallback for explicitly rebuildable stores.
+
+## Scenario: UI shows count 6 after two simultaneous increments from 5
+
+Read-modify-write raced. Use atomic SQL increment or transaction/version check; invalidation observation alone does not prevent lost updates.
+
+## Scenario: list became slow at 100,000 rows
+
+Inspect query plan, indexes matching filter/order, projection, N+1/relations, stable pagination, invalidation frequency, and blobs. Reproduce with realistic distribution; do not add random indexes.
+
+## Case study: offline task manager
+
+- Room owns tasks/projects/outbox/tombstones.
+- foreign keys and unique constraints preserve invariants.
+- transaction writes task mutation plus outbox entry.
+- Flow queries expose project-scoped projections.
+- keyset/Paging handles large history.
+- files hold attachments; Room holds URI/metadata/checksum.
+- Proto DataStore holds typed UI preferences.
+- Keystore protects key used for sensitive attachment encryption where threat model requires.
+- migrations preserve drafts and pending sync across upgrades.
+
+## Review checklist
+
+- [ ] Schema encodes nullability, uniqueness, references, units, and valid states.
+- [ ] Indexes follow measured query shapes.
+- [ ] Transactions are short and protect business atomicity.
+- [ ] Entities/DAOs do not leak as application contracts.
+- [ ] Every supported migration path is tested with data.
+- [ ] Flow invalidation and collector sharing are understood.
+- [ ] DataStore has one correctly scoped instance and tested migrations.
+- [ ] Storage choice matches query, size, sharing, durability, and secrecy.
+- [ ] Cache has eviction/freshness/invalidation policy.
+- [ ] Logout/backup/corruption/low-storage behavior is defined.
+
+<Admonition type="tip" title="Interview framing">
+Describe data meaning and ownership first, then schema/invariants, access patterns, atomicity/concurrency, evolution, failure recovery, security, performance evidence, and tests.
+</Admonition>
+
+## Exercises
+
+1. Whiteboard schema and migrations for offline chat.
+2. Diagnose a migration that forgot indexes and foreign keys.
+3. Create persistence test matrix for process death, upgrade, corruption, and low storage.

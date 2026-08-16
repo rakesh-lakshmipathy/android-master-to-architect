@@ -1,0 +1,77 @@
+---
+id: datastore
+title: Preferences and Proto DataStore
+---
+import Admonition from '@theme/Admonition';
+
+# Preferences and Proto DataStore
+
+DataStore is for small durable settings/state with coroutine/Flow APIs and serialized transactional updates—not relational datasets.
+
+## Preferences DataStore
+
+Schema-less typed keys suit simple settings:
+
+```kotlin
+val THEME = stringPreferencesKey("theme")
+
+val theme: Flow<Theme> = dataStore.data.map { prefs ->
+    Theme.fromCode(prefs[THEME]) ?: Theme.System
+}
+
+suspend fun setTheme(theme: Theme) {
+    dataStore.edit { it[THEME] = theme.code }
+}
+```
+
+Centralize keys and mapping. Raw key access throughout features recreates SharedPreferences-style coupling and typo/default inconsistency.
+
+## Proto DataStore
+
+Proto provides an explicit typed schema, defaults, field numbers, and evolution rules. It is preferable for cohesive structured settings.
+
+Never reuse removed field numbers or change field meaning/type incompatibly. Preserve unknown fields/evolution behavior and map generated storage types to application settings contract where useful.
+
+## Atomic update
+
+```kotlin
+dataStore.updateData { current ->
+    current.toBuilder().setLaunchCount(current.launchCount + 1).build()
+}
+```
+
+The transform is serialized and should be fast/pure. Do not call network or wait for UI inside. It may be retried; avoid side effects.
+
+## Migration
+
+Migrations run before data is exposed. Make them deterministic and idempotent; test existing/missing/malformed SharedPreferences values and cleanup policy. A migration must not depend on an unavailable network.
+
+## Corruption
+
+Corruption handler can replace unreadable data with safe defaults, but that is data loss. Decide which settings can reset, record privacy-safe diagnostics, and avoid treating security-sensitive state as harmless preferences.
+
+## Multi-process
+
+Use the supported multi-process DataStore consistently for a file when multiple processes access it. Never mix single- and multi-process variants for the same file. Multi-process consistency does not turn DataStore into a relational transaction system.
+
+## Common mistakes
+
+- multiple DataStore instances for one file
+- storing large lists/cache records
+- mutable singleton mirror that drifts from Flow
+- swallowing all `IOException`/corruption as defaults silently
+- storing access tokens because “preferences are private”
+
+<Admonition type="tip" title="Choice">
+Preferences DataStore: a few independent keys. Proto: cohesive typed settings. Room: queryable related records. Files: streams/blobs. Keystore: cryptographic key operations/material.
+</Admonition>
+
+## Sources
+
+- [DataStore architecture guide](https://developer.android.com/topic/libraries/architecture/datastore)
+
+## Exercises
+
+1. Choose Preferences or Proto for notification settings.
+2. Design a SharedPreferences migration with malformed values.
+3. Explain why DataStore update transforms must avoid side effects.
