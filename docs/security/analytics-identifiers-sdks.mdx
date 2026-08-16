@@ -1,0 +1,87 @@
+---
+id: analytics-identifiers-sdks
+title: Analytics, identifiers, SDK governance, and redaction
+---
+import Admonition from '@theme/Admonition';
+
+# Analytics, identifiers, SDK governance, and redaction
+
+Instrumentation should answer a defined product/reliability question with the least data—not reproduce user behavior and content “just in case.”
+
+## Event contract
+
+```kotlin
+data class AnalyticsEvent(
+    val name: AllowedEventName,
+    val properties: Map<AllowedProperty, SafeAnalyticsValue>,
+    val schemaVersion: Int,
+    val purpose: AnalyticsPurpose,
+)
+```
+
+Use allowlisted typed fields. A generic `Map<String, Any?>` invites developers to attach email, token, search query, message body, exact location, deep-link URL, or entire server response.
+
+## Classify fields
+
+- direct identifiers: email, phone, account ID;
+- persistent/pseudonymous identifiers: analytics user ID, installation ID;
+- sensitive content: health, finance, precise location, messages/files;
+- quasi-identifiers: device model + timestamp + region can re-identify;
+- operational metadata: bounded error code, duration bucket, build/version.
+
+Hashing a stable identifier generally keeps it linkable and vulnerable to dictionary matching. Prefer a purpose-scoped random identifier and define reset/deletion behavior.
+
+## Identifier hierarchy
+
+Choose the narrowest scope:
+
+1. no identifier—aggregate event;
+2. ephemeral session ID;
+3. app-installation random ID reset on reinstall/data clear;
+4. authenticated account-scoped analytics ID where necessary and disclosed;
+5. platform advertising/resettable IDs only for allowed purposes/policies;
+6. avoid hardware identifiers for analytics.
+
+Never join identifiers across products/purposes merely because it is technically possible.
+
+## Third-party SDK governance
+
+Before adding/upgrading an SDK, record:
+
+- business owner and necessity;
+- data/events/identifiers/permissions collected;
+- destinations/subprocessors/regions and retention;
+- collection defaults and consent/preference API;
+- children/sensitive-data restrictions;
+- network hosts, manifest components, transitive dependencies;
+- deletion/export support;
+- version/security/policy history and removal plan.
+
+Decompile/inspect merged manifest, dependency graph, runtime traffic, data-access auditing, and SDK dashboard configuration. Store declarations must match actual versions/configuration, not marketing assumptions.
+
+## Redaction by construction
+
+```kotlin
+sealed interface SafeAnalyticsValue {
+    data class Count(val value: Int) : SafeAnalyticsValue
+    data class DurationBucket(val value: String) : SafeAnalyticsValue
+    data class EnumValue(val value: String) : SafeAnalyticsValue
+}
+```
+
+Use event tests that reject forbidden key names/patterns and payload sizes. Network logging and crash breadcrumbs need the same allowlisting.
+
+<Admonition type="danger" title="Consent after SDK initialization may be too late">
+ContentProviders/App Startup/automatic collection can run before your first Activity. Ensure defaults, manifest flags, initialization order, and remote configuration prevent pre-choice collection.
+</Admonition>
+
+## Sources
+
+- [Best practices for unique identifiers](https://developer.android.com/identity/user-data-ids)
+- [Using SDKs safely and securely](https://support.google.com/googleplay/android-developer/answer/13326895)
+- [Declare your app’s data use](https://developer.android.com/privacy-and-security/declare-data-use)
+
+## Exercise
+
+Redesign analytics for search conversion, checkout failure, and crash diagnosis. For each field, state question, purpose, scope, retention, access, deletion, and a lower-data alternative.
+

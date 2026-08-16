@@ -1,0 +1,74 @@
+---
+id: privacy-review-interview
+title: Privacy review, release checklist, and interview lab
+---
+
+# Privacy review, release checklist, and interview lab
+
+## Case study: women’s health app
+
+1. Inventory cycle dates, symptoms, notes, pregnancy intent, account, device identifiers, location, analytics, crash data, support, backups, and SDKs.
+2. Remove location/contacts; use local computation for predictions where possible.
+3. Separate essential sync from optional analytics/research purposes and defaults.
+4. Encrypt/protect local/server data according to threat model; server enforces object authorization.
+5. Typed telemetry contains operational buckets, never free-text notes or health fields.
+6. Disable SDK auto-initialization/collection until configuration and applicable choice.
+7. Set short raw retention, user controls, export/delete operations, processor propagation, and anti-resurrection rules.
+8. Review screenshots/Recents, notification content, clipboard, backup/restore, deep links, logs, support tools, and account switching.
+9. Data Safety/privacy disclosures are generated/reconciled from current inventory and actual SDK/runtime behavior.
+10. Release evidence includes access audits, traffic inspection, deletion/export drills, permission tests, and incident owner.
+
+## Release checklist
+
+### Data and purpose
+
+- [ ] Every collected/derived field has owner, purpose, necessity, precision/frequency, destinations, retention, and user control.
+- [ ] New use is reviewed rather than silently reusing old data.
+- [ ] On-device/aggregate/lower-precision alternatives were evaluated.
+
+### Android behavior
+
+- [ ] Permissions are minimal, contextual, revocable, and gracefully degradable.
+- [ ] Sensor access duration and Privacy Dashboard history match UX.
+- [ ] Shared URIs, clipboard, notifications, Recents/screenshots, widgets, and backups are reviewed.
+- [ ] Account switch/logout/deletion clears every local representation.
+
+### SDKs and telemetry
+
+- [ ] Merged manifest, dependencies, initializers, hosts, permissions, and runtime traffic were inspected.
+- [ ] Consent/preferences reach every SDK before collection.
+- [ ] Analytics/log/crash schemas allowlist safe fields and reject payload dumps.
+- [ ] Identifier scope/reset/deletion/linkage is documented.
+
+### Operations and distribution
+
+- [ ] Retention and deletion execute across stores/processors/backups with failure monitoring.
+- [ ] Export/deletion are authenticated, idempotent, tested, and non-resurrecting.
+- [ ] Privacy policy, prominent disclosures, Play Data Safety, and actual behavior agree.
+- [ ] Incident response covers SDK leak, misconfiguration, unauthorized access, and user communication.
+
+## Interview questions
+
+1. **Privacy versus security?** Security protects confidentiality/integrity/availability; privacy governs appropriate collection/use/sharing/control. Strong encryption cannot justify unnecessary collection.
+2. **Data minimization?** Reduce collection, precision, frequency, recipients, and retention while preserving defined purpose.
+3. **Permission versus consent?** OS capability grant versus purpose-specific product/legal decision; neither automatically substitutes for the other.
+4. **Why care about Privacy Dashboard?** It exposes actual camera/mic/location access timing; unexpected access reveals lifetime/SDK defects.
+5. **Is hashed email anonymous?** Usually no; it remains stable/linkable and dictionary-testable.
+6. **Which identifier should analytics use?** Ideally none; otherwise the narrowest resettable purpose-scoped ID that answers the question.
+7. **Who owns SDK collection?** The app publisher remains responsible for integrated SDK behavior and declarations.
+8. **Why can SDK consent be too late?** automatic initializers/providers may transmit before the first Activity or choice.
+9. **How prevent sensitive logs?** typed allowlisted fields, centralized redaction, release configuration, payload tests, and controlled retention/access.
+10. **What makes retention real?** Executing deletion/aggregation across all representations with monitoring, retry, backup/restore policy, and evidence.
+11. **How handle deletion with backups?** Minimize backup lifetime/access and ensure restores reapply tombstones before serving/resyncing data.
+12. **How avoid deletion resurrection?** invalidate sessions, wipe devices, reject delayed/offline events using deletion version/tombstone, and propagate to processors.
+
+## Failure-injection exercises
+
+1. SDK begins collecting before consent after a dependency upgrade.
+2. Deletion succeeds in primary DB but fails in object storage and analytics.
+3. Six-month-old backup restores a deleted account.
+4. Offline phone uploads old health records after server deletion.
+5. Crash reporter captures an exception whose message contains an access token and symptom note.
+6. User revokes microphone while recording service remains active.
+
+For each, define prevention, detection, containment, recovery, audit evidence, and user impact.

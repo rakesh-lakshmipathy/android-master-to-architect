@@ -1,0 +1,79 @@
+---
+id: permission-transparency
+title: Permission UX, privacy indicators, and data access auditing
+---
+import Admonition from '@theme/Admonition';
+
+# Permission UX, privacy indicators, and data access auditing
+
+Users see system permission prompts, camera/microphone indicators, clipboard notices, and Privacy Dashboard history. Your explanation and actual access must agree with what Android shows.
+
+## The honest permission flow
+
+```text
+user invokes feature
+  ↓
+explain purpose + meaningful alternative
+  ↓
+request smallest OS capability
+  ↓
+granted -> access only during expected lifetime
+denied  -> degrade affected feature, respect decision
+revoked -> stop, recover safely
+```
+
+Requesting camera at startup for a scanner used weeks later destroys context. Keeping location active after a trip ends conflicts with the user’s expectation even if permission remains granted.
+
+## Permission is not consent
+
+The OS prompt says an app may access a sensor/data class. It does not fully explain your retention, server sharing, advertising purpose, human review, or derived inferences. Provide clear in-product disclosure and controls appropriate to the actual use and applicable policy.
+
+## Privacy Dashboard implications
+
+Recent Android versions expose camera, microphone, and location access history and live indicators. Treat unexpected dashboard entries as a product defect:
+
+- background component accesses location after feature stops;
+- analytics SDK probes location;
+- preview screen opens camera before user chooses capture;
+- microphone remains active while recording UI says paused.
+
+## Data access auditing
+
+Android data-access auditing can help attribute permission-protected operations to your code or dependencies. Use attribution tags to distinguish features and inspect unexpected accesses in testing.
+
+```xml
+<attribution
+    android:tag="delivery_tracking"
+    android:label="@string/delivery_tracking" />
+```
+
+Auditing is diagnostic evidence, not a complete inventory: server collection, file reads, custom identifiers, network payloads, and SDK processing still require code/config/data-flow review.
+
+## SDK and background surprises
+
+An SDK runs under your app’s permissions and identity. The user sees your app name in system surfaces. Initialize SDKs after required choices, configure collection defaults before first use, and verify no initializer/provider collects before consent/configuration.
+
+## Test scenarios
+
+- fresh install, denied once/repeatedly, “only this time,” approximate, while-in-use;
+- permission revoked in Settings while operation runs;
+- auto-reset/hibernation after inactivity;
+- process recreated with stale UI expectation;
+- background work/service after user disables feature;
+- SDK initialized before and after choice;
+- Privacy Dashboard/access logs match product copy.
+
+<Admonition type="tip" title="Review access duration">
+The most common privacy bug is not requesting the wrong permission—it is continuing to use a granted capability longer or for more purposes than the user expects.
+</Admonition>
+
+## Sources
+
+- [Audit access to data](https://developer.android.com/privacy-and-security/audit-data-access)
+- [Permissions overview](https://developer.android.com/guide/topics/permissions/overview)
+- [Explain access to sensitive information](https://developer.android.com/privacy-and-security/about#explain-access)
+
+## Exercise
+
+Map every camera/microphone/location access in a video-call app to visible UI state, attribution, foreground/background lifetime, dashboard history, denial fallback, and stop action.
+

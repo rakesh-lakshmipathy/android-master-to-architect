@@ -1,0 +1,75 @@
+---
+id: privacy-rights-operations
+title: Export, deletion, retention, and privacy operations
+---
+import Admonition from '@theme/Admonition';
+
+# Export, deletion, retention, and privacy operations
+
+User-data operations are distributed workflows. “Delete account” must coordinate identity, APIs, databases, object stores, processors, device state, backups, audit requirements, and future messages.
+
+## Account deletion state machine
+
+```text
+Active -> DeletionRequested -> Reauthenticated/Confirmed
+       -> DeletionScheduled (optional recovery window)
+       -> AccessDisabled
+       -> PrimaryDataDeleted/Anonymized
+       -> ProcessorDeletesRequested
+       -> LocalDevices/FCM invalidated
+       -> Completed + bounded evidence
+```
+
+Use stable request identity and idempotent steps. A retry must continue deletion, not create a second contradictory workflow.
+
+## Reauthentication and confirmation
+
+Deletion is destructive and high-impact. Require appropriate recent authentication, explain consequences and retained exceptions, distinguish account deletion from logout/subscription cancellation, and provide status. Do not create dark patterns or require contacting support if policy requires an accessible in-app/web path.
+
+## Deletion semantics
+
+Classify each field:
+
+- erase immediately;
+- anonymize irreversibly where truly possible;
+- retain temporarily for fraud/security/dispute/legal obligation with strict isolation/access/expiry;
+- retain aggregate non-identifying statistics;
+- propagate deletion to processors/partners and confirm/fail visibly.
+
+“Soft delete forever” is not deletion. A tombstone may be needed briefly to prevent resurrection, but must contain minimum data and its own retention.
+
+## Backups
+
+Individual deletion from immutable backups may be impractical; define short backup retention, access isolation, and restoration procedure that reapplies deletion tombstones before data returns to production. This requires legal/policy review and operational testing.
+
+## Device cleanup
+
+Server deletion should invalidate sessions/tokens and prevent new sync. The app clears account credentials, Room/files/cache, work/outbox, notifications, FCM association, WebView cookies, shortcuts/widgets, and analytics identity. Offline devices must discover deletion on next contact and wipe rather than upload stale queued data.
+
+## Export
+
+- authenticate and authorize requester;
+- define included categories and understandable schema;
+- generate asynchronously with bounded expiry;
+- encrypt/protect download channel and avoid email attachment leakage;
+- audit access without logging exported content;
+- prevent cross-tenant/object authorization errors;
+- clean temporary export artifacts.
+
+## Operational evidence
+
+Track aggregate counts/latency/failures per deletion stage, processor acknowledgement, oldest overdue request, retention-job lag, restore tests, and access audits—without retaining deleted personal data in the metrics.
+
+<Admonition type="danger" title="Never let deletion resurrect data">
+Offline outboxes, delayed events, backup restore, CDC streams, analytics retries, and third-party webhooks can recreate records. Tombstone/version and ingestion policies must reject post-deletion data.
+</Admonition>
+
+## Sources
+
+- [Google Play account deletion requirements](https://support.google.com/googleplay/android-developer/answer/13327111)
+- [Google Play User Data policy](https://support.google.com/googleplay/android-developer/answer/10144311)
+
+## Exercise
+
+Design deletion for a chat app with messages shared between users, abuse reports, media CDN, encrypted backups, offline devices, analytics, legal holds, and a 14-day recovery window.
+

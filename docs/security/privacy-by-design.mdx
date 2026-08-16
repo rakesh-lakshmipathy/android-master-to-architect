@@ -1,0 +1,94 @@
+---
+id: privacy-by-design
+title: Data minimization, purpose, consent, and retention
+---
+import Admonition from '@theme/Admonition';
+
+# Data minimization, purpose, consent, and retention
+
+Privacy engineering converts promises into data flows, access controls, defaults, deletion jobs, SDK configuration, tests, and evidence. A privacy policy cannot repair an architecture that collects everything forever.
+
+## Build a data inventory
+
+For every data category, record:
+
+| Field | Example |
+|---|---|
+| Data | precise courier location |
+| Source | foreground location provider |
+| Purpose | active delivery tracking |
+| Necessity/granularity | 25 m accuracy; only during trip |
+| Legal/consent basis | determined with qualified counsel/product policy |
+| Destinations | app Room, tracking API, customer stream |
+| Processors/SDKs | map provider; no analytics payload |
+| Retention | raw 7 days; aggregate 90 days |
+| User controls | pause, stop trip, export/delete account |
+| Owner/evidence | Logistics team; schema/job/access audit |
+
+This book explains engineering patterns, not jurisdiction-specific legal advice. Retention, consent, children’s data, health/financial data, and regional rights require current qualified review.
+
+## Minimize at five levels
+
+1. **Collection:** do not obtain contacts when the user can choose one contact.
+2. **Precision:** city instead of exact coordinate.
+3. **Frequency:** one current fix instead of continuous tracking.
+4. **Recipients:** compute on-device rather than send raw input.
+5. **Lifetime:** aggregate/delete raw data quickly.
+
+```kotlin
+// ❌ exact location attached to an analytics event
+analytics.log("search", mapOf("lat" to lat, "lng" to lng))
+
+// ✅ product metric answers the question without location
+analytics.log("search", mapOf("resultCountBucket" to "10-20"))
+```
+
+## Purpose limitation
+
+Data collected to deliver a package should not silently become an advertising profile. New use requires review of compatibility, transparency, user control/consent where applicable, backend/SDK routes, and retention. Add `purpose` ownership to schemas/events, not only documentation.
+
+## Consent is a state machine
+
+```kotlin
+data class ConsentRecord(
+    val purpose: Purpose,
+    val policyVersion: String,
+    val decision: Decision,
+    val decidedAt: Instant,
+    val source: ConsentSurface,
+)
+```
+
+Consent must be informed, specific, unbundled where required, freely chosen, reversible, and auditable under applicable rules. Withdrawal must stop future collection/processing and propagate to SDKs/servers; it does not necessarily erase every record where another valid obligation applies.
+
+Do not confuse:
+
+- OS permission: device grants capability;
+- product consent/preference: user’s decision for a purpose;
+- contract/legal basis: organizational determination;
+- authorization: whether caller may access resource.
+
+## Retention must execute
+
+```text
+ingest with category + purpose + timestamps
+        ↓
+active store -> derived store -> analytics -> backups -> exports
+        ↓          delete/aggregate workflow + evidence
+```
+
+A database TTL alone misses object storage, search index, analytics warehouse, device cache, support export, logs, replicas, and backups. Define grace/legal holds, deletion propagation, failure retry, metrics, and backup expiry/restoration behavior.
+
+<Admonition type="warning" title="Pseudonymous is still linkable">
+Hashing an email, replacing a user ID, or truncating coordinates may reduce exposure but often still permits correlation/re-identification. Document threat model rather than labeling it anonymous automatically.
+</Admonition>
+
+## Sources
+
+- [Android privacy checklist](https://developer.android.com/privacy-and-security/about)
+- [Minimize permission requests and data access](https://developer.android.com/privacy-and-security/minimize-permission-requests)
+
+## Exercise
+
+Create the inventory for a fitness app’s profile, workouts, GPS routes, heart rate, photos, crash reports, analytics, and support tickets. Remove or reduce at least one field from each flow.
+

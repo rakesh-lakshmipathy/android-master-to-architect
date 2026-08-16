@@ -1,0 +1,66 @@
+---
+id: privacy-exposure
+title: Screenshots, clipboard, notifications, backup, and logs
+---
+import Admonition from '@theme/Admonition';
+
+# Screenshots, clipboard, notifications, backup, and logs
+
+Privacy leaks often bypass the database: pixels appear in Recents, secrets remain on clipboard, notifications show on a lock screen, files restore to another device, and crash reports capture raw payloads.
+
+## Exposure matrix
+
+| Surface | Failure | Control questions |
+|---|---|---|
+| screenshots/Recents | balance or medical page captured | selective secure flag/redaction; accessibility/support trade-off |
+| screen sharing/overlays | another app/person observes UI | risk-based obscuring, overlay awareness, transaction verification |
+| clipboard | OTP/token/address persists/read by apps | avoid; mark sensitive where supported; clear carefully; use autofill/share APIs |
+| notification | message content on lock screen | private visibility/public version/channel and user settings |
+| backup/device transfer | tokens/device-bound encrypted data restored | explicit backup rules/exclusions and restore tests |
+| logs/crash/analytics | URL, token, PII, response body | typed allowlist, redaction, retention/access controls |
+| shared files/URIs | grant too broad/long | FileProvider, exact path, read-only, time/operation scope |
+| widgets/shortcuts | previous account data remains | account-aware refresh/removal on logout/switch |
+
+## Sensitive screen handling
+
+`FLAG_SECURE` can block many screenshots and non-secure displays, but it is not absolute against compromised devices/external cameras and can interfere with support, casting, accessibility, and user workflows. Apply it according to screen risk, test OEM/API behavior, and redact task previews where applicable.
+
+## Clipboard
+
+Do not copy passwords/tokens/OTP automatically. Use Autofill/Credential Manager or direct share/intent flows. If copying sensitive user-requested content is essential, mark it sensitive on supported versions and avoid logging/analytics. Clearing after a timer can accidentally overwrite a user’s newer clipboard item—verify ownership/content before clearing where possible.
+
+## Notifications
+
+Lock-screen visibility is user/device controlled. Design a safe public version and minimize titles/bodies/action extras. A hidden notification drawer does not prevent FCM payload/log/storage exposure. Notification tap must recheck current session/authorization.
+
+## Backup and restore
+
+Classify every file/database/preference. Exclude access/refresh tokens, installation identities, caches, logs, device-bound ciphertext, and data forbidden to transfer. If encrypted data backs up but Keystore key does not, restore creates unreadable blobs. Test real backup/restore and account deletion—not only XML configuration review.
+
+## Logging pipeline
+
+Redaction must cover:
+
+- application logs and structured fields;
+- OkHttp/network inspectors;
+- crash exceptions/messages, breadcrumbs, attachments;
+- analytics screen names/properties;
+- server traces/support tools;
+- developer diagnostic exports.
+
+Never use a blacklist alone. New sensitive fields will bypass it. Prefer explicit safe-field types and sample/fuzz tests.
+
+<Admonition type="warning" title="Delete every representation">
+Removing a Room row does not remove its thumbnail, exported PDF, notification, WorkManager input, crash attachment, analytics event, backup, or server replica. Inventory representations and ownership.
+</Admonition>
+
+## Sources
+
+- [Android security and privacy checklist](https://developer.android.com/privacy-and-security/security-tips)
+- [Back up user data](https://developer.android.com/identity/data/backup)
+- [Protect sensitive activities](https://developer.android.com/security/fraud-prevention/activities)
+
+## Exercise
+
+Trace one bank statement through download, viewer, Recents, share, cache, notification, analytics, logs, backup, logout, and account deletion. Define prevention and verification at every surface.
+
