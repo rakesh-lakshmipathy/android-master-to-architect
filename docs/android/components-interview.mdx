@@ -1,0 +1,86 @@
+---
+id: components-interview
+title: Components and lifecycle interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# Components and lifecycle interview scenarios
+
+## Quick answers
+
+<details><summary><strong>Is a Service a background thread?</strong></summary><p>No. Its lifecycle callbacks normally run on the hosting process main thread. Service describes component/lifetime/visibility semantics; concurrency must be designed separately.</p></details>
+
+<details><summary><strong>Activity versus task?</strong></summary><p>An Activity is a UI component instance. A task is a user journey containing an Activity back stack and represented in Recents.</p></details>
+
+<details><summary><strong>Why use viewLifecycleOwner?</strong></summary><p>A Fragment may remain after its view is destroyed. Binding and UI collection must stop with the view to avoid updating/leaking an obsolete view tree.</p></details>
+
+<details><summary><strong>Explicit versus implicit Intent?</strong></summary><p>An explicit Intent names the target component. An implicit Intent describes action/data and lets Android resolve matching filters. External inputs remain untrusted in either case.</p></details>
+
+<details><summary><strong>Application Context versus Activity Context?</strong></summary><p>Application Context is process-scoped and appropriate for long-lived non-window work. Activity Context carries current UI theme/window ownership and must not be retained by longer-lived objects.</p></details>
+
+## Scenario 1: Receiver performs 10-minute upload
+
+**Diagnosis:** receiver callback lifetime/main-thread/process importance cannot own long durable upload.
+
+**Design:** validate event quickly, enqueue unique constrained WorkManager work, make upload idempotent, expose progress from durable state.
+
+## Scenario 2: notification always opens old product
+
+Activity is `singleTop`, but product parsing occurs only in `onCreate()`.
+
+**Fix:** route both `onCreate` and `onNewIntent` through the same validated Intent consumer, call `setIntent`, and reload by ID.
+
+## Scenario 3: Fragment crashes after navigating back
+
+Collector uses Fragment `lifecycleScope` and accesses binding after `onDestroyView`.
+
+**Fix:** clear binding in `onDestroyView`; collect via `viewLifecycleOwner.repeatOnLifecycle`.
+
+## Scenario 4: deep link exposes another customer’s order
+
+URI format was validated but ownership was not.
+
+**Fix:** authenticate, authorize order access server/data-layer side, handle unavailable/forbidden state, avoid revealing existence through error differences where sensitive.
+
+## Scenario 5: repository leaks every Activity
+
+Singleton repository constructor receives Activity Context.
+
+**Fix:** inject application context only if Android access is needed, or inject narrower storage/resource dependency. Align DI scopes and verify heap root path.
+
+## Architect exercise: multi-entry checkout
+
+Checkout can open from:
+
+- catalog navigation;
+- verified web link;
+- abandoned-cart notification;
+- payment return Intent;
+- process-restored Recents task.
+
+Design:
+
+1. canonical route and stable identifiers;
+2. authentication and authorization gate;
+3. task/back-stack expectations for each entry;
+4. handling in `onNewIntent` versus creation;
+5. saved UI versus durable order state;
+6. payment-result idempotency;
+7. missing/expired order UX;
+8. tests across cold/warm process and Android versions.
+
+## Mastery checklist
+
+- [ ] I select component/work APIs from lifetime requirements.
+- [ ] I never assume Service means worker thread.
+- [ ] I distinguish Activity, task, and process state.
+- [ ] I predict launch mode/flag stacks and handle new Intents.
+- [ ] I separate Fragment object and view lifecycles.
+- [ ] I validate and authorize external Intents/URIs.
+- [ ] I use Activity Result APIs with recreation-safe state.
+- [ ] I match Context and DI lifetimes.
+
+<Admonition type="tip" title="Architect takeaway">
+Component design is entry-point design. Every Activity, Service, Receiver, Provider, deep link, and result callback must remain correct across independent creation, recreation, process death, duplicate delivery, untrusted input, and navigation from outside the expected happy path.
+</Admonition>
+

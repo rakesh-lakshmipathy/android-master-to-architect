@@ -1,64 +1,79 @@
 ---
 id: components-lifecycle
-title: App components and lifecycle
+title: Android components and lifecycle — choosing correctly
 ---
+import Admonition from '@theme/Admonition';
 
-# App components and lifecycle
+# Android components and lifecycle — choosing correctly
 
-Android components are **entry points controlled by the operating system**. Your app does not create a `main()` function and own the process forever. Android starts the process when needed and calls a declared component.
+## Components are operating-system entry points
+
+An Android application does not own one permanent entry point. Android can enter it through a declared Activity, Service, BroadcastReceiver, or ContentProvider. Each component tells the system **why the process matters and what contract it exposes**.
+
+:::warning Android-only chapter
+Component, lifecycle, manifest, and WorkManager examples need an Android project and cannot run in Kotlin Playground.
+:::
 
 ## The four component types
 
-| Component | Use it for | Practical example | Do not assume |
+| Component | Responsibility | Real example | Wrong assumption |
 |---|---|---|---|
-| `Activity` | A user-facing screen entry point | Checkout screen | It lives as long as the app |
-| `Service` | Work that must continue without a visible screen | Music playback | It automatically uses a background thread |
-| `BroadcastReceiver` | A short reaction to a broadcast | Reschedule work after boot | It can run lengthy work safely |
-| `ContentProvider` | Structured data shared through URIs | Share a file with another app | It is needed for every database |
+| Activity | User-facing task/screen entry | Checkout screen | “An Activity is the entire app” |
+| Service | Started/bound component for ongoing work or API | Music playback, bound device service | “Service means background thread” |
+| BroadcastReceiver | Short response to delivered broadcast | Schedule work after boot | “Receiver can upload for minutes” |
+| ContentProvider | URI-based structured data interface | Share documents/search suggestions | “Every Room database needs one” |
 
-:::warning Android-only code
-The examples on this page require the Android framework, so they cannot run in Kotlin Playground.
-:::
+## Component versus ordinary class
 
-## Activity lifecycle: what the callbacks mean
+```kotlin
+class PriceCalculator {
+    fun total(lines: List<Line>): Money = TODO()
+}
+```
+
+You construct and call this class. Android constructs component instances and delivers lifecycle/IPC callbacks according to platform state.
 
 ```kotlin
 class CheckoutActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Create UI and restore small UI state.
-    }
-
-    override fun onStart() {
-        super.onStart()
-        // Screen is visible.
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Screen is visible and interactive.
-    }
-
-    override fun onPause() {
-        // Pause exclusive resources quickly.
-        super.onPause()
-    }
-
-    override fun onStop() {
-        // Screen is no longer visible.
-        super.onStop()
     }
 }
 ```
 
-Lifecycle callbacks describe the component's **current usability**, not whether the user has permanently finished with it. Rotation can destroy and recreate an activity. The system can later kill a stopped app process without calling `onDestroy()`.
+Do not call `CheckoutActivity()` as navigation. Ask Android through an Intent/navigation API.
 
-## A Service is not a worker thread
+## Manifest as installed contract
+
+```xml
+<application ...>
+    <activity
+        android:name=".CheckoutActivity"
+        android:exported="false" />
+
+    <receiver
+        android:name=".BootReceiver"
+        android:exported="true"
+        android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+        <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+        </intent-filter>
+    </receiver>
+</application>
+```
+
+The merged manifest tells Android which components exist, whether outsiders can reach them, required permissions, intent filters, processes, and other policy. Inspect the merged result because libraries contribute entries.
+
+## Service does not create a worker thread
 
 ```kotlin
-class SyncService : Service() {
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // This callback starts on the main thread.
+class ExportService : Service() {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
+        exportDatabaseBlocking() // Main-thread work: ANR risk.
         return START_NOT_STICKY
     }
 
@@ -66,37 +81,97 @@ class SyncService : Service() {
 }
 ```
 
-Use a foreground service only for user-noticeable ongoing work that qualifies under current platform rules. Use WorkManager for guaranteed, deferrable work. Use an in-process coroutine for work that matters only while the screen or process is alive.
+`onStartCommand()` normally runs on the Service process’s main thread. A Service changes component/process importance and provides lifecycle; it does not supply concurrency.
 
-## Practical mistake
+## Choose work mechanism from requirements
 
-### ✕ Avoid: starting a long upload directly in a receiver
+| Requirement | Starting choice |
+|---|---|
+| Request needed only while visible screen lives | Lifecycle-aware coroutine/ViewModel |
+| Deferrable work that must eventually complete | WorkManager |
+| User-noticeable continuous activity | Eligible foreground service with notification |
+| Exact user-facing clock/calendar event | Alarm API only when exactness is justified/allowed |
+| Cross-process callable API | Bound service/Binder/AIDL if a real process boundary exists |
+
+### Scenario: photo upload
+
+- User taps upload and leaves app; upload should resume under constraints → WorkManager.
+- User watches immediate upload progress and cancelling screen cancels upload → screen/ViewModel coroutine may suffice.
+- User explicitly starts a long media transfer that must remain visible/ongoing → evaluate foreground-service rules and user notification.
+
+Architecture begins with semantics, not whichever API name contains “background.”
+
+## Receiver callbacks are short
+
+### ❌ Avoid
 
 ```kotlin
-override fun onReceive(context: Context, intent: Intent) {
-    uploadEveryPendingFile() // Blocks a short-lived callback.
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        repository.synchronizeEverythingBlocking()
+    }
 }
 ```
 
-The process may be stopped after `onReceive` returns, and blocking can cause an ANR.
+The callback has a short lifetime and runs on the main thread by default. The process can lose importance after it returns.
 
-### ✓ Prefer: enqueue durable work
+### ✅ Prefer enqueueing durable work
 
 ```kotlin
 override fun onReceive(context: Context, intent: Intent) {
-    WorkManager.getInstance(context).enqueue(
-        OneTimeWorkRequestBuilder<UploadWorker>().build()
+    WorkManager.getInstance(context).enqueueUniqueWork(
+        "post-boot-sync",
+        ExistingWorkPolicy.KEEP,
+        OneTimeWorkRequestBuilder<SyncWorker>().build()
     )
 }
 ```
 
-## Interview-ready answer
+Unique work prevents repeated boot/package events from creating duplicate logical jobs.
 
-Android components are OS-managed entry points. Lifecycle callbacks tell us when a component is usable, but they do not guarantee process survival or a final cleanup callback. I choose an Activity for UI, WorkManager for deferrable guaranteed work, and a foreground service only for qualifying user-visible ongoing work.
+## ContentProvider is an API boundary
 
-## Questions and exercises
+A provider is useful when data/resources must be queried or shared through URIs, possibly across apps/processes. It owns validation, permissions, URI grants, query contracts, and potentially concurrency.
 
-1. Why must important data not wait until `onDestroy()` to be saved?
-2. Why can a started service still freeze the UI?
-3. Choose a mechanism for music playback, an immediate screen request, and a nightly upload.
+Do not expose a provider merely because Room stores data. Internal repositories can use Room directly without publishing an IPC surface.
+
+## Lifecycle is usability, not immortality
+
+An Activity in `RESUMED` is interactive. A Fragment view in `STARTED` is visible. These states guide resource ownership and collection. They do not promise the process will later receive a cleanup callback.
+
+### ❌ Avoid correctness in `onDestroy()`
+
+```kotlin
+override fun onDestroy() {
+    saveCustomerOrder()
+    super.onDestroy()
+}
+```
+
+### ✅ Prefer event/transaction-based persistence
+
+Save when meaningful state changes or according to a debounced draft policy. Treat destruction as cleanup opportunity, not the only commit point.
+
+## Component exposure security
+
+Every exported component is a device-local public endpoint.
+
+- Validate all Intent/URI/extras.
+- Require appropriate permissions.
+- Authorize the requested domain operation.
+- Reject oversized/unexpected data.
+- Avoid leaking sensitive results.
+- Test calls from an untrusted test app.
+
+`exported="false"` is the safest default when no external caller is required.
+
+<Admonition type="tip" title="Interview-ready answer">
+Android components are OS-managed entry points, not ordinary objects. Activities represent user-facing task entries; Services provide started/bound lifecycle but no automatic worker thread; Receivers handle short broadcast work; Providers expose URI-based data APIs. I select components from lifetime and visibility requirements, keep callbacks short, persist important state before destruction, and treat every exported component as a secured public API.
+</Admonition>
+
+## Exercises
+
+1. Choose mechanisms for music playback, nightly logs, a screen API request, and a precise alarm-clock ring.
+2. Why does moving blocking code into a Service not prevent ANR?
+3. Threat-model an exported “approve payment” Receiver.
 

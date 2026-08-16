@@ -1,75 +1,176 @@
 ---
 id: activities-tasks
-title: Activities, tasks, and back stack
+title: Activities, lifecycle, tasks, and back stack
 ---
+import Admonition from '@theme/Admonition';
 
-# Activities, tasks, and back stack
+# Activities, lifecycle, tasks, and back stack
 
-An **activity** is a screen-level Android entry point. A **task** is an ordered stack of activities representing work the user is doing. Pressing Back normally removes the top destination; it does not simply “close the app.”
+## Activity and task solve different problems
 
-## A concrete journey
+- **Activity:** a system-managed user-interface entry point.
+- **Task:** a user journey represented by an Activity back stack and shown in Recents.
 
 ```text
-Launcher → ProductListActivity → ProductActivity → CheckoutActivity
-                                               ↑ top of stack
+Task: “buy a product”
+
+[CatalogActivity] → [ProductActivity] → [CheckoutActivity]
+ bottom                                      top
 ```
 
-Back from checkout reveals the product. Home keeps the task for later. The system may destroy stopped activities or the whole process, so the stack’s appearance does not mean every object still exists in memory.
+Back normally removes the top destination and reveals the previous one. Home normally moves the task to background. Neither operation necessarily kills the app process.
 
-## Launch modes in plain language
+## Lifecycle through a concrete journey
 
-| Mode | What happens | Typical caution |
+```kotlin
+class CheckoutActivity : AppCompatActivity() {
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)   // Construct UI and restore inputs.
+    }
+
+    override fun onStart() {
+        super.onStart()         // Visible.
+    }
+
+    override fun onResume() {
+        super.onResume()        // Foreground and interactive.
+    }
+
+    override fun onPause() {
+        // Lose foreground interaction; finish quickly.
+        super.onPause()
+    }
+
+    override fun onStop() {
+        // No longer visible.
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        // Instance cleanup; not guaranteed process-final callback.
+        super.onDestroy()
+    }
+}
+```
+
+If a permission dialog or translucent Activity covers part of the screen, exact callback transitions can differ from a complete navigation away. Design from visibility/interaction requirements and test the real flow.
+
+## Rotation versus finish versus process death
+
+| Cause | New Activity later? | ViewModel | Saved state | Meaning |
+|---|---|---|---|---|
+| Configuration change | Immediately | Usually retained | Available | Same logical destination |
+| Back/`finish()` | Normally no | Cleared | Not restoration contract | User left destination |
+| Process death while stopped | If user returns | Gone | Small restorable state may exist | System reclaimed memory |
+
+## State ownership
+
+```kotlin
+data class CheckoutUiState(
+    val orderId: String,
+    val total: Money,
+    val submitting: Boolean,
+    val error: String?
+)
+```
+
+- Activity/Compose renders and forwards events.
+- ViewModel coordinates screen state across configuration recreation.
+- SavedStateHandle stores small restoration inputs.
+- Repository/database stores durable order truth.
+
+The Activity should not become the database, network client, and business-rule engine simply because callbacks arrive there.
+
+## Default back-stack behaviour
+
+`standard` Activity launch normally pushes a new instance:
+
+```text
+A → B → B
+```
+
+This is legal. If duplicates are wrong for product UX, first check navigation event duplication. Launch modes are not a substitute for fixing double clicks or repeated effects.
+
+## Launch modes
+
+| Mode | Reuse rule | Key implication |
 |---|---|---|
-| `standard` | A new instance is pushed | Safest default |
-| `singleTop` | Reuses only if already at the top | Handle the new intent |
-| `singleTask` | Finds/reuses one instance and can clear above it | Can produce surprising navigation |
-| `singleInstancePerTask` | Restricts the activity instance per task | Rare; verify the UX carefully |
+| `standard` | Always new instance | Default and predictable |
+| `singleTop` | Reuse only if target already on top | New Intent goes to `onNewIntent()` |
+| `singleTask` | One task-root-style instance; routes/clears according to task rules | Strong global task effects |
+| `singleInstance` | Isolated task behaviour | Rare; surprising UX |
+| `singleInstancePerTask` | One instance per task | Specialized document/task use |
 
-:::warning Android-only code
-`Activity`, `Intent`, and task APIs require Android and cannot run in Kotlin Playground.
-:::
+Most apps should use default behaviour and Navigation APIs. Advanced launch modes change system task semantics and require tests from launcher, notification, deep link, external app, and Recents.
 
-## The `singleTop` corner case
+## `singleTop` corner case
+
+```xml
+<activity
+    android:name=".ProductActivity"
+    android:launchMode="singleTop" />
+```
 
 ```kotlin
 class ProductActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        showProduct(intent.getStringExtra("productId"))
+        consumeProductId(intent)
     }
 }
 ```
 
-If Android reuses the top activity, `onCreate()` does not run again. The new data arrives through `onNewIntent()`. Forgetting this produces a screen that shows the old product.
+If ProductActivity is already on top, Android does not call `onCreate()` again. Failing to handle `onNewIntent()` displays stale product data.
 
-## Deep links must reconstruct meaningful state
+## Intent flags interact with launch mode
 
-A notification might open checkout when no task exists. Do not assume the product-list screen or an authenticated session is already in memory. Validate the URI, authenticate if needed, load durable state, and build a sensible back path.
+- `NEW_TASK` asks Android to choose/create an appropriate task.
+- `SINGLE_TOP` reuses only a matching top instance.
+- `CLEAR_TOP` removes Activities above an existing target; a `standard` target may itself be recreated.
 
-### ✕ Avoid
+Avoid memorizing a slogan like “CLEAR_TOP always reuses.” Predict the starting stack, target launch mode, flags, and expected final stack—then test.
+
+## Deep-link cold start
+
+Notification opens `myapp://orders/ORD-42` with no process/task.
+
+### ❌ Avoid dependency on previous screen
 
 ```kotlin
-lateinit var selectedProduct: Product // Set only by the previous activity.
+val order = CatalogActivity.selectedOrder
 ```
 
-### ✓ Prefer
+### ✅ Prefer reconstructable routing
 
 ```kotlin
-val productId = intent.getStringExtra("productId")
+val orderId = intent.data?.lastPathSegment
+    ?.takeIf { it.matches(Regex("ORD-[0-9]+")) }
     ?: return finish()
-// ViewModel loads the product from a repository using productId.
+
+viewModel.load(orderId)
 ```
 
-Pass identifiers, not large object graphs. This survives process recreation and avoids Binder transaction pressure.
+Then apply authentication, authorization, record-exists, and back-stack policy.
 
-## Interview-ready answer
+## Back versus Up
 
-A task models the user’s navigation history as an activity stack. Launch modes change whether Android creates or reuses an activity, so reused activities must process `onNewIntent`. Deep links must work from a cold start and rebuild state from identifiers rather than relying on previous in-memory screens.
+- **Back** returns through actual user history across apps/tasks.
+- **Up** navigates within the app’s information hierarchy.
 
-## Questions and exercises
+They often coincide, but an external deep link can make them different. Up may build/navigate to a parent destination even when that parent was not in the actual history.
 
-1. What is the difference between Home and Back?
-2. When does `singleTop` still create a new instance?
-3. Design the back stack for a product notification opened from a cold start.
+## Predictive Back
+
+Modern Android can preview the destination while the gesture progresses. Use AndroidX back APIs/Navigation integration rather than arbitrary `onBackPressed()` overrides. Custom handling must remain state-consistent and allow system fallback.
+
+<Admonition type="tip" title="Interview-ready answer">
+An Activity is a UI entry point; a task is the user’s Activity history represented in Recents. Lifecycle callbacks describe visibility and interaction, not guaranteed process lifetime. Default standard launches push instances; launch modes and flags can reuse or reshape tasks, so reused Activities must handle `onNewIntent`. I use stable route IDs and durable repositories so launcher, notification, deep-link, and process-death entries all reconstruct correctly.
+</Admonition>
+
+## Exercises
+
+1. Predict stacks for A→B→C then `CLEAR_TOP` launch of B with standard and singleTop B.
+2. Design Back and Up after an external order deep link.
+3. Why can fixing duplicate navigation with `singleTask` create worse bugs?
 

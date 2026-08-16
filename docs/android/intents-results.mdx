@@ -1,0 +1,131 @@
+---
+id: intents-results
+title: Intents, filters, results, and secure messaging
+---
+import Admonition from '@theme/Admonition';
+
+# Intents, filters, results, and secure messaging
+
+## Intent is a request description
+
+An Intent can identify a target component, action, data URI/type, categories, flags, and small extras.
+
+### Explicit Intent
+
+```kotlin
+val intent = Intent(this, CheckoutActivity::class.java)
+    .putExtra("orderId", "ORD-42")
+startActivity(intent)
+```
+
+Your app names the exact component. Use this for known internal targets.
+
+### Implicit Intent
+
+```kotlin
+val intent = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=Chennai"))
+startActivity(intent)
+```
+
+Android resolves capable external Activities from installed intent filters. Handle the case where no handler exists and do not put secrets into broadly resolvable requests.
+
+## Intent-filter matching
+
+Filters compare action, categories, and data rules—not your extras. A receiving component must still validate the URI and extras.
+
+```xml
+<activity
+    android:name=".OrderLinkActivity"
+    android:exported="true">
+    <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+            android:scheme="https"
+            android:host="shop.example.com"
+            android:pathPrefix="/orders/" />
+    </intent-filter>
+</activity>
+```
+
+Matching `https://shop.example.com/orders/...` means Android may route the link here. It does not authorize whoever taps it to see any order.
+
+## Deep-link validation and authorization
+
+```kotlin
+val orderId = intent.data
+    ?.pathSegments
+    ?.takeIf { it.size == 2 && it[0] == "orders" }
+    ?.get(1)
+    ?.takeIf { it.matches(Regex("ORD-[0-9]+")) }
+    ?: return finish()
+
+viewModel.openAuthorizedOrder(orderId)
+```
+
+Validation checks shape. Authentication identifies the user. Authorization checks access to this order. All are required.
+
+## Activity Result APIs
+
+Register launchers during initialization so Android can restore callback routing after recreation.
+
+```kotlin
+private val pickDocument = registerForActivityResult(
+    ActivityResultContracts.OpenDocument()
+) { uri: Uri? ->
+    if (uri != null) viewModel.importDocument(uri)
+}
+
+fun onImportClicked() {
+    pickDocument.launch(arrayOf("application/pdf"))
+}
+```
+
+The callback can arrive after configuration recreation. Keep the operation’s business state in ViewModel/repository, not in a local variable captured from one old view.
+
+## URI permission
+
+A `content://` URI identifies data managed by a provider. For longer-lived access after document selection, request/persist URI permission only when the contract permits it. Do not convert arbitrary URIs to filesystem paths.
+
+## Extras are bounded transport, not a database
+
+### ❌ Avoid
+
+```kotlin
+intent.putParcelableArrayListExtra("orders", ArrayList(allOrders))
+```
+
+### ✅ Prefer
+
+```kotlin
+intent.putExtra("customerId", customerId)
+```
+
+The destination reloads current data and survives process death without stale/oversized transactions.
+
+## Intent redirection
+
+An exported component must not blindly forward an untrusted nested Intent with its original privileges.
+
+```kotlin
+val nested = intent.getParcelableExtra<Intent>("next")
+startActivity(nested) // Unsafe redirection possibility.
+```
+
+Use allowlisted destinations/actions/data and construct a fresh explicit Intent from validated values.
+
+## Service safety
+
+Use explicit Intents for Services. An implicit service request can be intercepted or resolved unexpectedly; modern Android also rejects important implicit binding cases.
+
+<Admonition type="tip" title="Interview-ready answer">
+An explicit Intent names a component; an implicit Intent describes an action/data that Android resolves against filters. Filters control routing, not business authorization. I validate every external URI/extra, use verified App Links when appropriate, pass small stable IDs, use Activity Result contracts registered early, handle process recreation, and never blindly forward an untrusted nested Intent.
+</Admonition>
+
+## Exercises
+
+1. Threat-model a password-reset deep link.
+2. Why do extras not participate in intent-filter resolution?
+3. Design document selection that still works after Activity recreation.
+

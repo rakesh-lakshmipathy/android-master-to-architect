@@ -1,0 +1,118 @@
+---
+id: context-lifetimes
+title: Context types and lifetime-safe ownership
+---
+import Admonition from '@theme/Admonition';
+
+# Context types and lifetime-safe ownership
+
+## What Context represents
+
+Context is access to an Android environment: resources/theme, package information, files, system services, and component operations. Different Contexts carry different lifetime and UI capabilities.
+
+| Context | Lifetime/meaning | Good examples |
+|---|---|---|
+| Application | Process-wide application environment | Repository, database, long-lived SDK |
+| Activity | Current UI/window/theme environment | Dialogs, navigation, themed inflation |
+| Service | Service component environment | Service-owned registration/resources |
+| ContextThemeWrapper | Context with a specific theme overlay | Themed UI construction |
+
+## The lifetime rule
+
+A long-lived object must not retain a shorter-lived Activity/View Context.
+
+### ❌ Leak Activity through singleton
+
+```kotlin
+object Analytics {
+    lateinit var context: Context
+}
+
+Analytics.context = activity
+```
+
+### ✅ Store application context for process-wide non-UI work
+
+```kotlin
+class Analytics(context: Context) {
+    private val appContext = context.applicationContext
+}
+```
+
+## Application context is not always correct
+
+```kotlin
+AlertDialog.Builder(applicationContext)
+    .setMessage("Delete order?")
+    .show()
+```
+
+Dialogs require a valid UI/window context and theme. Application context is process-scoped and has no Activity window token.
+
+Use the current Activity/Compose UI owner for UI work and do not store it beyond that owner’s lifetime.
+
+## Context determines registration ownership
+
+Registering a receiver with Activity context ties registration to Activity ownership expectations. Application context creates process-lifetime registration that you must explicitly unregister. The official Context API warns that application context can itself cause serious leaks when global registrations are forgotten.
+
+```kotlin
+class ConnectivityObserver(private val context: Context) : Closeable {
+    private val appContext = context.applicationContext
+
+    fun start() { appContext.registerReceiver(receiver, filter) }
+    override fun close() { appContext.unregisterReceiver(receiver) }
+}
+```
+
+Make start/close idempotent or guard state so double unregister cannot crash.
+
+## DI scope must match Context
+
+- Singleton/process scope → inject application context.
+- Activity scope → Activity context may be correct.
+- View/UI scope → pass only where needed; avoid retaining in ViewModel.
+
+A ViewModel should normally not hold Activity, Fragment, View, or Navigation controller. It produces state/events; UI owners perform UI actions.
+
+## Configuration Context
+
+Creating a configuration-specific Context can read resources for another locale/configuration, but storing it forever can make resources stale after configuration changes. Define whether the object should follow current configuration or intentionally use a fixed one.
+
+## `this` ambiguity
+
+Inside callbacks/receivers, `this` may refer to a listener or anonymous object, not Activity. Prefer named references or dependency injection over casts.
+
+```kotlin
+button.setOnClickListener {
+    Toast.makeText(this@CheckoutActivity, "Saved", Toast.LENGTH_SHORT).show()
+}
+```
+
+## Practical decision questions
+
+1. Does this operation need a window or current theme?
+2. How long will the receiver object retain Context?
+3. Who unregisters/unbinds/closes the resource?
+4. Should resources update when configuration changes?
+5. Can a narrower API replace passing full Context?
+
+### ✅ Prefer narrow dependencies
+
+```kotlin
+class ReceiptFormatter(
+    private val strings: ReceiptStrings
+)
+```
+
+Instead of passing Context into every domain class, adapt Android resources at the boundary. This improves lifetime safety and testing.
+
+<Admonition type="tip" title="Interview-ready answer">
+Context represents an Android environment, and its subtype carries lifetime and UI capabilities. Process-scoped objects may retain application context, while dialogs/themed UI need the current Activity or themed Context. Application context is not leak-proof: process-wide receiver/service bindings must still be released. I align DI scope with Context lifetime and pass narrow resource/service abstractions into non-UI code.
+</Admonition>
+
+## Exercises
+
+1. Choose Context for Room, Dialog, notification, and themed custom View.
+2. Why can application context leak a registered receiver?
+3. Refactor a domain validator that accepts Context only to read one string.
+

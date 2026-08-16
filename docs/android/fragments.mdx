@@ -1,31 +1,58 @@
 ---
 id: fragments
-title: Fragments and view lifecycle
+title: Fragments and the separate view lifecycle
 ---
+import Admonition from '@theme/Admonition';
 
-# Fragments and view lifecycle
+# Fragments and the separate view lifecycle
 
-A Fragment has two related lifecycles:
+## The one distinction you must remember
 
-1. the **Fragment lifecycle**, for the Fragment object;
-2. the **view lifecycle**, for the UI created by `onCreateView`.
+A Fragment has:
 
-The view can be destroyed while the Fragment object remains on the back stack. Most Fragment bugs come from treating those lifecycles as identical.
+1. a **Fragment object lifecycle**;
+2. a **Fragment view lifecycle** for the UI returned by `onCreateView()`.
 
-:::warning Android-only code
-These examples use Fragment and Lifecycle APIs and cannot run in Kotlin Playground.
-:::
+The view can be destroyed while the Fragment object stays alive on the back stack.
 
-## Safe view binding
+```text
+Fragment object:  onCreate ───────────────────────────── onDestroy
+View:                    onCreateView ── onDestroyView
+Later new view:                                  onCreateView ── onDestroyView
+```
+
+The [official Fragment lifecycle documentation](https://developer.android.com/guide/fragments/lifecycle) explicitly provides `viewLifecycleOwner` for work that should exist only while the Fragment’s view exists.
+
+## Why binding leaks
+
+### ❌ Retain the old view tree
 
 ```kotlin
-class ProfileFragment : Fragment(R.layout.profile_fragment) {
-    private var _binding: ProfileFragmentBinding? = null
-    private val binding get() = requireNotNull(_binding)
+class ProfileFragment : Fragment(R.layout.profile) {
+    private lateinit var binding: ProfileBinding
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        _binding = ProfileFragmentBinding.bind(view)
-        binding.retryButton.setOnClickListener { viewModel.retry() }
+    override fun onViewCreated(view: View, state: Bundle?) {
+        binding = ProfileBinding.bind(view)
+    }
+}
+```
+
+When navigation destroys the view but retains the Fragment, `binding` still references every View and its Activity context.
+
+### ✅ Restrict binding to view lifetime
+
+```kotlin
+class ProfileFragment : Fragment(R.layout.profile) {
+    private var _binding: ProfileBinding? = null
+    private val binding: ProfileBinding
+        get() = requireNotNull(_binding) {
+            "Binding used outside view lifecycle"
+        }
+
+    override fun onViewCreated(view: View, state: Bundle?) {
+        super.onViewCreated(view, state)
+        _binding = ProfileBinding.bind(view)
+        binding.retry.setOnClickListener { viewModel.retry() }
     }
 
     override fun onDestroyView() {
@@ -35,48 +62,108 @@ class ProfileFragment : Fragment(R.layout.profile_fragment) {
 }
 ```
 
-Step by step:
+The non-null accessor is valid only between view creation and destruction. Background callbacks must not use it afterward.
 
-1. `onViewCreated` receives the new view and creates its binding.
-2. Code may use `binding` only while that view exists.
-3. `onDestroyView` removes the Fragment’s reference to the old view tree.
-4. A later navigation pop can create a fresh view for the same Fragment object.
+## Collect state with viewLifecycleOwner
 
-## Collect UI state with the view lifecycle
+### ❌ Fragment lifecycle collection
+
+```kotlin
+lifecycleScope.launch {
+    viewModel.uiState.collect { state -> render(binding, state) }
+}
+```
+
+The Fragment may still be alive when its binding is gone.
+
+### ✅ View lifecycle and repeatOnLifecycle
 
 ```kotlin
 viewLifecycleOwner.lifecycleScope.launch {
     viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-        viewModel.uiState.collect { state -> render(state) }
+        viewModel.uiState.collect { state -> render(binding, state) }
     }
 }
 ```
 
-Collection starts when the view is at least STARTED, stops when it falls below STARTED, and restarts for a new view. Using the Fragment lifecycle can update a destroyed binding.
+Step by step:
 
-### ✕ Avoid
+1. Collection launches in the view owner’s scope.
+2. At STARTED, a child collector begins.
+3. Below STARTED, that child is cancelled.
+4. If the same view restarts, collection restarts.
+5. When the view is destroyed, its scope is cancelled permanently.
+6. A future view gets a new owner and collector.
+
+## `launchWhenStarted` versus repeatOnLifecycle
+
+Older patterns can suspend a coroutine while upstream work remains active. `repeatOnLifecycle` cancels and relaunches the block as state changes, making resource ownership explicit. For multiple flows, collect concurrently inside the repeat block when each must progress independently.
 
 ```kotlin
-lifecycleScope.launch {
-    viewModel.uiState.collect { binding.render(it) }
+repeatOnLifecycle(Lifecycle.State.STARTED) {
+    launch { viewModel.uiState.collect(::render) }
+    launch { viewModel.effects.collect(::handleEffect) }
 }
 ```
 
-### ✓ Prefer
+## Arguments and recreation
 
-Use `viewLifecycleOwner`, `repeatOnLifecycle`, and clear view references in `onDestroyView`.
+### ❌ Constructor argument
 
-## Fragment arguments
+```kotlin
+class OrderFragment(private val orderId: String) : Fragment()
+```
 
-Use stable IDs or small serializable values. Do not use a Fragment constructor for runtime arguments because Android must be able to recreate the Fragment.
+Android/FragmentManager must recreate the Fragment using its expected constructor/factory mechanism.
 
-## Interview-ready answer
+### ✅ Arguments/navigation route
 
-A Fragment can outlive its view. UI references and UI-state collection therefore belong to `viewLifecycleOwner`, and binding must be cleared in `onDestroyView`. Persistent screen data belongs in a ViewModel or repository, not in the view tree.
+```kotlin
+class OrderFragment : Fragment(R.layout.order) {
+    private val orderId: String by lazy {
+        requireArguments().getString("orderId")
+            ?: error("Missing orderId")
+    }
+}
+```
 
-## Questions and exercises
+Prefer typed Navigation arguments where available. Pass stable IDs, not large mutable domain graphs.
 
-1. Why can `_binding` be null while the Fragment still exists?
-2. What failure can occur when collecting with `fragment.lifecycleScope`?
-3. Where should a loaded profile survive view recreation?
+## FragmentManager owns transactions
+
+Committing after state has been saved can produce `IllegalStateException` because Android cannot safely include the transaction in restored state.
+
+### ❌ Hide with state loss
+
+```kotlin
+transaction.commitAllowingStateLoss()
+```
+
+This suppresses the exception by accepting that navigation/UI state may disappear. It is not a general fix.
+
+### ✅ Fix event/lifecycle ownership
+
+Deliver navigation only while the owner can act, model consumed events, and use Navigation/FragmentManager APIs at the correct lifecycle point. Use state loss only when losing that transaction is explicitly acceptable.
+
+## ViewPager2 and maximum lifecycle
+
+Fragments near the selected page can exist while only the current page is RESUMED. Do not infer “Fragment exists” means “user sees/interacts with it.” Use lifecycle state and visibility contracts.
+
+## Child fragments
+
+Use `childFragmentManager` for Fragments nested inside another Fragment’s UI. Using the Activity manager accidentally changes ownership and restoration hierarchy.
+
+## Fragment versus Compose
+
+Compose can reduce the need for many UI Fragments, but Fragments remain relevant for existing navigation, View interoperability, ViewPager2, modular boundaries, dialogs, and gradual migration. The same principle remains: UI collection/effects must match the lifetime of the actual rendered UI.
+
+<Admonition type="tip" title="Interview-ready answer">
+A Fragment object can outlive its view, especially on the back stack. Therefore bindings, adapters, listeners, and UI collection belong to the view lifecycle, are cleared in `onDestroyView`, and use `viewLifecycleOwner.repeatOnLifecycle`. Persistent screen data belongs in a ViewModel/repository, while Fragment arguments contain small reconstructable inputs. I avoid `commitAllowingStateLoss` unless losing the UI transaction is an explicit requirement.
+</Admonition>
+
+## Exercises
+
+1. Draw the Fragment and view lifecycles during replace/add-to-back-stack/pop.
+2. Why can a Fragment-scoped coroutine access a dead binding?
+3. Diagnose navigation that crashes only after app backgrounding.
 
