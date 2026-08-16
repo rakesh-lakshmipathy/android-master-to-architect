@@ -1,0 +1,62 @@
+---
+id: flag-lifecycle-testing
+title: Ownership, testing, and flag cleanup
+---
+
+# Ownership, testing, and flag cleanup
+
+Flags are production branches. When temporary flags outlive their purpose, tests multiply and nobody knows which path is real.
+
+## Healthy flag metadata
+
+Every flag needs a key, purpose, type, packaged default, accountable owner, creation/expiry dates, removal ticket, affected clients, dependencies, success metric, guardrails, and rollback signal. Reject “mobile team” as owner when nobody is on the hook during an incident.
+
+## Test the policy, not the SDK
+
+```kotlin
+class FakeFlags(private val values: Map<Flag<Boolean>, Boolean>) : FlagReader {
+    override fun isEnabled(flag: Flag<Boolean>) = values[flag] ?: flag.default
+}
+
+@Test fun `off uses legacy checkout`() {
+    val policy = CheckoutPolicy(FakeFlags(mapOf(Flag.NewCheckout to false)))
+    assertFalse(policy.useNewFlow())
+}
+
+@Test fun `on uses new checkout`() {
+    val policy = CheckoutPolicy(FakeFlags(mapOf(Flag.NewCheckout to true)))
+    assertTrue(policy.useNewFlow())
+}
+```
+
+Also test changes before entry, during a journey, process death, stale cache, malformed data, offline operation, and logout.
+
+## Combination explosion
+
+Ten Booleans create 1,024 combinations. Keep decisions independent, reject invalid combinations, exhaustively test high-risk domain states, use pairwise/risk-based integration coverage, and smoke-test production defaults. Avoid high-cardinality telemetry for every combination.
+
+## Complete removal
+
+1. Freeze the winning value and observe it.
+2. Make the branch unconditional and delete the loser/tests.
+3. Keep compatible server config while old installed versions need it.
+4. Remove targeting, analytics, dashboards, documentation, and runbooks.
+5. Verify Android, iOS, web, and backend no longer read the key.
+
+Automate owner/expiry lint, pre-expiry alerts, stale 0%/100% reports, and cross-repository key search.
+
+## Practical mistakes
+
+- ❌ Test only the future “on” branch.
+- ✅ Test both branches and transitions until deletion.
+- ❌ Nest many raw flag reads inside a composable.
+- ✅ Resolve one domain policy and render its state.
+- ❌ Recycle an old key for a new meaning.
+- ✅ Use a versioned key; old clients and analytics retain history.
+- ❌ Delete server configuration immediately at 100%.
+- ✅ Plan for old app versions still in use.
+
+## Exercise
+
+Audit five flags. Record classification, owner, default, age, rollout, downstream consumers, and exact deletion steps. Estimate the branches removed.
+

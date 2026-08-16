@@ -1,0 +1,75 @@
+---
+id: feature-flag-types
+title: Feature-flag types and boundaries
+---
+
+# Feature-flag types and boundaries
+
+A feature flag is a named runtime decision. The important question is not only **“is it on?”**, but **“what decision is this, who owns it, and what must remain true when it changes?”**
+
+| Mechanism | Purpose | Example |
+|---|---|---|
+| Release flag | Separate deployment from user release | New checkout: employees, then 1%, 10%, 50%, 100% |
+| Operational flag | Reduce production harm | Pause automatic uploads while the backend is overloaded |
+| Experiment | Compare outcomes between stable groups | Compare two onboarding flows |
+| Configuration | Supply a typed, validated value | Upload batch size is 20, clamped to 1–100 |
+| Permission/entitlement | Decide what is allowed | Premium account may download offline |
+
+:::warning Security boundary
+A client flag is not authorization. APK contents and downloaded values can be inspected or modified. The server must enforce subscriptions, payments, data access, quotas, and other sensitive rules.
+:::
+
+## A typed registry
+
+Do not scatter string keys and defaults through UI code. A registry makes ownership and cleanup reviewable.
+
+```kotlin
+sealed class Flag<T>(
+    val key: String,
+    val default: T,
+    val owner: String,
+    val expiresOn: String?,
+) {
+    data object NewCheckout : Flag<Boolean>(
+        "new_checkout", false, "payments", "2026-10-01"
+    )
+    data object UploadBatchSize : Flag<Int>(
+        "upload_batch_size", 20, "sync", null
+    )
+}
+```
+
+The default is production failure behavior. `false` makes sense for unfinished checkout, but could be dangerous if the old path corrupts data. Choose it from consequences, not habit.
+
+```kotlin
+interface FlagReader {
+    fun isEnabled(flag: Flag<Boolean>): Boolean
+}
+
+class CheckoutPolicy(private val flags: FlagReader) {
+    fun useNewFlow() = flags.isEnabled(Flag.NewCheckout)
+}
+```
+
+UI consumes a typed policy instead of depending directly on Firebase, a cache, experiment SDK, or developer override.
+
+## Practical mistakes
+
+- ❌ Hide an admin button and assume its API is protected.
+- ✅ Hide it for UX **and** enforce the role on the server.
+- ❌ Put an API secret in remote configuration.
+- ✅ Assume every client-delivered value is public.
+- ❌ Reuse one flag for release, pricing eligibility, and an experiment.
+- ✅ Model separate decisions with separate guarantees.
+- ❌ Keep `new_checkout` forever after full rollout.
+- ✅ Delete the old branch, flag, tests, targeting, and dashboard.
+
+## Interview checkpoint
+
+**Why use flags when Play staged rollout exists?** Play rollout controls who receives a binary. A flag controls behavior inside an installed binary. They complement each other; neither is instant for offline devices.
+
+## Sources
+
+- [Firebase Remote Config for Android](https://firebase.google.com/docs/remote-config/android/get-started)
+- [Remote Config rollouts](https://firebase.google.com/docs/remote-config/rollouts)
+

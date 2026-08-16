@@ -1,0 +1,72 @@
+---
+id: experimentation
+title: Experiments, metrics, bias, and guardrails
+---
+
+# Experiments, metrics, bias, and guardrails
+
+An A/B test is not “enable a flag and compare charts.” It is a predeclared causal question with stable assignment, correct exposure, outcome measurement, and safety guardrails.
+
+Example: **For eligible first-time shoppers, showing delivery date beside price increases completed purchases within seven days without increasing payment failures, crashes, cancellations, or support contacts.**
+
+Before launch define population/exclusions, randomization unit, variants, assignment/exposure, primary metric/window, guardrails, sample plan, analysis owner, and decision date. Shared accounts may require account rather than device randomization.
+
+## Assignment is not exposure
+
+A person may be assigned but never see the screen. Record assignment for balance checks and exposure when the variant is actually shown.
+
+```kotlin
+data class Exposure(val experiment: String, val variant: String, val subject: String)
+
+class ExposureRecorder {
+    private val sent = mutableSetOf<String>()
+    fun once(e: Exposure, send: (Exposure) -> Unit) {
+        if (sent.add("${e.experiment}:${e.subject}")) send(e)
+    }
+}
+```
+
+Real deduplication may need durable state, and the analytics pipeline must tolerate retries. Never emit exposure on every Compose recomposition.
+
+| Metric role | Example |
+|---|---|
+| Primary | Purchases per eligible assigned account |
+| Diagnostic | Step conversion |
+| Reliability guardrail | Crash-free users, ANR, API failures |
+| Business guardrail | Refunds, cancellations, margin |
+| Harm guardrail | Support contacts, opt-outs |
+
+Use server-confirmed purchases/refunds; client events may be delayed, duplicated, blocked, or fabricated.
+
+## Bias and failure modes
+
+- **Sample-ratio mismatch:** expected 50/50 but observed 57/43. Investigate eligibility, assignment, loss, crashes, and test traffic before reading lift.
+- **Peeking:** repeatedly stopping on a favorable result inflates false positives unless sequential analysis was planned.
+- **Multiple comparisons:** many metrics/segments create lucky winners. Predeclare the primary analysis.
+- **Novelty:** early behavior may not persist.
+- **Survivorship:** analyzing only completers hides failures caused by treatment.
+- **Contamination:** subjects encounter both variants or influence each other.
+- **Instrumentation bias:** variants emit different events.
+
+Use data-science review for power, assumptions, uncertainty, and practical effect size. A dashboard badge is not enough.
+
+Ramp gradually only after minimum observation windows and operational signals. Do not change treatment under the same experiment ID; version or restart it.
+
+## Practical mistakes
+
+- ❌ Optimize button clicks only.
+- ✅ Measure the user/business outcome plus harm guardrails.
+- ❌ Assign randomly on each launch.
+- ✅ Use sticky assignment.
+- ❌ Search tiny segments until one “wins.”
+- ✅ Treat post-hoc findings as hypotheses for another test.
+
+## Sources
+
+- [Firebase A/B Testing](https://firebase.google.com/docs/ab-testing)
+- [A/B Testing concepts](https://firebase.google.com/docs/ab-testing/ab-concepts)
+
+## Exercise
+
+Design an experiment for biometric sign-in promotion: eligibility, randomization unit, exposure, primary outcome, security/reliability guardrails, duration, and rejection evidence.
+

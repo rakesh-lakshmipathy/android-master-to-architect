@@ -1,0 +1,83 @@
+---
+id: flag-evaluation
+title: Safe evaluation, targeting, and offline behaviour
+---
+
+# Safe evaluation, targeting, and offline behaviour
+
+Mobile clients may be offline for days and installed for months. A correct system needs an answer before the network responds and when cached data is stale.
+
+## Three layers
+
+1. **In-app defaults** ship with the APK and work on first launch or total outage.
+2. **Last activated values** provide stable offline behavior.
+3. **Fetched values** are validated and activated at a deliberate boundary.
+
+```kotlin
+data class CheckoutConfig(
+    val enabled: Boolean = false,
+    val retryLimit: Int = 2,
+)
+
+fun Map<String, Any?>.toCheckoutConfig() = CheckoutConfig(
+    enabled = this["checkout_enabled"] as? Boolean ?: false,
+    retryLimit = (this["retry_limit"] as? Number)
+        ?.toInt()?.coerceIn(0, 5) ?: 2,
+)
+```
+
+Clamping matters: a typo such as 5,000 retries can become a battery and backend incident.
+
+| Loading strategy | Good fit | Cost |
+|---|---|---|
+| Activate cached; fetch for next launch | Most UI | Stable session, slower change |
+| Fetch with timeout before entry | Decision required before a journey | Entry latency |
+| Real-time listener | Urgent operational control | Lifecycle/network and consistency complexity |
+
+Never block the whole app indefinitely. Use a bounded timeout and continue with a known safe value. Freeze payment/booking decisions for that journey so configuration cannot change the implementation halfway through.
+
+## Deterministic experiment assignment
+
+Randomizing on every call makes one person see both variants. Bucket a stable, privacy-reviewed identifier.
+
+```kotlin
+fun bucket(subject: String, experiment: String): Int {
+    val hash = java.security.MessageDigest.getInstance("SHA-256")
+        .digest("$experiment:$subject".toByteArray())
+    val value = java.nio.ByteBuffer.wrap(hash.copyOfRange(0, 4)).int and Int.MAX_VALUE
+    return value % 10_000
+}
+
+fun variant(subject: String) =
+    if (bucket(subject, "checkout-copy-v1") < 5_000) "A" else "B"
+```
+
+Production implementations need versioned algorithms and golden cross-platform test vectors.
+
+## Corner cases
+
+- On logout, clear account-scoped assignments and private cached config.
+- On a shared device, never leak one account's entitlement to another.
+- Do not trust device time for security eligibility.
+- Decide whether reinstall creating a new anonymous subject is analytically acceptable.
+- Expose value source, version, and fetch age in internal diagnostics.
+- Use only necessary, governed targeting attributes; do not upload sensitive data merely to target UI.
+
+## Practical mistakes
+
+- ❌ Render legacy UI and visibly swap it after fetch.
+- ✅ Activate at a screen/session boundary.
+- ❌ Interpret any fetch error as `false`.
+- ✅ Define and test an explicit default for each decision.
+- ❌ Use unstable `Random()` assignment.
+- ✅ Use sticky deterministic assignment.
+
+## Sources
+
+- [Remote Config loading strategies](https://firebase.google.com/docs/remote-config/loading)
+- [Real-time Remote Config](https://firebase.google.com/docs/remote-config/real-time)
+
+## Exercise
+
+Design an emergency “disable video autoplay” flag: packaged default, timeout, cache age, offline result, update boundary, and behavior for a video already playing.
+

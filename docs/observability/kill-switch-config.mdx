@@ -1,0 +1,70 @@
+---
+id: kill-switch-config
+title: Kill switches and server-driven configuration
+---
+
+# Kill switches and server-driven configuration
+
+A kill switch reduces harm quickly only when its disabled path is safe, observable, reachable, and rehearsed.
+
+## Scenario: uploads overload the backend
+
+Degrade in stages: reduce concurrency, require Wi-Fi, pause automatic uploads while preserving the queue, show an honest status, then resume gradually. One Boolean is often too weak.
+
+```kotlin
+enum class UploadMode { NORMAL, WIFI_ONLY, PAUSED }
+
+fun parseUploadMode(raw: String?): UploadMode =
+    enumValues<UploadMode>().firstOrNull { it.name == raw }
+        ?: UploadMode.WIFI_ONLY
+```
+
+The fallback reduces load without losing intent. A medical alert would require a different hazard analysis.
+
+## Fail open or fail closed?
+
+| Failure | Likely safer behavior |
+|---|---|
+| Cosmetic redesign unavailable | Old UI |
+| Unverified transfer feature | Disabled |
+| Upload backend overloaded | Queue and degrade |
+| Security fix rollout | Fixed path, not vulnerable legacy path |
+
+Ask: **If configuration is unavailable for 24 hours, what harm occurs?**
+
+## Server-driven UI boundaries
+
+Config may select client-supported layouts, identifiers, limits, and known workflows. It must not download executable code or bypass review. Old clients ignore unknown fields and retain a supported default.
+
+```kotlin
+data class HomeConfig(val modules: List<String>)
+
+fun HomeConfig.sanitized() = copy(
+    modules = modules
+        .filter { it in setOf("search", "recent", "offers") }
+        .distinct().take(5)
+)
+```
+
+Validate schema version, size, enums, URLs, accessibility, and bounds. Never permit a malformed value to create unbounded work or an arbitrary WebView destination.
+
+## Why “remote” is not instant
+
+Devices may be offline, killed, restricted, or cached. Even real-time config needs a reachable running client. Enforce critical protection server-side, make queued work re-check acceptance, measure publish-to-activation delay, and retain a binary repair plan.
+
+An operational runbook records authorized operators, approval, expected metric movement, dashboard, verification, rollback value, and communications. Audit the operator, reason, time, old/new value, and observed result.
+
+## Practical mistakes
+
+- ❌ Claim “we can turn it off” without testing cached/offline clients.
+- ✅ Drill packaged, cached, fetched, and malformed states.
+- ❌ Pause sync by deleting pending work.
+- ✅ Preserve durable intent and resume idempotently.
+- ❌ Treat a kill switch as a replacement for rollback.
+- ✅ Combine it with backend enforcement, monitoring, staged binaries, and repair.
+
+## Sources
+
+- [Remote Config rollouts](https://firebase.google.com/docs/remote-config/rollouts)
+- [Remote Config parameters and conditions](https://firebase.google.com/docs/remote-config/parameters)
+

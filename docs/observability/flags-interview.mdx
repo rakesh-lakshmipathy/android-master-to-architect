@@ -1,0 +1,45 @@
+---
+id: flags-interview
+title: Feature flags — case study and interview preparation
+---
+
+# Feature flags — case study and interview preparation
+
+## Case study: replacing checkout
+
+Keep separate controls: a release flag selects legacy/new checkout; an operational enum selects normal/degraded/paused API mode; a versioned experiment assigns copy; server authorization remains authoritative; validated configuration supplies retry limits.
+
+Activate cached config at a journey boundary. Capture an immutable `CheckoutPolicySnapshot` when payment starts so recomposition or real-time updates cannot switch implementation halfway through.
+
+Roll out internal → 1% → 5% → 25% → 50% → 100%, gated by crashes, ANRs, API errors, duplicate orders, completion, and support. At incident time, stop new entries while preserving idempotent in-progress work. After a stable observation window, remove legacy code and the release flag with an old-version compatibility plan.
+
+If the console says “disabled” but failures continue, investigate offline/cache state, captured journeys, old versions, targeting mistakes, backend-only traffic, and telemetry delay. Correlate by app release, flag snapshot/config version, and server request—not only the current console value.
+
+## Interview questions
+
+1. **Deployment versus release?** Deployment puts code in a binary; release exposes behavior.
+2. **Why not authorization?** The client is outside the trust boundary; the server rechecks sensitive operations.
+3. **How choose a default?** Analyze harm from absent/stale config: data, money, security, backend load, and compatibility.
+4. **How prevent mid-screen inconsistency?** Activate at boundaries and use an immutable journey policy.
+5. **How test many flags?** Independence, invalid-combination checks, risk-based/pairwise tests, production-default smoke tests, fast cleanup.
+6. **What makes an experiment credible?** Stable randomization, correct exposure, balanced samples, sufficient power/duration, consistent instrumentation, and guardrails.
+7. **How design a kill switch?** Safe degraded mode, backend protection, offline semantics, restricted/audited operators, diagnostics, monitoring, and drills.
+
+## Review checklist
+
+- [ ] One classification and accountable owner per flag.
+- [ ] Packaged/cached defaults are intentional and tested.
+- [ ] Sensitive work remains server-authorized.
+- [ ] Values are typed, bounded, and backward compatible.
+- [ ] Account switch, process death, offline, stale, and malformed states are covered.
+- [ ] Rollout has success signals, guardrails, and a runbook.
+- [ ] Experiment assignment is stable and exposure deduplicated.
+- [ ] Removal ticket and expiry exist before launch.
+
+## Exercises
+
+1. Explain why a remote flag cannot safely reverse an already-applied destructive database migration.
+2. Test `NORMAL`, `WIFI_ONLY`, and `PAUSED` sync across queued work and process death.
+3. An expected 50/50 test has 12,000 control and 8,000 treatment assignments. List investigations before comparing conversion.
+4. Write a removal checklist covering Android, backend, analytics, operations, documentation, and old versions.
+
