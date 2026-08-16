@@ -1,0 +1,88 @@
+---
+id: cold-start-routing
+title: Cold-start navigation and authentication gates
+---
+
+# Cold-start navigation and authentication gates
+
+The same link can arrive when the process is absent, the Activity exists, the graph is not ready, the user is signed out, or another account is active. Route it through one pipeline instead of scattering checks across Activities and composables.
+
+```text
+Intent/notification/link
+        ↓
+parse + validate syntax
+        ↓
+ExternalDestination (typed)
+        ↓
+wait for app/session restoration
+        ↓
+authentication + authorization decision
+        ↓
+navigate once / show safe fallback
+```
+
+## Preserve intent, not a back stack
+
+```kotlin
+data class PendingDestination(
+    val destination: ExternalDestination,
+    val receivedAt: Instant,
+    val nonce: String,
+)
+```
+
+If login is needed, preserve the typed destination, complete authentication, then resolve it again under the current user. Do not persist raw `Intent` objects or blindly replay extras.
+
+## A coordinator
+
+```kotlin
+class ExternalRouteCoordinator(
+    private val session: SessionRepository,
+    private val orders: OrderRepository,
+) {
+    suspend fun resolve(destination: ExternalDestination): RouteResult =
+        when (destination) {
+            is ExternalDestination.Order -> {
+                if (!session.isAuthenticated()) {
+                    RouteResult.RequireLogin(destination)
+                } else if (orders.canOpen(destination.id)) {
+                    RouteResult.Navigate(AppRoute.Order(destination.id))
+                } else {
+                    RouteResult.Rejected("Order unavailable")
+                }
+            }
+            ExternalDestination.Unsupported -> RouteResult.Rejected("Unsupported link")
+        }
+}
+```
+
+The UI observes one-shot route results and acknowledges consumption. A plain replaying `StateFlow` can navigate twice after configuration change unless the state includes explicit consumption/identity semantics.
+
+## Cold versus warm delivery
+
+- Cold start: inspect the Activity’s initial intent after essential app/session initialization.
+- Existing Activity: handle the new intent (`onNewIntent`) and update the Activity’s stored intent if appropriate.
+- Compose Navigation: emit a typed route after the `NavHost` is ready; avoid navigation directly during composition.
+- Multiple links: define whether to queue, replace, or deduplicate. A stable event ID prevents double handling.
+
+## Back-stack expectations
+
+Opening an order should usually produce a sensible Up path (for example Orders → Order) while system Back returns to the previous app when appropriate. Build synthetic stacks only where product behavior requires them; do not manufacture confusing duplicate destinations.
+
+## Practical edge cases
+
+- Link belongs to account A while account B is active: reject or offer explicit account switch; never leak metadata.
+- Token expired during login: show a safe expired-link state, not the home screen with no explanation.
+- User taps the same notification repeatedly: navigate idempotently or use single-top semantics.
+- Resource deleted: show a stable “no longer available” destination.
+- App initialization fails offline: retain a bounded pending request and expose retry/cancel.
+
+## Sources
+
+- [Navigate to a destination](https://developer.android.com/guide/navigation/design/deep-link)
+- [Tasks and the back stack](https://developer.android.com/guide/components/activities/tasks-and-back-stack)
+
+## Interview question
+
+**Where should authentication be checked?** At routing for UX and on the server/data boundary for actual authorization. Navigation guards alone are not security boundaries.
+

@@ -1,0 +1,65 @@
+---
+id: notifications-interview
+title: Notification and external-entry system-design interview
+---
+
+# Notification and external-entry system-design interview
+
+## Case study: secure order updates
+
+**Requirements:** show delivery changes, open the correct order, support logged-out cold starts, avoid duplicate alerts, and protect orders across account switches.
+
+1. Server commits order event and outbox atomically.
+2. Sender publishes FCM containing opaque event ID, order ID, and version—no sensitive details.
+3. App validates payload shape and deduplicates event ID.
+4. App fetches current authorized state or schedules durable reconciliation.
+5. Notification uses the order channel, stable notification ID, private lock-screen visibility, and an explicit immutable `PendingIntent` with unique URI identity.
+6. Tap becomes typed `ExternalDestination.Order(id)`.
+7. Coordinator restores session, checks current-account authorization, then navigates.
+8. Missing/deleted/wrong-account orders produce safe explicit states.
+
+## Failure-injection checklist
+
+- notification permission denied and channel disabled;
+- FCM duplicated, delayed, reordered, or never delivered;
+- process dies between deduplication and notification display;
+- two order notifications created with the same request code and only different extras;
+- user signs out before tapping;
+- link contains encoded path tricks or unexpected host;
+- release signing fingerprint missing from `assetlinks.json`;
+- user taps during cold start, then a second link arrives during login;
+- inline reply is replayed or conversation was deleted;
+- app is offline when an FCM message arrives.
+
+## Interview questions and concise answers
+
+1. **Channel importance versus notification priority?** Channel importance governs modern system interruption behavior; builder priority mainly supports older versions. Users control channels after creation.
+2. **Why immutable PendingIntent?** It prevents the holder from altering unspecified Intent fields. Mutable is an exception for platform-filled data such as direct reply.
+3. **Why did every notification open the newest item?** Matching PendingIntents were reused because extras do not affect identity; the latest extras updated the shared token.
+4. **Custom scheme versus App Link?** Custom schemes are easily claimed. Verified HTTPS App Links associate a domain with the signed app and retain web fallback.
+5. **Does verification authorize a resource?** No. It authenticates association/routing, not the signed-in user’s permission.
+6. **Can FCM guarantee delivery?** No. Use it as a signal; persist events and reconcile from server truth.
+7. **Notification message versus data message?** Notification payload can be system-displayed in background; data gives app handling control, subject to delivery and execution limits.
+8. **What happens after token rotation?** Persist new token, upload it durably, update installation association, and retire invalid tokens on the server.
+9. **Where is deep-link input validated?** At parsing, routing, and the authenticated server/data boundary. Never turn arbitrary strings into internal routes.
+10. **How do you prevent double navigation?** Give route events identity, acknowledge consumption, use appropriate single-top behavior, and centralize warm/cold handling.
+
+## Review checklist
+
+- [ ] Notification channel matches actual urgency and user expectation.
+- [ ] Permission denial has a functional fallback.
+- [ ] Lock-screen privacy is deliberate.
+- [ ] PendingIntent is explicit, immutable by default, and uniquely identified.
+- [ ] Every external value is syntax-validated and authorization-checked.
+- [ ] App Link verification covers every intended release certificate/host.
+- [ ] Cold/warm/login/account-switch paths use one coordinator.
+- [ ] FCM payload is minimal and non-secret.
+- [ ] Duplicates, reordering, missing delivery, and token rotation are tolerated.
+- [ ] Analytics distinguish sent, received, displayed, opened, and successfully routed.
+
+## Exercises
+
+1. Reproduce and fix the “all notifications open the last item” PendingIntent bug.
+2. Write parser property tests for malformed and encoded App Link inputs.
+3. Draw the state machine for two deep links received while authentication is in progress.
+4. Explain how the product behaves if push never arrives but the user opens the app later.

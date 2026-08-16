@@ -1,0 +1,83 @@
+---
+id: fcm
+title: Firebase Cloud Messaging delivery and token lifecycle
+---
+import Admonition from '@theme/Admonition';
+
+# Firebase Cloud Messaging delivery and token lifecycle
+
+FCM is a best-effort wake-up/delivery channel, not your business database. Messages can be delayed, collapsed, duplicated, or unavailable; the app must reconcile with server truth.
+
+## Message styles
+
+- **Notification message:** SDK/system can display it when the app is backgrounded; handling differs by app state.
+- **Data message:** app code interprets the payload when delivered; gives control but not unlimited execution time.
+- **Combined:** notification plus data; behavior still varies between foreground/background.
+
+Do not put secrets or full sensitive records in the payload. Send a type, stable entity/version ID, and fetch authorized data over TLS.
+
+```kotlin
+class AppMessagingService : FirebaseMessagingService() {
+    override fun onNewToken(token: String) {
+        tokenRepository.recordPendingToken(token)
+        tokenSyncScheduler.enqueue()
+    }
+
+    override fun onMessageReceived(message: RemoteMessage) {
+        val eventId = message.data["eventId"] ?: return
+        val orderId = message.data["orderId"] ?: return
+        if (!safeId.matches(orderId)) return
+
+        eventStore.recordIfNew(eventId, orderId)
+        notificationPublisher.publishOrderUpdate(orderId)
+    }
+}
+```
+
+`onMessageReceived` has a short processing window. Post a notification promptly. For longer durable processing, persist minimal intent and schedule WorkManager; do not start an unrestricted background service.
+
+## Token lifecycle is many-to-many
+
+A registration token identifies an app installation instance, not a person forever. It can rotate. One user may have several devices; a device may change users.
+
+Server model should associate token with installation, platform, current user/session binding, update time, and notification preferences. On sign-out, detach or invalidate that user binding. Delete invalid/unregistered tokens reported by sends.
+
+## Priority
+
+Normal priority may be delayed in Doze. High priority is for time-sensitive, user-visible content and should normally lead to a notification. Consistently using high priority without visible outcomes can lead to deprioritization.
+
+High priority does not mean guaranteed or exactly-once. Critical alarms, financial correctness, and message history must not depend solely on push arrival.
+
+## Topics
+
+Topics are suitable for broad public segments such as weather alerts for a region, not private per-user authorization. Anyone able to subscribe a client must not gain access to confidential payloads. Enforce targeting and data access on trusted servers.
+
+## Delivery-safe architecture
+
+```text
+Server commits event + outbox
+        ↓
+Push says “entity 42 changed to version 7”
+        ↓
+App deduplicates event ID
+        ↓
+App fetches authorized current state
+        ↓
+Room updates; UI and notification derive from truth
+```
+
+<Admonition type="danger" title="Never send FCM from the client with server credentials">
+Sending belongs in a trusted environment using the HTTP v1 API/Admin SDK and scoped service credentials. Embedding a server key or service-account credential in an APK exposes it.
+</Admonition>
+
+## Sources
+
+- [Receive messages on Android](https://firebase.google.com/docs/cloud-messaging/android/receive)
+- [Set and manage message priority](https://firebase.google.com/docs/cloud-messaging/android-message-priority)
+- [Manage registration tokens](https://firebase.google.com/docs/cloud-messaging/manage-tokens)
+- [Message types](https://firebase.google.com/docs/cloud-messaging/customize-messages/set-message-type)
+
+## Exercise
+
+Design chat push handling for duplicate delivery, token rotation, multiple devices, muted conversations, signed-out state, Doze, and a process killed immediately after receiving the message.
+

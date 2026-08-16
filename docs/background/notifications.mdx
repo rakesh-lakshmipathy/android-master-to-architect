@@ -1,0 +1,95 @@
+---
+id: notifications
+title: Notification channels, permission, grouping, and actions
+---
+import Admonition from '@theme/Admonition';
+
+# Notification channels, permission, grouping, and actions
+
+A notification is a user-facing product surface, not merely a side effect of receiving data. Design its purpose, urgency, privacy, navigation destination, and behavior when tapped or dismissed.
+
+## Permission and channel are different gates
+
+On Android 13+, ordinary notifications require the runtime `POST_NOTIFICATIONS` permission. On Android 8+, every notification belongs to a channel. The user can deny the app permission, disable one channel, or change its importance independently.
+
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+Ask after explaining a concrete benefit—for example, when the user enables delivery tracking—not automatically on first launch.
+
+```kotlin
+fun createChannels(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+    val manager = context.getSystemService(NotificationManager::class.java)
+    manager.createNotificationChannels(
+        listOf(
+            NotificationChannel(
+                "orders",
+                "Order updates",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply { description = "Time-sensitive delivery progress" },
+            NotificationChannel(
+                "recommendations",
+                "Recommendations",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ),
+        )
+    )
+}
+```
+
+Once created, the app cannot freely raise a channel’s importance; the user owns channel behavior. Create stable semantic channels, not one channel per notification.
+
+## Build a useful notification
+
+```kotlin
+val notification = NotificationCompat.Builder(context, "orders")
+    .setSmallIcon(R.drawable.ic_delivery)
+    .setContentTitle("Your order is nearby")
+    .setContentText("Driver arriving in approximately 5 minutes")
+    .setContentIntent(openOrderIntent)
+    .setAutoCancel(true)
+    .setCategory(NotificationCompat.CATEGORY_STATUS)
+    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+    .build()
+
+NotificationManagerCompat.from(context).notify(orderId.hashCode(), notification)
+```
+
+Use a stable notification ID to update an existing event. A random ID for every progress update creates notification spam.
+
+## Groups, summaries, and conversations
+
+For several notifications, assign a group key and provide a summary where platform behavior requires it. Do not post both a full summary and identical child content. Messaging apps should use conversation-aware APIs, shortcuts, persons, and `MessagingStyle` so the system can rank and display them correctly.
+
+## Actions must be safe and repeatable
+
+“Mark as read” may execute in a receiver, persist locally, and enqueue sync. It must tolerate a second tap or delayed delivery. Destructive actions should require appropriate confirmation or an undo strategy.
+
+<Admonition type="warning" title="Sensitive lock-screen content">
+Do not put OTPs, medical details, full message bodies, or account identifiers on the lock screen without a deliberate privacy policy. Set visibility and provide a safe public version when needed.
+</Admonition>
+
+## Practical mistakes
+
+- ❌ Ask permission before the user knows what notifications provide.
+- ✅ Ask at the moment the user enables a notification-dependent feature.
+- ❌ Put promotions and urgent security alerts in one high-importance channel.
+- ✅ Separate categories by user expectation and urgency.
+- ❌ Repost progress with a new ID every second.
+- ✅ Update one stable notification at a sensible cadence.
+- ❌ Treat `notify()` returning as proof the user saw it.
+- ✅ Instrument enqueue/display/open separately and accept platform/user suppression.
+
+## Sources
+
+- [Notifications overview](https://developer.android.com/develop/ui/views/notifications)
+- [Create and manage notification channels](https://developer.android.com/develop/ui/views/notifications/channels)
+- [Notification runtime permission](https://developer.android.com/develop/ui/views/notifications/notification-permission)
+
+## Exercise
+
+Design channels for banking: card transaction, fraud alert, monthly statement, and marketing. Explain importance, lock-screen visibility, opt-in moment, tap destination, and what remains usable after permission denial.
+

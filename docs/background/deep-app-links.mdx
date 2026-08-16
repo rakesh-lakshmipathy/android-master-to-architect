@@ -1,0 +1,87 @@
+---
+id: deep-app-links
+title: Deep links, verified App Links, and validation
+---
+import Admonition from '@theme/Admonition';
+
+# Deep links, verified App Links, and validation
+
+A deep link is externally supplied input that requests navigation. A verified App Link is an HTTPS deep link whose domain has declared a relationship with your signed app.
+
+| Link | Example | Main property |
+|---|---|---|
+| custom scheme | `myshop://orders/42` | easy, but any app can claim the scheme |
+| ordinary web deep link | `https://shop.example.com/orders/42` | has web fallback; may open browser/chooser |
+| verified App Link | same HTTPS URL + verification | domain ownership association enables trusted routing |
+
+## Manifest declaration
+
+```xml
+<activity
+    android:name=".MainActivity"
+    android:exported="true">
+    <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+            android:scheme="https"
+            android:host="shop.example.com"
+            android:pathPrefix="/orders" />
+    </intent-filter>
+</activity>
+```
+
+Host `https://shop.example.com/.well-known/assetlinks.json` with package name and SHA-256 signing certificate fingerprints. Include production and intended testing certificates deliberately; do not weaken the relationship with unrelated apps.
+
+## Parse into a typed request
+
+```kotlin
+sealed interface ExternalDestination {
+    data class Order(val id: String) : ExternalDestination
+    data object Unsupported : ExternalDestination
+}
+
+fun parseExternalUri(uri: Uri): ExternalDestination {
+    if (uri.scheme != "https" || uri.host != "shop.example.com") {
+        return ExternalDestination.Unsupported
+    }
+    val segments = uri.pathSegments
+    if (segments.size != 2 || segments[0] != "orders") {
+        return ExternalDestination.Unsupported
+    }
+    val id = segments[1].takeIf { it.matches(Regex("[A-Za-z0-9-]{1,64}")) }
+        ?: return ExternalDestination.Unsupported
+    return ExternalDestination.Order(id)
+}
+```
+
+Verification proves domain-to-app association; it does **not** prove the user may access order 42. Fetch through an authenticated repository and enforce authorization on the server.
+
+## Attack and failure cases
+
+- unexpected scheme/host, encoded slashes, duplicate query parameters, very long values;
+- open redirects (`?next=https://evil.example`);
+- links to deleted or tenant-inaccessible content;
+- verification file missing, redirected, wrong MIME/JSON, or wrong signing fingerprint;
+- staging links accidentally opening production app;
+- navigation into an exported internal-only screen.
+
+<Admonition type="warning" title="Never deserialize navigation commands">
+Map a small allowlisted URI grammar to typed destinations. Do not accept arbitrary class names, routes, nested intents, file paths, or SQL-like filter expressions from a URL.
+</Admonition>
+
+## Test the contract
+
+Use App Links Assistant and device commands to verify association and route handling. Test installed/not installed, signed debug/release builds, logged in/out, malformed URLs, browser fallback, multiple tasks, and warm/cold app states.
+
+## Sources
+
+- [About Android App Links](https://developer.android.com/training/app-links/about)
+- [Create deep links](https://developer.android.com/training/app-links/create-deeplinks)
+- [Verify App Links](https://developer.android.com/training/app-links/verify-applinks)
+
+## Exercise
+
+Define an allowlisted URI grammar for products, orders, and password-reset links. State which may be opened when signed out and which require a one-time server token.
+

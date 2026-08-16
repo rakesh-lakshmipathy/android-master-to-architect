@@ -1,0 +1,87 @@
+---
+id: pending-intents
+title: PendingIntent identity, mutability, and security
+---
+import Admonition from '@theme/Admonition';
+
+# PendingIntent identity, mutability, and security
+
+A `PendingIntent` is a system-held capability: another process may trigger an operation **as your app**, even when your process is gone. Treat it like a scoped authorization token.
+
+## Prefer explicit and immutable
+
+```kotlin
+val intent = Intent(context, MainActivity::class.java).apply {
+    action = ACTION_OPEN_ORDER
+    data = "https://shop.example.com/orders/$orderId".toUri()
+}
+
+val contentIntent = PendingIntent.getActivity(
+    context,
+    orderId.hashCode(),
+    intent,
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+)
+```
+
+`FLAG_IMMUTABLE` prevents the holder from filling in/changing intent semantics. The creator can still update its token using `FLAG_UPDATE_CURRENT`.
+
+Use `FLAG_MUTABLE` only when the platform must supply values—for example inline reply. Even then, make the underlying intent explicit and tightly validate received values.
+
+## Identity surprises
+
+The system compares the operation type, request code, and the Intent’s filter identity (action, data, type, component, categories). **Extras do not distinguish two PendingIntents.**
+
+```kotlin
+// ❌ Same requestCode and same filter identity: second may update/reuse first token.
+PendingIntent.getActivity(context, 0, base.putExtra("orderId", "A"), flags)
+PendingIntent.getActivity(context, 0, base.putExtra("orderId", "B"), flags)
+
+// ✅ Give each destination stable identity.
+Intent(context, MainActivity::class.java).apply {
+    data = "https://shop.example.com/orders/$orderId".toUri()
+}
+```
+
+This explains the classic bug where tapping notification A opens order B: all notifications shared one token and only extras changed.
+
+## Update, cancel, and one-shot
+
+- `FLAG_UPDATE_CURRENT`: creator updates extras on an existing matching token.
+- `FLAG_CANCEL_CURRENT`: invalidate matching old token and create another.
+- `FLAG_ONE_SHOT`: token can be sent only once; useful when replay is unsafe.
+- `FLAG_NO_CREATE`: look up without creating.
+
+One-shot limits token replay, but the receiving operation still needs domain-level idempotency and authorization.
+
+## Inline reply
+
+```kotlin
+val replyIntent = Intent(context, ReplyReceiver::class.java).apply {
+    action = ACTION_REPLY
+    data = "app://conversation/$conversationId".toUri()
+}
+val replyPendingIntent = PendingIntent.getBroadcast(
+    context,
+    conversationId.hashCode(),
+    replyIntent,
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+)
+```
+
+Validate conversation access after the receiver starts. Never trust an ID merely because it arrived through your `PendingIntent`.
+
+<Admonition type="danger" title="Authority is checked at execution time">
+A notification created while Alice was signed in might be tapped after Bob signs in. Resolve current session and authorize access before showing or changing the resource.
+</Admonition>
+
+## Sources
+
+- [PendingIntent API](https://developer.android.com/reference/android/app/PendingIntent)
+- [PendingIntent security risks](https://developer.android.com/privacy-and-security/risks/pending-intent)
+- [Intents and intent filters](https://developer.android.com/guide/components/intents-filters)
+
+## Interview question
+
+**Why do different extras not create different PendingIntents?** Extras are excluded from Intent filter equality. Use distinct request codes or stable action/data/component identity, based on the operation’s semantics.
+
