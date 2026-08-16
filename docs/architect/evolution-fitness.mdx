@@ -1,0 +1,49 @@
+---
+id: evolution-fitness
+title: Risk, proofs of concept, and fitness functions
+---
+
+# Risk, proofs of concept, and fitness functions
+
+Risk combines uncertainty, likelihood, consequence, exposure and detectability/recovery. Reduce the largest decision-changing uncertainty first.
+
+## Risk register
+
+```text
+Risk: encrypted DB migration exceeds startup timeout on low-tier devices
+Evidence/confidence: no production-sized benchmark; low confidence
+Mitigation: background staged copy with resumable checkpoints
+Experiment: 95th-percentile snapshot on reference device
+Trigger: p95 > 8 s or failure > 0.1%
+Owner/review: Data team, before 5% rollout
+```
+
+## Proof of concept versus prototype
+
+A POC answers a bounded uncertainty and may be disposable. Specify hypothesis, representative data/device/network, success threshold, time box and artifacts. Do not productionize a happy-path spike whose error handling/security/maintenance were intentionally omitted.
+
+Examples: measure JNI copy overhead; validate Room migration under disk pressure; test BLE reconnect across target OEMs; validate KMP framework/API integration; load-test sync conflicts. Prefer the cheapest experiment capable of changing the decision.
+
+## Fitness functions
+
+A fitness function continuously checks an architectural objective:
+
+- dependency test forbids feature-to-feature edges;
+- API/ABI checker protects published module contracts;
+- macrobenchmark enforces startup/jank budget;
+- release check fails on increased critical lint/dependency issues;
+- contract tests verify old/new server schemas;
+- SLO detects sync duplicate rate;
+- build metric limits critical-path regression.
+
+Not every attribute is fully automatable. Combine gates with periodic threat modeling, accessibility review, incident learning and dependency ownership audits. Calibrate thresholds; a noisy gate that is always waived provides no control.
+
+## Evolutionary sequence
+
+Make small changes, measure fitness, preserve compatibility, learn, update/supersede ADRs and remove temporary scaffolding. Evolution is directed feedback—not architecture emerging by accident.
+
+## Sources
+
+- [Evolutionary architecture and feedback](https://martinfowler.com/articles/evo-arch-forward.html)
+- [Fitness-function examples](https://martinfowler.com/articles/fitness-functions-data-products.html)
+

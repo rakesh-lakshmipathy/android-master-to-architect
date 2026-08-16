@@ -1,0 +1,55 @@
+---
+id: adrs
+title: Architecture Decision Records
+---
+
+# Architecture Decision Records
+
+An ADR records an architecturally significant decision and why it was reasonable under its context. It is not a meeting transcript or a complete design document.
+
+## Lightweight template
+
+```markdown
+# ADR-017: Store pending checkout commands in Room
+Status: Accepted
+Date: 2026-08-16
+Owners: Checkout + Data
+
+## Context
+Offline checkout intent must survive process/device restart. Maximum queue: 1,000.
+Payment authorization remains online-only.
+
+## Decision
+Persist idempotent pending commands and state transitions in Room.
+
+## Options considered
+Memory only; DataStore JSON; Room command table.
+
+## Consequences
+Positive: transactional queue/recovery/querying.
+Negative: schema migration, reconciliation and cleanup ownership.
+
+## Validation and revisit
+Migration tests; duplicate-order SLI; revisit if queue exceeds 10k.
+```
+
+Include context, quality attributes/constraints, options (including do nothing), decision, rationale, positive/negative consequences, risks, confidence, implementation/migration, validation/fitness functions, status and superseding links.
+
+Store ADRs near the system in searchable version control. Accepted records are historical/immutable: a changed choice creates a new ADR that **supersedes** the old one. Otherwise teams lose evidence of past constraints and repeat arguments.
+
+Write ADRs for structure, trust/data ownership, public contracts, irreversible/high-cost choices and key quality trade-offs—not every library patch. The implementing team should draft; relevant owners advise; an explicit decision owner accepts.
+
+## Practical mistakes
+
+- ❌ ADR says “Use Room because it is best practice.”
+- ✅ compare options against explicit offline/transaction/migration needs.
+- ❌ edit an accepted ADR until it describes the present.
+- ✅ supersede it and preserve decision history.
+- ❌ ADR is approved but no gate/test reflects it.
+- ✅ connect it to implementation tasks and fitness evidence.
+
+## Sources
+
+- [AWS ADR process](https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html)
+- [Azure ADR guidance](https://learn.microsoft.com/en-us/azure/well-architected/architect-role/architecture-decision-record)
+

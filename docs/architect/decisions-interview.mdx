@@ -1,0 +1,43 @@
+---
+id: decisions-interview
+title: Architecture decision case study and interview preparation
+---
+
+# Architecture decision case study and interview preparation
+
+## Case study: offline ordering architecture
+
+Requirements: browsing works offline; order intent survives restart; server authorizes price/payment; no duplicate order; 100k daily users; five-person mobile team; existing REST backend; six-month deadline.
+
+Compare memory queue, DataStore document and Room command/state tables. Room adds schema/migration cost but supports transactional state, querying and reconciliation. Choose it with idempotency keys and expand-compatible server contract. Fitness functions cover migration snapshots, duplicate-order SLI, queue recovery, dependency direction, p95 sync and database size. Rollback can route future creation, but already-persisted commands require compatible readers/forward repair.
+
+ADR confidence is medium; revisit if queue/load assumptions or backend protocol change. This is a decision grounded in forces—not “Room is recommended.”
+
+## Interview questions
+
+1. **Functional versus quality requirement?** What the system does versus how well/under what measurable conditions.
+2. **What belongs in an ADR?** Significant context, options, decision/rationale, consequences, confidence, validation and superseding lifecycle.
+3. **What makes a decision irreversible?** Persisted/external effects, installed clients, trust identity, public contracts, migration/organizational cost.
+4. **How compare architectures?** Prioritized attributes, constraints, lifecycle cost, risk/confidence, evidence, reversibility and team ownership.
+5. **What is a good POC?** Bounded hypothesis using representative conditions and predetermined success threshold.
+6. **What is a fitness function?** Repeatable evidence that implementation continues to meet an architectural objective.
+7. **How avoid fashion?** Start from forces, include do-nothing, test the hardest uncertainty and define outcome/exit criteria.
+
+## Checklist
+
+- [ ] Requirements, constraints, assumptions, invariants and non-goals separated.
+- [ ] Quality attributes expressed as measurable scenarios and prioritized.
+- [ ] Options include status quo with positive/negative consequences.
+- [ ] Data, API, trust, client-version and organizational reversibility assessed.
+- [ ] Lifecycle cost and actual team capacity included.
+- [ ] Largest uncertainties have bounded experiments.
+- [ ] Decision, confidence, owner and superseding/revisit triggers recorded.
+- [ ] Fitness evidence and recovery/deletion plans exist.
+
+## Exercises
+
+1. Write an ADR choosing StateFlow versus another state holder for a library API.
+2. Analyze reversibility of client-side database encryption migration.
+3. Build a weighted/sensitivity matrix for native UI versus shared Compose UI.
+4. Turn “the architecture must scale” into three measurable fitness functions.
+

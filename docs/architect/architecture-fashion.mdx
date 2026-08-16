@@ -1,0 +1,49 @@
+---
+id: architecture-fashion
+title: Avoiding architecture by fashion
+---
+
+# Avoiding architecture by fashion
+
+Patterns and technologies are compressed experience, not universal requirements. “Google uses it,” “everyone uses Clean Architecture,” or “it is modern” is weak evidence for your constraints.
+
+## Fashion-resistance questions
+
+1. What user/business/quality problem exists today?
+2. What evidence and baseline show it?
+3. Which constraints and team capabilities matter?
+4. What is the simplest viable option, including do nothing?
+5. What costs/failure modes does the proposed pattern introduce?
+6. What uncertainty will a POC reduce?
+7. What observable threshold justifies adoption?
+8. How do we migrate, operate, reverse and delete old scaffolding?
+
+## Example: MVI everywhere
+
+MVI-style reducers can make complex state transitions explicit and testable. For a static settings screen, mandatory actions/intents/reducers/effects may add concepts without reducing risk. Use the pattern where state/event complexity and debugging benefits exceed ceremony; keep vocabulary consistent in that scope.
+
+Likewise, modularization, repositories/use cases, KMP, Compose, microservices, reactive streams and event sourcing solve specific forces. Require an ADR for broad adoption, one representative vertical slice, negative evidence, team feedback, performance/build measurements and a stop condition.
+
+## Cargo-cult warning signs
+
+- solution appears before requirements;
+- only benefits are documented;
+- sample app is treated as production proof;
+- abstractions are named after frameworks rather than business capabilities;
+- dissent asks for evidence and is dismissed as resistance;
+- adoption success is percentage migrated, not outcome;
+- no owner, fitness function, exit or deletion plan.
+
+## Practical mistakes
+
+- ❌ Ban every new technique as hype.
+- ✅ evaluate it against explicit forces and evidence.
+- ❌ standardize after a conference demo.
+- ✅ trial a hard representative slice and record trade-offs.
+- ❌ copy another company's architecture without its scale/team constraints.
+- ✅ borrow principles, then re-derive the local design.
+
+## Exercise
+
+Challenge “We must migrate all Android UI to Compose and all business logic to KMP this year.” Produce questions, experiment, metrics, phased decision and stop conditions.
+

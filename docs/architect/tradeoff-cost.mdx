@@ -1,0 +1,45 @@
+---
+id: tradeoff-cost
+title: Coupling, complexity, delivery, and operational cost
+---
+
+# Coupling, complexity, delivery, and operational cost
+
+Architecture moves cost; it rarely removes it. Compare options across the whole lifecycle and affected teams.
+
+## Trade-off matrix
+
+| Attribute | Option A: single app module | Option B: feature modules |
+|---|---|---|
+| Initial delivery | Faster | Boundary/build setup cost |
+| Ownership | Informal | Can be explicit |
+| Build isolation | Limited | Possible if graph/tasks support it |
+| Navigation/contracts | Direct/simple | Stable APIs/adapters required |
+| Runtime | Fewer boundaries | Similar unless dynamic delivery |
+| Organizational | Easy for one team | Better potential for multiple teams |
+
+Scores are conversation aids, not mathematics. Weight requirements, show evidence/confidence and run sensitivity analysis: if a small weight change flips the result, the decision is uncertain.
+
+## Costs to include
+
+Implementation, migration/coexistence, learning/hiring, cognitive load, clean/incremental build, test matrix, binary/startup/runtime, security/privacy review, observability/on-call, upgrades/deprecations, incident recovery, coordination and eventual exit.
+
+Coupling is not inherently wrong. Cohesive code that changes together may belong together. Harmful coupling forces unrelated teams/features to coordinate, leaks unstable models, or makes failure propagate. Abstractions add concepts and indirection; spend them at volatile or ownership boundaries.
+
+## Team capacity is an architectural constraint
+
+A design needing a platform team, data scientists and 24/7 operations is invalid if one mobile team must run it. Prefer the simplest design meeting prioritized attributes with realistic skills and ownership.
+
+## Practical mistakes
+
+- ❌ Optimize runtime while ignoring build/on-call/migration cost.
+- ✅ compare total lifecycle and opportunity cost.
+- ❌ maximize decoupling everywhere.
+- ✅ couple cohesive behavior; isolate volatility/trust/ownership boundaries.
+- ❌ use weighted scores to disguise predetermined preference.
+- ✅ expose assumptions and sensitivity.
+
+## Exercise
+
+Compare Room versus files, one module versus feature modules, and native versus KMP for a five-engineer app. Include three-year costs and reversal paths.
+

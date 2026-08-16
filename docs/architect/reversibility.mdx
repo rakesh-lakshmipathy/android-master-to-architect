@@ -1,0 +1,50 @@
+---
+id: reversibility
+title: Reversible and irreversible decisions
+---
+
+# Reversible and irreversible decisions
+
+A reversible decision can be changed with bounded cost and blast radius. Irreversibility is a spectrum, not a label.
+
+## Reversibility factors
+
+- persisted or externally observed data;
+- public/server/partner API commitments;
+- app versions that cannot be recalled;
+- signing identity, encryption keys and trust;
+- user workflow/training or legal consent;
+- migration duration and dual-operation cost;
+- vendor lock-in/data export;
+- organizational/team dependency changes.
+
+A Compose component color is cheap to reverse. Changing money from decimal text to floating point and writing it across clients/backends is not. A remote flag can route new reads, but cannot erase already-written semantics.
+
+## Decision timing
+
+Make high-consequence decisions early enough to manage risk, but delay choices whose uncertainty can cheaply be reduced. Preserve options using stable seams, expand-migrate-contract schemas, backward-compatible APIs, idempotency and staged rollout. Do not add abstraction for hypothetical reversibility without a plausible change scenario.
+
+## Reversal plan
+
+Define trigger, decision authority, detection time, traffic/control action, data compatibility, in-flight work, old app behavior, communication and forward repair. Test it before rollout.
+
+```text
+Can routing revert? yes
+Can schema writes revert? no
+Therefore: old readers understand new rows; rollback routes future sessions;
+repair migrates incomplete rows forward.
+```
+
+## Practical mistakes
+
+- ❌ Call feature-flagged work fully reversible.
+- ✅ inspect data, external effects and installed-client contracts.
+- ❌ delay security/trust decisions as “two-way doors.”
+- ✅ escalate decisions with high blast radius and weak recovery.
+- ❌ design universal abstractions for every imagined future.
+- ✅ buy options only where likelihood × reversal cost justifies them.
+
+## Exercise
+
+Classify changing DI framework, database encryption, package name, analytics vendor, navigation library and signing key. State what makes each more or less reversible.
+

@@ -1,0 +1,39 @@
+---
+id: decision-context
+title: Requirements, constraints, and quality attributes
+---
+
+# Requirements, constraints, and quality attributes
+
+Architecture begins by discovering what must be true—not by selecting MVVM, Clean Architecture, or a database.
+
+## Separate inputs
+
+- **Functional requirement:** user can place an order offline.
+- **Quality attribute:** 95% of cached catalog opens under 300 ms on supported low-tier devices.
+- **Constraint:** payment authorization requires network/server verification.
+- **Assumption:** users may remain offline for seven days.
+- **Invariant:** one idempotency key never creates two orders.
+- **Non-goal:** real-time inventory accuracy while offline.
+
+Turn “fast,” “secure,” “scalable,” and “reliable” into scenarios containing source, stimulus, environment, artifact, response and measurable response. Example: “When connectivity returns after seven days with 500 queued mutations, sync completes without duplicate orders and keeps UI responsive; p95 completion is under two minutes on the reference device/network.”
+
+## Stakeholder and evidence discovery
+
+Interview product, users/support, backend, security/privacy, QA/accessibility, operations and release owners. Inspect incidents, telemetry, app/version/device distribution, current contracts, budgets, policies and team skills. Mark uncertainty and confidence; do not convert guesses into facts by putting them in a diagram.
+
+Prioritize quality attributes because they conflict: stronger freshness can cost battery/network; richer abstraction can cost build/cognitive time; stricter security can add UX/recovery complexity.
+
+## Practical mistakes
+
+- ❌ “Must use microservices/MVI” as a requirement.
+- ✅ state the problem/quality attribute that might justify it.
+- ❌ list every quality as highest priority.
+- ✅ force ranking and document sacrifice thresholds.
+- ❌ hide assumptions in implementation.
+- ✅ record owner, evidence, confidence and validation date.
+
+## Exercise
+
+Rewrite “Build a scalable secure chat app” into functional requirements, measurable quality scenarios, constraints, assumptions, invariants and non-goals.
+
