@@ -1,0 +1,84 @@
+---
+id: session-multiaccount
+title: Logout, multi-account sessions, and sensitive screens
+---
+
+# Logout, multi-account sessions, and sensitive screens
+
+Logout is a distributed cleanup/revocation workflow, not `currentUser = null`.
+
+## Session-owned data
+
+Inventory by account/session:
+
+- access/refresh tokens and cookies/WebView cookies;
+- Room rows, files, encrypted caches, thumbnails;
+- WorkManager jobs/outbox uploads;
+- FCM installation-token association/topics;
+- in-memory repositories, singleton flows, player/download state;
+- notification and PendingIntent destinations;
+- analytics/crash user identity;
+- app shortcuts/widgets/clipboard/recent-screen snapshots.
+
+## Logout sequence
+
+```text
+mark session Closing (blocks new authenticated work)
+        ↓
+attempt server revocation / queue policy if offline
+        ↓
+cancel account-tagged work and close streams/sockets
+        ↓
+remove credentials atomically
+        ↓
+delete or detach account-owned local data
+        ↓
+clear identity in analytics/notifications/cookies
+        ↓
+publish SignedOut and navigate to safe root
+```
+
+Prioritize local credential removal even if revocation network call fails. Record no raw token in a retry job; define backend logout-all/session management for compromised credentials.
+
+## Multi-account correctness
+
+Use stable server subject/account ID as namespace. Every database/cache/outbox/work unique name includes account where required. Repositories receive account context explicitly or are created per-account. Global `currentAccountId` read midway through a long operation causes cross-account races.
+
+```kotlin
+data class AccountContext(
+    val issuer: String,
+    val subject: String,
+    val sessionId: String,
+)
+
+suspend fun loadOrders(account: AccountContext): List<Order>
+```
+
+If the active account changes, cancel/ignore results created under old session identity. Never retry A’s failed request with B’s token.
+
+## Sensitive-screen protection
+
+- Use `FLAG_SECURE` selectively where screenshot/recent-task exposure causes material harm; understand accessibility/support trade-offs and that external cameras/root can bypass it.
+- Hide/redact app content when backgrounded if product risk requires it.
+- Require reauthentication after risk-based inactivity or for high-impact actions, not arbitrary UI rotations.
+- Notifications and widgets must follow lock-screen/privacy choices.
+- Clear clipboard quickly or avoid it for secrets; use autofill/credential APIs.
+- Do not expose sensitive route/state in deep-link URLs, logs, or saved state.
+
+## Offline/logout corner cases
+
+- Device offline during logout: remove local access; server session remains until revocation/expiry.
+- Unsynced user data: product must ask discard/retain/export; never silently upload after logout with wrong account.
+- Process death mid-cleanup: persist closing/tombstone state and finish on restart.
+- Shared device: account chooser must not leak names/avatars beyond user expectation.
+- Notification tapped after logout: route coordinator rechecks current session and authorization.
+
+## Sources
+
+- [OAuth token revocation — RFC 7009](https://www.rfc-editor.org/rfc/rfc7009)
+- [Android sensitive data guidance](https://developer.android.com/privacy-and-security)
+
+## Interview question
+
+**How do you guarantee logout when offline?** You can guarantee local credential/data access removal. You cannot immediately contact the server; rely on token expiry, later best-effort revocation without retaining dangerous credentials, and server “log out all sessions” controls.
+

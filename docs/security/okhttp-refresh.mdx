@@ -1,0 +1,92 @@
+---
+id: okhttp-refresh
+title: OkHttp token refresh without retry storms
+---
+import Admonition from '@theme/Admonition';
+
+# OkHttp token refresh without retry storms
+
+An interceptor attaches a known access token. An authenticator may respond to an authentication challenge. The hard problem is coordinating 20 requests that all receive `401` simultaneously.
+
+## Attach tokens narrowly
+
+```kotlin
+class AccessTokenInterceptor(
+    private val tokens: TokenRepository,
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (!request.url.isTrustedApiHost()) return chain.proceed(request)
+        val token = tokens.currentAccessToken() ?: return chain.proceed(request)
+        return chain.proceed(
+            request.newBuilder()
+                .header("Authorization", "Bearer ${token.revealForHeader()}")
+                .build()
+        )
+    }
+}
+```
+
+Never attach credentials to arbitrary hosts/redirects. Redact the Authorization header in logs.
+
+## Single-flight refresh
+
+Conceptually:
+
+```kotlin
+override fun authenticate(route: Route?, response: Response): Request? {
+    if (response.priorResponseCount() >= 1) return null
+    val failedToken = response.request.header("Authorization")
+
+    synchronized(refreshLock) {
+        val latest = tokens.currentAuthorizationHeader()
+        if (latest != null && latest != failedToken) {
+            return response.request.newBuilder()
+                .header("Authorization", latest)
+                .build()
+        }
+
+        val refreshed = blockingRefreshClient.refresh(tokens.refreshToken())
+            ?: return null.also { sessions.requireReauthentication() }
+        tokens.replaceAtomically(refreshed)
+        return response.request.newBuilder()
+            .header("Authorization", refreshed.authorizationHeader())
+            .build()
+    }
+}
+```
+
+This illustrates the algorithm; production code must avoid doing forbidden coroutine/blocking conversions and use a dedicated token client/store appropriate to OkHttp’s synchronous authenticator contract.
+
+## Critical safeguards
+
+- Refresh client must not use the same authenticator, or it recursively refreshes itself.
+- Compare failed token with latest: another request may already have refreshed.
+- Exactly one refresh is in flight per session/account.
+- Bound retry count using prior response chain.
+- Refresh result replaces access + rotating refresh token atomically.
+- Permanent refresh failure transitions session once; waiting requests fail consistently.
+- Network/5xx failure is not necessarily invalid credentials; define temporary offline behavior.
+- Never retry non-repeatable request bodies blindly. Mutations need idempotency keys/server semantics.
+
+## Multi-account isolation
+
+Token state, locks/single-flight jobs, OkHttp request tagging, caches, and cookie jars must be scoped to account/session. A request created under account A must never be retried with account B’s newly active token.
+
+## Cancellation and backpressure
+
+Waiting requests should be cancellable where architecture allows. Limit queued work during an identity outage; do not hold hundreds of requests indefinitely. A central session coordinator should expose reauthentication state rather than every repository opening login UI.
+
+<Admonition type="danger" title="Do not refresh every 401">
+The endpoint may reject audience, scope, account state, or business authentication. Follow the API’s challenge/error contract and retry at most once after a successful coordinated refresh.
+</Admonition>
+
+## Sources
+
+- [OkHttp Authenticator API](https://square.github.io/okhttp/5.x/okhttp/okhttp3/-authenticator/)
+- [HTTP authentication framework — RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)
+
+## Exercise
+
+Test 50 concurrent API calls after token expiry: one refresh, atomic rotated-token storage, all eligible requests retry once, cancellation works, and a 403 never triggers refresh.
+

@@ -1,0 +1,70 @@
+---
+id: auth-interview
+title: Authentication and authorization interview lab
+---
+
+# Authentication and authorization interview lab
+
+## Case study: multi-account finance app
+
+1. Native app is a public client using system browser/Custom Tab, Authorization Code + S256 PKCE, exact verified redirect, state, and OIDC nonce.
+2. Maintained library validates issuer metadata and ID-token signature/issuer/audience/time/nonce; `iss + sub` identifies account.
+3. Access tokens stay short-lived and audience-scoped; refresh token is protected locally and rotated server-side.
+4. Account-scoped token repository and request tags prevent cross-account retries.
+5. OkHttp attaches token only to trusted API hosts; one single-flight refresh occurs, with bounded one-time retry.
+6. Server authorizes every account/object/action and binds high-value step-up challenge to exact transaction details.
+7. Biometric authorizes a Keystore operation/local presence gate; it never substitutes for server authorization.
+8. Logout blocks new work, revokes when possible, removes local credentials, cancels account jobs, cleans caches/notifications/cookies/analytics, and recovers after process death.
+
+## Failure-injection checklist
+
+- malicious app intercepts custom-scheme authorization code;
+- returned state/nonce/issuer/redirect does not match;
+- two login attempts complete out of order;
+- authorization code is replayed;
+- 50 requests receive 401 simultaneously;
+- refresh token rotates but app crashes before storing replacement;
+- refresh endpoint returns 401, 500, timeout, or malformed response;
+- account switches while request/worker is in flight;
+- server role revoked while token remains unexpired;
+- biometric cancelled, locked out, enrollment changes, or process dies;
+- logout occurs offline with unsynced data;
+- old notification/deep link opens after another user signs in;
+- access token accidentally follows redirect to another host;
+- mutation request body cannot be replayed safely.
+
+## Interview questions
+
+1. **OAuth versus OIDC?** OAuth delegates resource access; OIDC adds standardized user authentication/identity claims.
+2. **Why is Android a public client?** Installed app binaries cannot keep a shared client secret confidential.
+3. **Why external browser instead of WebView?** It isolates provider credentials/content from the app and supports browser SSO/security context.
+4. **What does PKCE protect?** Intercepted authorization code cannot be redeemed without the per-request verifier.
+5. **`state` versus `nonce` versus PKCE?** Response/CSRF correlation, ID-token replay/request binding, and code-redemption binding respectively.
+6. **Can ID token call an API?** It is for the client’s identity assertion; APIs normally require an access token with correct audience/scope.
+7. **Why rotate refresh tokens?** Reuse of an invalidated prior token can reveal theft and revoke the token family/session.
+8. **How prevent refresh storm?** One per-session single-flight refresh; compare failed/latest token; waiters reuse result; retry once.
+9. **Refresh every 401?** No. Wrong audience/scope/revocation/business auth may not be fixed; honor error contract and bound retries.
+10. **Where store tokens?** Minimize access-token persistence; protect refresh credential with platform security while relying on server expiry/rotation/revocation because client compromise remains possible.
+11. **Does biometric mean account owner approved?** It proves an allowed local device authenticator succeeded, not remote identity/authorization or exact transaction unless cryptographically bound.
+12. **Logout versus deleting token?** Logout spans server revocation, local credential/data/work/cookie/notification/analytics cleanup and crash/offline recovery.
+13. **Authentication versus authorization?** Who/session identity versus permission for this action/resource under current policy.
+14. **Why are UUID object IDs insufficient?** Unpredictability reduces guessing; only server object-level authorization prevents access.
+
+## Review checklist
+
+- [ ] Native public-client flow uses browser, exact redirects, S256 PKCE, state, and required OIDC validation.
+- [ ] No client secret/server credential ships in APK.
+- [ ] Token type, issuer, audience, scope, subject, lifetime, and storage are explicit.
+- [ ] Refresh is rotated, atomic, single-flight, bounded, and account-scoped.
+- [ ] Credentials attach only to intended trusted resource hosts.
+- [ ] Biometrics and Keystore are bound to a clearly defined local/server operation.
+- [ ] Logout and account switch cover data, work, FCM, notifications, cookies, analytics, and process death.
+- [ ] Server enforces object/action authorization and step-up transaction binding.
+- [ ] Logs and telemetry never contain codes, verifiers, tokens, cookies, or raw identity claims.
+- [ ] Redirect, replay, concurrency, offline, revocation, and key rotation are tested.
+
+## Exercises
+
+1. Draw sequence diagrams for first login, silent refresh, revoked refresh, and add-payee step-up.
+2. Implement/test a single-flight token coordinator independent of OkHttp.
+3. Audit one API for BOLA/IDOR by changing every object and tenant identifier.

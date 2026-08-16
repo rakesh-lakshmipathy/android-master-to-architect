@@ -1,0 +1,68 @@
+---
+id: oauth-oidc
+title: OAuth 2.0 and OpenID Connect for Android
+---
+import Admonition from '@theme/Admonition';
+
+# OAuth 2.0 and OpenID Connect for Android
+
+OAuth delegates API access. OpenID Connect (OIDC) adds an identity layer on OAuth so a client can establish an authenticated subject using an ID token and related endpoints.
+
+## Roles and artifacts
+
+```text
+Android app (public client) -> authorization server
+        |                           |
+        | access token              | authenticates user / grants consent
+        v                           |
+resource/API server <---------------+
+```
+
+- **Authorization code:** short-lived, single-use intermediate delivered through redirect.
+- **Access token:** credential presented to a resource server for scoped access.
+- **Refresh token:** longer-lived credential used only with authorization server to obtain new tokens.
+- **ID token:** signed assertion about authentication/subject for the client; not a general-purpose API access token.
+
+## Native apps are public clients
+
+An APK cannot keep a shared OAuth client secret confidential. Anyone can inspect or run the app. Register it as a public native client and use Authorization Code + PKCE. A “secret” embedded in resources/native code is not client authentication.
+
+## Use the external user agent
+
+Open authorization in a browser/Custom Tab through a standards-compliant library. Do not collect the identity provider password in your app or use a WebView for OAuth login; the external browser separates credentials/cookies from app content and supports SSO/security controls.
+
+## OAuth is not login by itself
+
+An access token answers “this client may call this resource with these grants.” OIDC adds standardized authentication. Do not infer identity by decoding an arbitrary OAuth access token unless the issuer/resource contract explicitly defines and validates that use.
+
+## Validate ID tokens correctly
+
+A vetted OIDC library should verify:
+
+- signature using trusted issuer metadata/JWKS and allowed algorithm;
+- issuer (`iss`) exactly matches configured issuer;
+- audience (`aud`) includes this client and authorized-party rules where relevant;
+- expiry/not-before/issued-at with bounded clock skew;
+- `nonce` when used, matching the authorization request;
+- subject (`sub`) as the stable user identifier—not email/display name.
+
+Do not accept an unverified JWT simply because Base64 decoding succeeds.
+
+## Scope and audience
+
+Request the minimum scopes. The API must confirm token issuer, signature/introspection, audience/resource, time validity, revocation/session policy, and authorization for the requested object/action. A valid token for API A must not automatically work at API B.
+
+<Admonition type="warning" title="Library over hand-built protocol">
+OAuth/OIDC contain redirect, browser, metadata, signature, state, nonce, PKCE, clock, and error corner cases. Use a maintained standards-compliant native-app library/provider SDK and validate configuration; do not manually concatenate URLs and parse tokens for production.
+</Admonition>
+
+## Sources
+
+- [OAuth 2.0 for Native Apps — RFC 8252](https://www.rfc-editor.org/rfc/rfc8252)
+- [OAuth 2.0 Security Best Current Practice — RFC 9700](https://www.rfc-editor.org/rfc/rfc9700)
+- [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html)
+
+## Exercise
+
+For “Sign in with Provider and read calendar,” identify authorization server, resource server, client, user, every token, audience, scope, and which artifact establishes app identity versus calendar access.
+

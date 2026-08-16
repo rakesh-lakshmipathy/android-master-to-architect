@@ -1,0 +1,89 @@
+---
+id: pkce-flow
+title: Authorization Code with PKCE
+---
+import Admonition from '@theme/Admonition';
+
+# Authorization Code with PKCE
+
+PKCE protects an intercepted authorization code: the app creates a high-entropy secret verifier, sends only its challenge before login, and must present the verifier at token exchange.
+
+## End-to-end flow
+
+```text
+App: verifier=random; challenge=BASE64URL(SHA256(verifier))
+
+App -> Browser -> /authorize
+  client_id, redirect_uri, response_type=code,
+  code_challenge, code_challenge_method=S256, state, nonce, scope
+
+Authorization server -> redirect URI?code=...&state=...
+
+App validates state and redirect
+
+App -> /token over TLS
+  code, redirect_uri, client_id, code_verifier
+
+Server hashes verifier, compares challenge, then returns tokens
+```
+
+An app intercepting only `code` lacks the verifier and cannot redeem it.
+
+## Generate verifier and challenge
+
+```kotlin
+private val secureRandom = SecureRandom()
+
+fun createPkce(): Pair<String, String> {
+    val bytes = ByteArray(32).also(secureRandom::nextBytes)
+    val verifier = Base64.encodeToString(
+        bytes,
+        Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+    )
+    val digest = MessageDigest.getInstance("SHA-256")
+        .digest(verifier.toByteArray(StandardCharsets.US_ASCII))
+    val challenge = Base64.encodeToString(
+        digest,
+        Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+    )
+    return verifier to challenge
+}
+```
+
+Prefer your OAuth library’s implementation. Persist pending transaction state only as long as needed and bind verifier, state, nonce, issuer, redirect, and initiation identity together.
+
+## `state`, `nonce`, and PKCE differ
+
+| Value | Primary purpose |
+|---|---|
+| PKCE verifier/challenge | binds authorization code redemption to initiating app instance |
+| `state` | correlates response and mitigates login CSRF/mix-up in the client flow |
+| OIDC `nonce` | binds ID token to authentication request and mitigates replay |
+
+One does not automatically replace all others. Follow provider/library profile.
+
+## Redirect URI choices
+
+Verified HTTPS App Links provide stronger app/domain association than a custom scheme. Custom schemes can be claimed by another app; PKCE limits code theft but correct redirect validation still matters. Register exact redirect URIs—avoid wildcards and open redirectors.
+
+## Multiple/incomplete attempts
+
+- A second login attempt should not overwrite the first attempt’s verifier/state silently.
+- Reject unknown, expired, already-consumed, wrong-issuer, or wrong-redirect transactions.
+- Treat denial/cancel/browser death/process death explicitly.
+- Authorization code is single-use and short-lived; never retry it indefinitely.
+- Do not log redirect URLs/codes/verifier/tokens.
+
+<Admonition type="danger" title="Never send a native-app client secret">
+A public client cannot prove possession of a shared static secret embedded in its APK. PKCE protects each authorization transaction; it is not a disguised static password.
+</Admonition>
+
+## Sources
+
+- [PKCE — RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)
+- [Native app redirect and PKCE guidance — RFC 8252](https://www.rfc-editor.org/rfc/rfc8252)
+
+## Interview question
+
+**If another app intercepts the redirect code, what stops token theft?** It lacks the random verifier whose S256 challenge was bound to the authorization request. The server rejects redemption without the matching verifier.
+

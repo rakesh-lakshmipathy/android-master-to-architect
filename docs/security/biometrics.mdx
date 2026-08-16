@@ -1,0 +1,68 @@
+---
+id: biometrics
+title: Biometrics and device credentials
+---
+import Admonition from '@theme/Admonition';
+
+# Biometrics and device credentials
+
+BiometricPrompt verifies that an enrolled device user presented an allowed authenticator. It does not identify the remote account, prove transaction details, or replace server authorization.
+
+## Choose authenticators by risk
+
+```kotlin
+val authenticators =
+    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+        BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
+val status = BiometricManager.from(context)
+    .canAuthenticate(authenticators)
+```
+
+Handle unavailable hardware, none enrolled, temporarily locked out, unsupported combinations, and user cancellation. Offer recovery that matches account risk; do not trap a user because biometric enrollment changed.
+
+## Presence gate versus cryptographic authorization
+
+### Convenience re-entry
+
+Prompt, then reveal an already authenticated local session. This is a local privacy gate; process hooks may bypass a boolean if no key operation is bound.
+
+### CryptoObject-bound use
+
+Configure a Keystore key requiring user authentication, initialize `Cipher`/`Signature`, and pass it as `BiometricPrompt.CryptoObject`. On success, use that exact authorized operation. This binds prompt success more strongly to cryptographic use than setting `isUnlocked = true`.
+
+```text
+server challenge + transaction details hash
+        ↓
+Keystore signature operation authorized by BiometricPrompt
+        ↓
+server verifies signature, challenge freshness, device key, transaction binding
+```
+
+For high-risk actions, server challenge and exact transaction binding prevent replay/substitution. The server still checks account authorization and risk.
+
+## Enrollment and invalidation
+
+Decide whether key invalidates when new biometrics are enrolled and how device credential fallback changes assurance. Key invalidation must lead to re-registration/reauthentication, not data loss or an insecure fallback.
+
+## UX/lifecycle
+
+- Launch prompt from visible UI after a deliberate action.
+- Avoid repeated automatic prompts after cancellation.
+- Treat cancellation, negative button, temporary/permanent lockout, and app background distinctly.
+- Never start network transfer before transaction/prompt state is fully bound.
+- Do not log biometric error details with account-sensitive context.
+
+<Admonition type="warning" title="Biometric is local authentication">
+“Biometric succeeded” means the OS accepted an enrolled authenticator under configured policy. It does not prove which person among shared-device users acted, nor grant access to arbitrary server resources.
+</Admonition>
+
+## Sources
+
+- [Show a biometric authentication dialog](https://developer.android.com/identity/sign-in/biometric-auth)
+- [Android Keystore](https://developer.android.com/privacy-and-security/keystore)
+
+## Exercise
+
+Design biometric use for opening a notes app, revealing a bank balance, and confirming a new payee. State assurance, server involvement, key binding, fallback, cancellation, and enrollment-change behavior.
+

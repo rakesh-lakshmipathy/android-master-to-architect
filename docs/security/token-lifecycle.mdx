@@ -1,0 +1,79 @@
+---
+id: token-lifecycle
+title: Access and refresh token lifecycle
+---
+import Admonition from '@theme/Admonition';
+
+# Access and refresh token lifecycle
+
+Tokens are credentials with issuer, audience, scope, subject/client binding, time limits, and revocation policy—not strings that mean “logged in.”
+
+## Separate lifetimes
+
+- Access tokens should be short-lived and sent only to their intended resource server.
+- Refresh tokens are higher-value, longer-lived authorization-server credentials. Never send them to normal APIs.
+- ID tokens are identity assertions for the client and should not be attached as bearer API credentials unless a specific protocol says so.
+
+## Session state
+
+```kotlin
+data class TokenSet(
+    val accessToken: SecretString,
+    val accessTokenExpiresAt: Instant,
+    val refreshToken: SecretString?,
+    val refreshFamilyId: String?,
+    val subject: String,
+    val issuer: String,
+)
+
+sealed interface SessionState {
+    data object SignedOut : SessionState
+    data object Restoring : SessionState
+    data class Active(val account: AccountSummary) : SessionState
+    data class ReauthenticationRequired(val reason: Reason) : SessionState
+}
+```
+
+Keep access token in memory where practical. Protect refresh credentials using platform secure-storage design, but assume a compromised process may still use/capture them. Server rotation, revocation, audience/scope, anomaly controls, and short absolute lifetime limit impact.
+
+## Refresh-token rotation
+
+```text
+client sends R1 -> server invalidates R1, returns A2 + R2
+client atomically stores R2
+
+If R1 appears again -> possible theft/replay
+server revokes token family/session according to policy
+```
+
+Client must replace the refresh token atomically with the response. A crash between server rotation and local commit can strand the session; provider grace/reuse policy and client transaction design must be understood. Do not run concurrent refreshes with the same rotating token.
+
+## Expiry is not the only invalidation
+
+A token can fail because of revoked session, password/security change, account disablement, scope/audience mismatch, signing-key/config changes, replay detection, or server risk. `401` is not always “refresh now.”
+
+```text
+401 expired_access -> one coordinated refresh -> retry once
+401 invalid_refresh/revoked -> clear session -> reauthenticate
+403 -> authenticated but forbidden; do not refresh-loop
+429/5xx/network -> retry policy; do not log out immediately
+```
+
+## JWT versus opaque
+
+A JWT’s claims can be locally validated by intended servers using issuer keys; an opaque token may require introspection/session lookup. Clients should usually treat access tokens as opaque and avoid building authorization/UI truth from decoded claims that can become stale.
+
+<Admonition type="warning" title="Clock and grace">
+Use server-issued expiry with a small safety margin and monotonic elapsed time for local scheduling where possible. Device wall clock may be wrong. The server remains authoritative.
+</Admonition>
+
+## Sources
+
+- [OAuth 2.0 framework — RFC 6749](https://www.rfc-editor.org/rfc/rfc6749)
+- [OAuth 2.0 Security BCP — RFC 9700](https://www.rfc-editor.org/rfc/rfc9700)
+- [Token revocation — RFC 7009](https://www.rfc-editor.org/rfc/rfc7009)
+
+## Exercise
+
+Draw token-family state after two devices refresh, one token is stolen, the legitimate app is offline, the password changes, and the user selects “log out all devices.”
+

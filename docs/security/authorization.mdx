@@ -1,0 +1,76 @@
+---
+id: authorization
+title: Authentication versus authorization
+---
+import Admonition from '@theme/Admonition';
+
+# Authentication versus authorization
+
+Authentication establishes a principal/session. Authorization decides whether that principal may perform a specific action on a specific resource under current policy.
+
+```text
+Authenticated as user U
+        ≠
+U may read invoice I in tenant T
+        ≠
+U may refund I for amount X now
+```
+
+## Enforce at the trusted resource boundary
+
+```kotlin
+// Server-side conceptual code
+fun refund(command: Refund, principal: Principal): Result {
+    val order = orders.load(command.orderId) ?: return NotFound
+    if (order.tenantId != principal.tenantId) return NotFound
+    if (!policy.canRefund(principal, order, command.amount)) return Forbidden
+    return refunds.executeIdempotently(command)
+}
+```
+
+The mobile UI may hide disabled actions for UX, but a modified client can call the API. The server/API/data service must enforce object and action authorization every time.
+
+## RBAC, ABAC, relationship rules
+
+- RBAC: roles grant permissions (support agent, admin).
+- ABAC: attributes/context affect policy (tenant, region, amount, time, device risk).
+- ReBAC: relationships matter (document owner, team member, parent/child organization).
+
+Real systems combine them. Avoid sending a giant role list to Android and treating it as eternal truth; permissions can change while a token/session remains valid.
+
+## Object-level authorization (IDOR/BOLA)
+
+Changing `/orders/123` to `/orders/124` must not reveal another user’s order. Random UUIDs make guessing harder but are not authorization. Scope queries by authorized tenant/owner/relationship and use safe not-found behavior to limit enumeration.
+
+## Step-up authentication
+
+A valid session may be too old/weak for adding a payee. Server can require a recent authentication/strong method/challenge. Bind step-up result to user, action, resource, details, nonce, and expiry so approval cannot be replayed for another transaction.
+
+## Offline authorization
+
+Offline apps may show cached data based on last known policy, but high-impact mutations cannot claim final authorization until trusted server reconciliation. Sign/local-record intent, mark pending, and clearly show unconfirmed state. Define what happens if role/access was revoked while offline.
+
+## Common failures
+
+- ❌ Hide admin button and trust the client.
+- ✅ server enforces admin action and logs decision.
+- ❌ Check only `userId` from request body.
+- ✅ derive principal from validated token/session; ignore caller-supplied identity.
+- ❌ Reuse an access token for the wrong audience.
+- ✅ resource server validates issuer/audience/scope and object policy.
+- ❌ Return different detailed errors that enumerate private objects.
+- ✅ deliberate error semantics, monitoring, and rate limits.
+
+<Admonition type="danger" title="Authentication success is not authorization">
+Biometric, passkey, password, OAuth login, and integrity verdict cannot answer whether this account may access this particular object or action now. That decision belongs to current trusted policy.
+</Admonition>
+
+## Sources
+
+- [Bearer token usage — RFC 6750](https://www.rfc-editor.org/rfc/rfc6750)
+- [OWASP API authorization risks](https://owasp.org/API-Security/)
+
+## Exercise
+
+Define authorization for a hospital record: patient, doctor, covering doctor, emergency “break glass,” support engineer, and revoked employee. Include audit, expiry, tenant boundaries, and offline behavior.
+
