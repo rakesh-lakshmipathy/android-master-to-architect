@@ -1,0 +1,48 @@
+---
+id: architecture-data
+title: Architecture, data, networking, and sync interviews
+---
+
+# Architecture, data, networking, and sync interviews
+
+## Pattern comparisons
+
+MVC/MVP/MVVM/MVI describe responsibility/state/event organization, not complete architectures. Compare state complexity, lifecycle, testability, team vocabulary and ceremony. Clean Architecture protects business policy through dependency direction; it does not require a use-case class for every repository call.
+
+```text
+UI -> presentation/domain contracts -> repositories
+                              implementations -> local/network
+```
+
+Explain source of truth, ownership and data flow before layer names.
+
+## Data questions
+
+**Repository:** mediates domain data and sources; it is not merely a Retrofit forwarding wrapper. Define freshness, cache, errors, concurrency and writes.
+
+**Room transaction:** protects a local atomic invariant; it does not make server/local distributed work atomic. Use idempotent commands/outbox/reconciliation.
+
+**DataStore:** typed/preferences small durable state; not relational query/large datasets. SQLite/Room for structured relationships/transactions.
+
+**Paging:** UI consumes `PagingData`; local source plus `RemoteMediator` can provide offline truth. Remote keys, refresh/append errors, duplicates and invalidation require explicit design.
+
+## Networking/sync questions
+
+Define timeouts by phase/operation, cancellation, retryable errors, exponential backoff/jitter, idempotency, auth refresh serialization, pagination, error body, serialization compatibility and observability. Retrying POST is safe only with protocol/idempotency design.
+
+Offline-first means local readable state plus durable user intent, sync state/conflict policy, freshness UX and reconciliation. Last-write-wins is only valid when domain consequences permit it.
+
+## Design drills
+
+1. Cache-first product page with stale-while-revalidate and explicit error/freshness UI.
+2. Offline edit from two devices: version/precondition, conflict response, merge or user choice.
+3. Token expiry for 100 parallel calls: one refresh, queued callers, failure/logout and no recursive interceptor loop.
+4. Database migration across five released schemas with large data/disk pressure and forward repair.
+
+## Red flags
+
+- ❌ “Single source of truth means only one physical source.”
+- ✅ one authoritative model per context; data can synchronize from several systems.
+- ❌ “Exactly once sync.”
+- ✅ at-least-once attempts plus idempotency/deduplication/reconciliation.
+

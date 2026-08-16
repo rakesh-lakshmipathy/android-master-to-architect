@@ -1,0 +1,43 @@
+---
+id: platform-components
+title: Lifecycle, process, Binder, and components
+---
+
+# Lifecycle, process, Binder, and components
+
+## Core questions
+
+**Activity versus process lifetime:** an Activity instance can be recreated for configuration; the process can die without lifecycle callbacks while app is backgrounded. Durable data belongs in storage/server, screen state in ViewModel/SavedStateHandle according to size/reconstructability, and Views/Compose render current state.
+
+**ViewModel guarantee:** survives configuration within its owner scope; it does not survive process death and should not hold Views/shorter-lived Context.
+
+**Service:** component for work needing service semantics, not a background thread. Current background/foreground restrictions, user visibility and work type determine legality. WorkManager handles deferrable guaranteed work; alarms handle justified time-based wake; none are interchangeable.
+
+**BroadcastReceiver:** short-lived entry point; return quickly and hand durable asynchronous work to an allowed mechanism. Export/permission/input validation are security boundaries.
+
+**ContentProvider:** structured cross-process data/initialization component; URI grants and exported permissions matter. Avoid accidental startup work.
+
+## Binder/IPС answer
+
+Binder is Android's kernel-mediated IPC/RPC mechanism. Calls cross process/thread pools; arguments are marshalled and transaction size/liveness/death matter. Never assume remote object is local, cheap or alive.
+
+```text
+client proxy -> Binder driver -> server Binder thread
+             <- result/exception <-
+```
+
+Avoid main-thread IPC, large payloads and lock-held calls. Handle `RemoteException`, binder death, reconnection, caller identity and server-side authorization. AIDL gives typed contracts; Messenger serializes messages; bound services manage connection lifecycle.
+
+## Scenario drills
+
+1. Upload must continue after swipe/process death/reboot: define durable intent, WorkManager constraints/idempotency and server reconciliation.
+2. Deep link opens logged-out checkout: validate link, save safe return intent, authenticate, re-authorize server-side and restore navigation.
+3. Bound media service dies: UI shows disconnected, reconnects without duplicate commands and reloads authoritative playback state.
+
+## Common weak answers
+
+- ❌ “`onDestroy` always saves data.”
+- ✅ process death may provide no callback; persist before correctness depends on it.
+- ❌ “Service runs in background.”
+- ✅ component lifecycle and execution/thread are separate.
+

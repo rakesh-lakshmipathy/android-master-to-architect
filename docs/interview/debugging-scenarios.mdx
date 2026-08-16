@@ -1,0 +1,37 @@
+---
+id: debugging-scenarios
+title: Senior Android debugging scenarios
+---
+
+# Senior Android debugging scenarios
+
+For every scenario, use SCOPE: symptom, contain, observe, propose ranked hypotheses, evaluate/fix.
+
+## 1. Intermittent duplicate orders
+
+Segment by app/server version, idempotency key, retry/timeout, account and request correlation. Contain with server dedup/checkout kill switch if safe. Check client double-click/recomposition, retry interceptor, WorkManager replay and server transaction race. Fix invariant server-side, client UI guard, regression concurrency test and mismatch SLI.
+
+## 2. Battery drain after release
+
+Compare cohorts and background duration/wakeups/network/location. Inspect Battery Historian/system traces, WorkManager jobs, foreground service, socket reconnect and location sampling. Suspect retry loop, unbounded listener, constraint loss or scheduler duplication. Reproduce under offline/doze/process restart, then stage mitigation.
+
+## 3. ANR with no obvious long method
+
+Read main-thread state and lock owner across traces. It may wait on Binder, monitor held by worker, synchronous DB, class initialization or broadcast/service timeout. Do not only move the visible caller to IO; remove cyclic lock/blocking ownership and test contention.
+
+## 4. Compose screen shows stale account after logout/login
+
+Trace account-scoped caches, StateFlow sharing scope/replay, ViewModel/nav scope, remembered key and WorkManager. Ensure logout changes the data partition and cancels/clears scoped producers; key state by account and prevent old async result committing after generation changes.
+
+## 5. BLE works on Pixel, fails on one OEM
+
+Gather API/OEM/firmware/permission/radio/GATT phase/status and protocol capture without PII. Test physical matrix and timing. Distinguish capability, permission, service discovery, MTU, operation serialization and reconnect. Add bounded owned workaround only with evidence/removal condition.
+
+## 6. Database migration crash at 2%
+
+Halt rollout, preserve evidence/data, identify source schema/data shape/disk. Reproduce with real snapshot, test transaction/interruption and storage pressure. Ship higher-version forward fix compatible with partially migrated state; never “solve” user-owned data with destructive fallback.
+
+## Interview score
+
+Strong candidates protect users first, request discriminating evidence, understand Android/client-server boundaries, avoid destructive diagnostics, and close with tests/telemetry/rollout—not a list of random fixes.
+

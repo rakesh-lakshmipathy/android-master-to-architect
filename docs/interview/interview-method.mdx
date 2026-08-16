@@ -1,0 +1,50 @@
+---
+id: interview-method
+title: Android interview answer method
+---
+
+# Android interview answer method
+
+A strong answer is structured reasoning, not maximum vocabulary.
+
+## Concept answer: WCE
+
+1. **What:** define it plainly.
+2. **Contrast:** distinguish the nearest confusing concept.
+3. **Example:** walk a realistic Android scenario.
+
+Then add lifecycle/concurrency/failure/performance/security only where relevant.
+
+Example: “`StateFlow` is a hot state holder with a current value. Unlike a cold flow, collecting it does not start the producer; unlike LiveData, collection is not automatically stopped for a hidden UI. In a ViewModel I expose immutable UI state and collect it with lifecycle-aware APIs.”
+
+## Design answer: RIFTO
+
+- **Requirements** and non-goals
+- **Invariants** and quality attributes
+- **Flow** through components/data
+- **Trade-offs** and alternatives
+- **Operations**: failures, tests, telemetry, rollout
+
+## Debug answer: SCOPE
+
+- **Symptom:** exact expected versus observed, affected cohorts/time.
+- **Contain:** reduce harm without destroying evidence.
+- **Observe:** logs/traces/metrics/dumps and reproduction matrix.
+- **Propose hypotheses:** ranked by evidence; one discriminating test each.
+- **Evaluate/fix:** smallest verified correction, regression test and production validation.
+
+Ask clarifying questions, state assumptions aloud and correct yourself directly. If you do not know an API name, explain the platform guarantee you need and how you would verify current documentation.
+
+## Practical mistakes
+
+- ❌ Start coding before confirming input/output/corners.
+- ✅ restate contract and test cases first.
+- ❌ list technologies with no data flow.
+- ✅ narrate one read/write and their failures.
+- ❌ bluff exact version/policy details.
+- ✅ state stable principle and verification source.
+
+## Practice
+
+Record 2-minute answers to “What is a ViewModel?”, “Flow versus StateFlow?” and “How would you debug an ANR?” Score clarity, correctness, scenario and trade-off.
+

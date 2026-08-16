@@ -1,0 +1,45 @@
+---
+id: architect-interview
+title: Architect system-design and trade-off interviews
+---
+
+# Architect system-design and trade-off interviews
+
+## 45-minute pacing
+
+- 0–5: clarify journeys, scale, quality attributes, constraints/non-goals.
+- 5–10: invariants, trust/data authority and rough estimates.
+- 10–20: high-level client/backend/data flow.
+- 20–32: one write/read, offline/retry/races/process death/security.
+- 32–39: scaling, observability, testing, rollout/recovery.
+- 39–45: trade-offs, alternatives, evolution and questions.
+
+## Prompt bank
+
+Design offline commerce, chat, banking transfer, ride tracking, media download, news feed, BLE health, super-app, enterprise multi-brand app, photo backup, collaborative notes or feature-flag platform. Use Chapter 47 as reference only after attempting.
+
+## Follow-up questioning
+
+Interviewers change constraints to test reasoning:
+
+- “Now users are offline seven days.” → durability, staleness, queue/conflict/storage.
+- “Traffic grows 100×.” → identify measured bottleneck/partition/cache/fan-out, not wholesale rewrite.
+- “One team becomes ten.” → ownership/contracts/platform governance/build/release.
+- “This contains health/payment data.” → threat/privacy/audit/authorization/recovery.
+- “Rollback must be instant.” → challenge installed clients/data/external effects; flags plus compatibility/forward repair.
+- “Minimum devices are low-end.” → budgets, paging/media/memory/startup/device test.
+
+## Trade-off language
+
+Use: “Given requirement X and constraint Y, I prefer A because it improves Q. It costs Z and fails under W. I would mitigate/measure with M and revisit when trigger T occurs.”
+
+Do not answer every challenge by adding a service, repository, queue or abstraction. Simplicity is an option with benefits and limits.
+
+## Evaluation dimensions
+
+Requirement discovery, correctness/invariants, mobile depth, data/security, reliability/operations, scale/evolution, trade-off clarity, communication and prioritization. A beautiful diagram with no failure model is weak.
+
+## Exercise
+
+Run three prompts with 15-, 30- and 45-minute limits. Record assumptions, changes after follow-ups and the one risky claim you need to verify.
+

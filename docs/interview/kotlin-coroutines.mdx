@@ -1,0 +1,54 @@
+---
+id: kotlin-coroutines
+title: Kotlin and coroutine interview drills
+---
+
+# Kotlin and coroutine interview drills
+
+## High-frequency questions
+
+### `val`, immutability and data races
+
+`val` prevents reassignment of the reference; it does not make the referenced object immutable or thread-safe. Prefer immutable state and single ownership, then synchronize unavoidable mutation.
+
+### `Unit` versus `Nothing`
+
+`Unit` means the function completes normally with the single `Unit` value. `Nothing` has no values: the function never completes normally because it throws or never returns. `Nothing` helps type inference in `error(...)`/`throw` branches.
+
+### `inline`, `noinline`, `crossinline`, `reified`
+
+Inlining can place higher-order function body/lambda at the call site, enabling non-local returns and reified type parameters while potentially increasing bytecode. `noinline` keeps a lambda as a value; `crossinline` forbids non-local return when invoked in another context. Explain with generated behavior, not “always faster.”
+
+### Structured concurrency
+
+Child work belongs to a scope/lifetime; failure/cancellation propagates by defined parent/supervisor rules and completion waits for children. `GlobalScope` breaks ownership. `coroutineScope` fails siblings together; `supervisorScope` isolates child failure but does not make errors disappear.
+
+```kotlin
+suspend fun loadDashboard(): Dashboard = coroutineScope {
+    val profile = async { api.profile() }
+    val orders = async { api.orders() }
+    Dashboard(profile.await(), orders.await())
+}
+```
+
+If orders fails, the scope cancels sibling work and throws; cancellation must not be converted into a generic failure.
+
+## Coding drills
+
+1. Implement a cancellable retry with exponential backoff, jitter, max attempts and retryable-error predicate.
+2. Merge search input with debounce/latest-result semantics and lifecycle ownership.
+3. Protect token refresh so concurrent 401s cause one refresh and all callers resume/fail correctly.
+4. Model an immutable reducer and test concurrent events.
+
+## Follow-up traps
+
+- `Dispatchers.IO` does not make shared mutation safe.
+- `suspend` does not mean background thread.
+- Flow exception operators act by position/direction; cancellation is special.
+- `StateFlow` conflates by equality and requires initial state; it is not an event queue.
+- Channels deliver values under channel semantics, not durable process-death events.
+
+## Self-check
+
+Explain dispatcher, context, job, scope, cancellation, exception propagation, hot/cold flow, `stateIn/shareIn`, buffering/conflation and lifecycle collection with one end-to-end example.
+

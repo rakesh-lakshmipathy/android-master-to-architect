@@ -1,0 +1,34 @@
+---
+id: quality-interviews
+title: Security, performance, testing, and release interviews
+---
+
+# Security, performance, testing, and release interviews
+
+## Security answer frame
+
+Asset/actor → trust boundary → threat → prevention → detection → recovery. The client is untrusted; server authorizes sensitive operations. Keystore protects key operations/material according to hardware/device guarantees but not all plaintext while app legitimately uses it. Encryption needs key lifecycle, nonce/algorithm, rotation, backup/recovery and metadata policy.
+
+Practice: auth token handling, deep-link/exported component validation, WebView/network security, certificate pinning trade-offs, secret versus public client ID, log redaction, biometric step-up, tampered device signals and payment idempotency.
+
+## Performance answer frame
+
+Define user journey/metric/device/build → reproduce/trace → attribute bottleneck → change one cause → benchmark/regression gate → production cohort validation. Separate CPU, blocking I/O, allocation/GC, GPU/render, lock/contention, network, startup initialization and thermal/battery.
+
+ANR is main-thread unresponsiveness; inspect traces and waiting owner. Jank is missed frame deadlines; inspect frame timeline/recomposition/layout/draw. Memory leak is retained reachability; OOM can also be legitimate peak pressure.
+
+## Testing answer frame
+
+Test behavior at the cheapest reliable boundary: pure unit, contract/component/integration, device/UI and end-to-end. Use fakes for coherent behavior, mocks for interaction contracts sparingly, virtual time for coroutines and lifecycle/device tests for platform guarantees. A test pyramid is a portfolio, not fixed percentages.
+
+## Release questions
+
+Explain build type/flavor, release shrinking tests, AAB/generated APKs, upload versus app-signing key, version code, mappings/symbols, Play tracks, staged rollout, feature flags and forward fix. Halting rollout does not remove installed versions.
+
+## Scenario drills
+
+1. Crash only in minified production: mapping, reflection/serialization/consumer rules and exact artifact.
+2. Startup regresses 300 ms: baseline/startup trace, initializer attribution, lazy/on-demand work and Macrobenchmark.
+3. Security SDK outage: fail-open/closed by risk, server control, cached policy and runbook.
+4. Flaky Compose test: classify product race versus test synchronization/infrastructure; retain first failure and owner expiry.
+

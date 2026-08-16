@@ -1,0 +1,37 @@
+---
+id: ui-interviews
+title: Compose and View-system interviews
+---
+
+# Compose and View-system interviews
+
+## Compose questions
+
+**Recomposition:** Compose re-executes affected composables when observed state changes; it is not necessarily redrawing the whole screen. Keep composables side-effect free, pass stable state/events, use keys correctly and measure before applying stability annotations.
+
+**`remember` versus `rememberSaveable` versus ViewModel:** `remember` survives recomposition while composition remains; `rememberSaveable` can restore small saveable UI state across recreation/process restoration; ViewModel owns screen/business presentation state and survives configuration, with SavedStateHandle for reconstructive inputs. Durable domain data goes to repository/storage.
+
+**Effects:** `LaunchedEffect` starts cancellable coroutine keyed to composition; `DisposableEffect` acquires/releases resources; `SideEffect` publishes successful composition state. Wrong keys cause stale capture or repeated work; `rememberUpdatedState` handles changing callback/value without restarting the effect.
+
+**State hoisting:** move state to lowest common owner that needs to read/write it; expose value and events. Do not hoist transient implementation state globally without reason.
+
+## View questions
+
+Explain Activity/Fragment view lifecycle distinction, RecyclerView recycling/diff identity, custom View measure/layout/draw, state restoration, insets, accessibility and avoiding leaks from listeners/adapters/bindings.
+
+## Comparison
+
+Compose is declarative and state-driven; Views mutate retained objects. Both still obey Android lifecycle, accessibility, input, saved state, rendering and performance constraints. Compose does not remove the need for architecture.
+
+## Practical scenarios
+
+1. List row checkbox moves after scroll: stable identity/state ownership, not position-local state.
+2. API call repeats on recomposition: move work to ViewModel or correctly keyed effect.
+3. Fragment binding leaks: clear at `onDestroyView`, not only Fragment destruction.
+4. Large text clips: semantic layout/adaptive testing, not hard-coded heights.
+5. Jank: inspect frame timeline, recomposition/layout/draw, images/main thread and release build; do not guess.
+
+## Follow-ups
+
+Explain snapshot state, derived state, lazy-list keys, stability/skipping, View/Compose interop lifecycle/insets/testing, semantics, focus/keyboard and process restoration.
+
