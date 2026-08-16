@@ -1,0 +1,51 @@
+---
+id: quality-gates
+title: Static analysis and quality gates
+---
+
+# Static analysis and quality gates
+
+Formatting makes code consistent; lint/static analysis detects selected structural risks; tests execute selected behavior. None replaces the others.
+
+| Tool | Good use | Cannot prove |
+|---|---|---|
+| Formatter/ktlint | Deterministic layout/basic style | Correct architecture/business behavior |
+| Detekt | Kotlin smells/complexity/project rules | Runtime lifecycle/device behavior |
+| Android Lint | Android correctness, API, accessibility, security/performance patterns | Every path or third-party/runtime behavior |
+| Dependency/security scan | Known metadata/advisories/policy | Absence of unknown vulnerabilities |
+
+Run the exact release-relevant variants in CI. Android Lint is not automatically evidence just because compilation succeeded.
+
+## Baselines are debt ledgers
+
+A baseline permits adoption without fixing everything immediately. Pin it in version control, block new issues, assign categories/owners, burn it down, and fail if it silently grows. Suppress narrowly with a reason and expiry.
+
+```kotlin
+android {
+    lint {
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+        checkReleaseBuilds = true
+    }
+}
+```
+
+Custom lint/Detekt rules pay off for repeated high-impact local patterns: forbidden feature dependencies, raw token logging, direct wall-clock calls, unmanaged coroutine scopes, or design-system bypass. Provide clear messages, fixes/examples, tests, owner and rollout baseline. Avoid encoding controversial architecture before consensus.
+
+## Gate design
+
+Every blocking gate needs purpose, signal quality, owner, expected runtime, failure triage, override authority/audit, and recovery when infrastructure fails. Track duration, false-positive rate, flaky failures and escaped defects. A gate everyone bypasses is theater.
+
+## Practical mistakes
+
+- ❌ Generate a fresh baseline whenever CI fails.
+- ✅ review and reduce baseline changes explicitly.
+- ❌ block on thousands of low-signal warnings.
+- ✅ calibrate severity to user/system risk.
+- ❌ disable an entire rule because of one exception.
+- ✅ use the narrowest documented suppression.
+
+## Source
+
+- [Android Lint and baselines](https://developer.android.com/studio/write/lint.html)
+

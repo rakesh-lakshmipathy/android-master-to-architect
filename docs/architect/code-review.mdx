@@ -1,0 +1,46 @@
+---
+id: code-review
+title: Risk-based code review
+---
+
+# Risk-based code review
+
+Code review protects users and improves shared ownership. It is not proof of correctness or a contest to redesign code in the reviewer's personal style.
+
+## Review in passes
+
+1. **Intent:** requirement, scope, screenshots/ADR, rollout and affected users.
+2. **Correctness:** invariants, state transitions, lifecycle, concurrency, process death, cancellation, error and retry behavior.
+3. **Architecture:** ownership, dependency direction, stable contracts, data source of truth, migration/deletion path.
+4. **Security/privacy:** trust boundaries, authorization, validation, secrets, logs, storage, exported components.
+5. **Performance/operations:** main-thread work, allocations/recomposition, battery/network, observability, feature flags and recovery.
+6. **Evidence:** focused tests, release behavior, accessibility, compatibility and monitoring.
+
+Review generated/machine formatting with tools. For high-risk database, auth, cryptography, signing or concurrency changes, request a domain owner and smaller change set.
+
+## Actionable comment
+
+```text
+Blocking — data loss: `REPLACE` can delete the existing row and its child relation.
+Please use an update/upsert that preserves the key, and add a migration test with children.
+```
+
+Label `Blocking`, `Suggestion`, `Question`, and `Nit`. State observed risk and why; offer direction without demanding an unproven rewrite. Authors explain context, self-review, and provide evidence. Disagreements use facts, standards, prototypes/measurements, then a documented escalation—not endless comment loops.
+
+## Teaching without gatekeeping
+
+Explain reusable principles and recognize trade-offs. Pair synchronously for complex misunderstandings, then record the decision. Approve when the change improves code health and safely meets requirements; perfection is not a merge criterion.
+
+## Practical mistakes
+
+- ❌ “This is bad; rewrite it.”
+- ✅ identify scenario, consequence, evidence, and acceptance condition.
+- ❌ discover architecture only after 3,000 changed lines.
+- ✅ review design/seams early and keep changes coherent/small.
+- ❌ approve because CI is green.
+- ✅ verify tests/gates cover the actual risk.
+
+## Source
+
+- [Google engineering code-review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
+

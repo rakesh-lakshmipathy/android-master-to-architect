@@ -1,0 +1,42 @@
+---
+id: technical-leadership
+title: Mentoring, design reviews, and alignment
+---
+
+# Mentoring, design reviews, and alignment
+
+Technical leadership increases the system's and team's ability to make good decisions without the architect becoming a bottleneck.
+
+## Design review packet
+
+Require problem/user, goals/non-goals, constraints/assumptions, current state, quality attributes, options, proposed data/control flow, contracts, security/privacy, failure/recovery, observability, migration, testing, rollout, open questions and decision owner.
+
+Review early enough to change direction. Invite affected mobile/backend/product/security/QA/operations/accessibility owners, but distinguish contributors from decision maker. Time-box unresolved debate, run a focused spike when uncertainty is empirical, and record the decision/conditions in an ADR.
+
+## Mentoring ladder
+
+1. Explain the principle and context.
+2. Demonstrate one example.
+3. Solve the next example together.
+4. Let the engineer lead while you observe/review.
+5. Let them teach/document it.
+
+Tailor support: direct instruction during incidents; questions and delegation during growth work. Give specific behavior-impact-next-step feedback privately; recognize impact publicly. Do not use production-critical work as an unbounded learning exercise without safety nets.
+
+## Cross-team alignment
+
+Create stable decision forums, ownership maps, API/version policies, RFC/ADR templates, deprecation windows, shared scorecards and escalation paths. Alignment is not unanimous agreement. It is shared context, an explicit decision, committed execution, and a way to revisit when assumptions change.
+
+## Practical mistakes
+
+- ❌ Architect designs alone and announces the solution.
+- ✅ include implementers/operators and surface constraints early.
+- ❌ become required reviewer for every change.
+- ✅ establish principles, owners and delegated decision boundaries.
+- ❌ mentor by rewriting someone's code silently.
+- ✅ explain risks and let them own the improved solution.
+
+## Exercise
+
+Facilitate a 45-minute design review for offline checkout. Define pre-read, attendees, questions, decision rule, parking lot, and recorded outputs.
+

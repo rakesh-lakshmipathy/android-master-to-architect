@@ -1,0 +1,41 @@
+---
+id: leadership-interview
+title: Engineering leadership case study and interview preparation
+---
+
+# Engineering leadership case study and interview preparation
+
+## Case study: quality declines while delivery slows
+
+The team proposes mandatory architect approval and more warnings. First measure review wait/cycle time, change size, escaped defects, flaky gates, ownership gaps, dependency hotspots and incident themes. Automate formatting, calibrate lint to high-signal risks, create domain ownership/reviewer rotation, require early designs only for high-impact changes, and coach reviewers on severity/actionable comments.
+
+Track lead time, review latency, rollback/defect rate, baseline size, gate false positives, ownership concentration and developer feedback. If mandatory review merely moves the bottleneck, delegate decision boundaries rather than adding process.
+
+## Interview questions
+
+1. **What belongs in a coding standard?** Repeated high-value decisions with rationale/examples and automated enforcement where objective.
+2. **What should reviewers prioritize?** User/system risk: intent, correctness, architecture, security, performance/operations and evidence.
+3. **How adopt lint in a legacy codebase?** Baseline existing findings, block new debt, assign burn-down and prevent baseline growth.
+4. **How prioritize debt?** Evidence of risk/recurring cost, likelihood/frequency, delivery drag, strategic timing and remediation economics.
+5. **How avoid being a bottleneck?** Principles, ownership, delegated decisions, teaching and risk-based involvement.
+6. **How resolve design disagreement?** Requirements/quality attributes, evidence, bounded spike, explicit decision owner and recorded consequences.
+7. **Build or buy?** Compare total lifecycle fit/risk, validate hardest uncertainty, preserve boundaries and exit plan.
+
+## Checklist
+
+- [ ] Standards are concise, owned, exemplified and enforceable.
+- [ ] Formatting is automated; review attention follows risk.
+- [ ] Blocking comments state consequence and acceptance condition.
+- [ ] Gates have owners, signal metrics and audited override.
+- [ ] Debt records contain evidence, options, owner and success measure.
+- [ ] Design reviews occur before implementation lock-in.
+- [ ] Decision rights and escalation paths are clear.
+- [ ] Vendor decisions include privacy/security/operations and exit.
+
+## Exercises
+
+1. Rewrite five vague review comments as actionable risk-based feedback.
+2. Design a three-month lint-baseline burn-down without stopping features.
+3. Coach an engineer whose coroutine change works but leaks lifecycle work.
+4. Present a build-versus-buy recommendation with uncertainty and reversal triggers.
+

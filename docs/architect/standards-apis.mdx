@@ -1,0 +1,48 @@
+---
+id: standards-apis
+title: Coding standards and consistent APIs
+---
+
+# Coding standards and consistent APIs
+
+A useful standard reduces repeated decisions and prevents defects. It is short, searchable, versioned, automatically enforced where possible, and explains exceptions. A style guide should not become one architect's taste encoded as bureaucracy.
+
+## Layers of guidance
+
+1. Adopt official Kotlin/Android conventions as the default.
+2. Add project rules only for demonstrated local risks.
+3. Automate objective formatting/naming rules.
+4. Document architectural contracts and examples near the code.
+5. Assign owner, review date, and exception path.
+
+## API consistency
+
+```kotlin
+interface OrdersRepository {
+    fun observe(orderId: OrderId): Flow<Order>
+    suspend fun refresh(orderId: OrderId): RefreshResult
+}
+```
+
+Names reveal streaming versus one-shot work. Domain identifiers avoid accidental string mixing. The contract must also state dispatcher/thread safety, cold/hot behavior, errors, cancellation, caching/freshness, and whether refresh is idempotent.
+
+For public/library Kotlin APIs, explicitly declare visibility and return types; implementation inference should not accidentally change an ABI. KDoc should explain purpose, non-obvious contract, invariants, ownership, failure and examples—not narrate `userId` as “the user ID.”
+
+## Common project decisions
+
+Standardize UI state/event vocabulary, coroutine scope/dispatcher ownership, error taxonomy, logging/redaction, time/ID/money types, module/API visibility, Compose modifier/semantics conventions, test names, and deprecation/migration policy.
+
+## Practical mistakes
+
+- ❌ Write a 100-page guide nobody can find.
+- ✅ keep rules discoverable, exemplified, and enforced.
+- ❌ Require comments for every obvious line.
+- ✅ document why, invariants, surprising constraints, and decisions.
+- ❌ Use `Util`, `Manager`, or `Helper` as responsibility-free dumping grounds.
+- ✅ name by owned capability and narrow contract.
+
+## Sources
+
+- [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html)
+- [KDoc](https://kotlinlang.org/docs/kotlin-doc.html)
+

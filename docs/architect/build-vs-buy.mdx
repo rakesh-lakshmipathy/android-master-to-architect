@@ -1,0 +1,48 @@
+---
+id: build-vs-buy
+title: Build versus buy and library evaluation
+---
+
+# Build versus buy and library evaluation
+
+“Buy” includes commercial SDKs, hosted services and open-source libraries. Compare total lifecycle risk, not only initial implementation time.
+
+## Evaluation scorecard
+
+| Dimension | Questions |
+|---|---|
+| Functional fit | Required flows, offline behavior, customization, accessibility? |
+| Security/privacy | Data collected, trust boundary, permissions, SDK supply chain, vulnerability process? |
+| Technical | min/target SDK, Compose, KMP, ABI/native code, size/startup/build impact? |
+| Reliability | SLAs, offline/outage behavior, rate limits, idempotency, status/incident history? |
+| Operations | Logs/metrics, feature control, migration/export, support and escalation? |
+| Business/legal | License, pricing growth, data residency/retention, audit, termination? |
+| Longevity | Ownership, release cadence, roadmap, bus factor, deprecation policy? |
+
+## Proof of concept
+
+Test the hardest uncertainty, not a happy-path demo: process death, offline queue, release shrinking, large data, accessibility, multi-account, auth expiry, SDK outage, minimum API, native symbols, data deletion/export, and removal.
+
+Wrap vendors at a meaningful seam:
+
+```kotlin
+interface FraudAssessment {
+    suspend fun assess(order: PendingOrder): FraudDecision
+}
+```
+
+Do not wrap every vendor type mechanically; prevent vendor models from becoming domain/public APIs. Define degraded behavior and server-side authority. Maintain an exit plan: export format, dual-run/migration, contract tests, decommission and cost.
+
+## Practical mistakes
+
+- ❌ Choose by GitHub stars or sales demo.
+- ✅ use weighted requirements and verified evidence.
+- ❌ build generic infrastructure “for flexibility” without demand.
+- ✅ estimate multi-year build/on-call/security/upgrade cost.
+- ❌ assume a wrapper makes replacement cheap.
+- ✅ keep data semantics and workflows portable and rehearse exit constraints.
+
+## Exercise
+
+Compare building versus buying analytics, image loading, authentication, and feature flags. Weight the scorecard differently for a banking app and a prototype.
+

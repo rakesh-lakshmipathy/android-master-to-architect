@@ -664,7 +664,28 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Part X - Android Architect Mastery', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part X - Android Architect Mastery',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'Engineering Standards and Technical Leadership',
+          collapsed: true,
+          items: [
+            'architect/standards-apis',
+            'architect/code-review',
+            'architect/quality-gates',
+            'architect/technical-debt',
+            'architect/technical-leadership',
+            'architect/build-vs-buy',
+            'architect/leadership-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
   ],
 };
 

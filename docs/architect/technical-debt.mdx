@@ -1,0 +1,44 @@
+---
+id: technical-debt
+title: Technical-debt economics and communication
+---
+
+# Technical-debt economics and communication
+
+Technical debt is a design/implementation choice that creates continuing cost or risk. Old code is not automatically debt; fashionable new code can be debt if it increases operational or cognitive cost.
+
+## Debt record
+
+Capture evidence, affected journeys/teams, principal remediation estimate, recurring “interest,” risk/blast radius, trigger/deadline, owner, dependencies, options and success measure.
+
+```text
+Debt: checkout has two pricing models
+Evidence: 5 defects/quarter; 18% checkout changes touch adapters
+Risk: inconsistent displayed/charged totals
+Options: shared Money/Price contract; server-authoritative migration
+Success: one model; zero fallback use for 30 days; old adapters deleted
+```
+
+## Prioritization
+
+Use impact × likelihood × frequency plus delivery drag and strategic timing. Security/data-loss/compliance debt can dominate despite low frequency. Couple repayment to related feature work when safe; reserve explicit capacity for systemic issues; stop creating new instances with a gate before cleaning the backlog.
+
+Communicate in product/operational terms: change lead time, incidents, support, reliability, regulatory exposure and opportunity cost. “The code is ugly” does not support investment.
+
+## Avoid endless rewrites
+
+Set a bounded outcome, baseline, milestones that ship value, kill criteria, legacy deletion condition and decision dates. Reassess if metrics do not improve. Some debt should be accepted: record why and the condition that would reopen it.
+
+## Practical mistakes
+
+- ❌ One giant “tech debt” backlog with no owner/evidence.
+- ✅ maintain actionable records tied to measurable impact.
+- ❌ repay by building a parallel platform forever.
+- ✅ migrate traffic and delete the old path.
+- ❌ promise an exact ROI from weak data.
+- ✅ state assumptions/ranges and measure after investment.
+
+## Exercise
+
+Rank: slow builds, an unsupported auth SDK, duplicated Compose components, flaky UI tests, and a legacy database. State assumptions and what evidence could change the ranking.
+
