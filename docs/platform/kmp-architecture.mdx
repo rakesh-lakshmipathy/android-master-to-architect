@@ -1,0 +1,48 @@
+---
+id: kmp-architecture
+title: Kotlin Multiplatform architecture
+---
+
+# Kotlin Multiplatform architecture
+
+Kotlin Multiplatform (KMP) shares Kotlin source across targets while retaining platform-specific code. The architectural decision is **what semantics are truly common**, not how high a percentage can be shared.
+
+## Good shared candidates
+
+Domain rules, validation, money/time abstractions with explicit semantics, serialization, network/cache orchestration, sync/conflict policy, state reducers, and contract tests can be good candidates. Platform UI, permissions, lifecycle, background execution, secure storage, notifications, Bluetooth, and platform navigation usually need platform ownership or adapters.
+
+```kotlin
+// commonMain
+interface SecureTokenStore {
+    suspend fun read(): String?
+    suspend fun write(token: String?)
+}
+
+class RefreshSession(private val tokens: SecureTokenStore) {
+    suspend operator fun invoke(api: AuthApi): Session =
+        api.refresh(tokens.read()).also { tokens.write(it.token) }
+}
+```
+
+Android/iOS supply policy-compliant storage. The shared layer owns the use case, not Android `Context` or an iOS keychain class.
+
+Use interfaces/injection when platform behavior is a dependency. `expect`/`actual` is useful for small platform declarations, but broad expected platform facades can hide divergent semantics and become hard to fake. Model time zones, locale, cancellation, freezing/threading, file paths, database/network drivers, and error mapping explicitly.
+
+## Delivery and ownership
+
+Decide who reviews shared APIs, how Android/iOS releases consume versions, compatibility policy, CI targets, native framework packaging, crash symbols, and rollback. A shared breaking change can block multiple release trains.
+
+## Practical mistakes
+
+- ❌ Move code to `commonMain` merely because it compiles.
+- ✅ share stable product semantics with tests.
+- ❌ Return platform exceptions from shared APIs.
+- ✅ map to documented domain failures while retaining diagnostic cause safely.
+- ❌ Force identical behavior where platform policies differ.
+- ✅ share intent and permit platform-specific implementation/UX.
+
+## Sources
+
+- [Kotlin Multiplatform mobile overview](https://kotlinlang.org/docs/multiplatform/cross-platform-mobile-development.html)
+- [`expect` and `actual` declarations](https://kotlinlang.org/docs/multiplatform/multiplatform-expect-actual.html)
+

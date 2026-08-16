@@ -1,0 +1,54 @@
+---
+id: ndk-jni
+title: NDK and JNI fundamentals
+---
+
+# NDK and JNI fundamentals
+
+The NDK compiles C/C++ into native libraries. JNI bridges Kotlin/Java bytecode and native code. Use it for proven needs—existing native libraries, codecs/engines, or measured compute hotspots—not because C++ is automatically faster.
+
+## Keep the boundary coarse
+
+```kotlin
+class ImageEngine : AutoCloseable {
+    private var handle: Long = nativeCreate()
+
+    fun process(input: ByteArray): ByteArray {
+        check(handle != 0L) { "Engine is closed" }
+        return nativeProcess(handle, input)
+    }
+
+    override fun close() {
+        val old = handle
+        handle = 0
+        if (old != 0L) nativeDestroy(old)
+    }
+
+    private external fun nativeCreate(): Long
+    private external fun nativeProcess(handle: Long, input: ByteArray): ByteArray
+    private external fun nativeDestroy(handle: Long)
+}
+```
+
+The opaque handle makes ownership visible, but production code must synchronize `process` versus `close`, cap inputs, map errors, and guarantee cleanup. Prefer a few coarse calls over per-pixel/per-item JNI crossing and repeated allocation/marshalling.
+
+## Thread and reference rules
+
+`JNIEnv` belongs to the current thread and must not be shared. A native-created thread attaches to the VM, obtains its own environment, and detaches correctly. Local references have limited lifetime; long-lived Java objects require global references that must be deleted. Never retain raw pointers into movable managed objects beyond the API's allowed lifetime.
+
+Check for Java exceptions after JNI calls. Translate C++ exceptions before they cross a C ABI/JNI boundary. Define whether cancellation can interrupt native work and how callbacks avoid invoking destroyed owners.
+
+## Practical mistakes
+
+- ❌ Call JNI thousands of times per frame.
+- ✅ batch data and profile end-to-end.
+- ❌ Store `JNIEnv*` globally.
+- ✅ store `JavaVM*` and obtain a thread-local environment correctly.
+- ❌ Let C++ exceptions or invalid pointers cross the boundary.
+- ✅ catch/map errors and validate handles/lengths.
+
+## Sources
+
+- [Android NDK concepts](https://developer.android.com/ndk/guides/concepts)
+- [JNI tips](https://developer.android.com/ndk/guides/jni-tips)
+

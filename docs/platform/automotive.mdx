@@ -1,0 +1,51 @@
+---
+id: automotive
+title: Android Auto and Android Automotive OS
+---
+
+# Android Auto and Android Automotive OS
+
+**Android Auto** projects a driver-optimized experience powered by the connected phone. **Android Automotive OS (AAOS)** runs in the vehicle and installs the app on the car. A vehicle may support both.
+
+| Concern | Android Auto | AAOS |
+|---|---|---|
+| Runtime/data | Phone app/services | Vehicle Android device |
+| Connectivity | Phone and projection link | Vehicle-assigned networks, possibly no phone |
+| Identity | Commonly phone account | Multiple vehicle users/guest/valet require explicit design |
+| Hardware | Phone plus car host | OEM vehicle hardware and displays |
+
+Use supported app categories and Car App Library/media templates rather than recreating a phone UI. Templates constrain interaction to reduce driver distraction and give OEM-consistent behavior.
+
+## Restrictions are context, not gear inference
+
+UX restrictions can vary by manufacturer, country, and display: a driver-facing screen may be restricted while a passenger display is not. Query platform restrictions. Do not infer them from “gear != PARK” or try to bypass them.
+
+Design glanceable hierarchy, short flows, large targets, voice/audio continuity, safe errors, and parked-only setup. Preserve playback/navigation intent across phone disconnect, vehicle shutdown, network switching, account change, and process death.
+
+## Architecture boundary
+
+```kotlin
+interface DrivingContext {
+    val interactionMode: StateFlow<InteractionMode>
+}
+
+enum class InteractionMode { PARKED, RESTRICTED, PASSENGER_ALLOWED }
+```
+
+Domain/media state should not depend on Activity or car templates. Platform adapters translate supported actions. Backend authorization remains independent of vehicle UI.
+
+## Practical mistakes
+
+- ❌ Mark ordinary AAOS activities distraction-optimized.
+- ✅ Use only supported declarations/APIs and current car-quality rules.
+- ❌ Assume a persistent personal driver account.
+- ✅ handle guest, logout, shared vehicle, and privacy-safe cache clearing.
+- ❌ Test only the desktop-sized emulator window.
+- ✅ test applicable templates, rotary/touch, audio focus, restriction changes, reconnect, and OEM dimensions.
+
+## Sources
+
+- [Android for Cars overview](https://developer.android.com/training/cars)
+- [Android Automotive OS overview](https://developer.android.com/training/cars/platforms/automotive-os)
+- [Car app quality](https://developer.android.com/docs/quality-guidelines/car-app-quality)
+

@@ -1,0 +1,44 @@
+---
+id: native-delivery
+title: Native ABIs, memory safety, and debugging
+---
+
+# Native ABIs, memory safety, and debugging
+
+An ABI defines instruction set, calling convention, binary format, alignment, and related contracts. Android packages shared libraries under `lib/<abi>/libname.so`; missing or incompatible libraries can install yet fail when loaded.
+
+## Delivery design
+
+Choose supported ABIs from user/device/store requirements. Test Play-generated splits and every shipped ABI. Ensure every native dependency has a compatible library; a transitive prebuilt `.so` can constrain the matrix. Track native size by ABI and strip release symbols only after preserving symbol files for exact builds.
+
+## Memory and concurrency hazards
+
+Native code adds use-after-free, buffer overflow, data race, integer overflow, double-free, and ownership ambiguity beyond managed-memory risks. Prefer RAII/smart pointers, bounded spans/containers, checked size arithmetic, immutable ownership contracts, and fuzz/property tests for parsers.
+
+```cpp
+std::vector<std::uint8_t> decode(std::span<const std::uint8_t> input) {
+    if (input.size() > kMaxPayload) throw InputError("payload too large");
+    // Validate structure before allocating based on untrusted lengths.
+    return decodeValidated(input);
+}
+```
+
+Use CheckJNI in debug, sanitizers on supported test builds, native unit/fuzz tests, debugger, tombstones, and exact unstripped symbols/build IDs. A Java crash reporter without native symbol upload produces weak evidence.
+
+## Performance reality
+
+Measure JNI marshalling, copies, startup/library loading, CPU, thermal throttling, battery, binary size, and maintainability. A faster inner loop can produce a slower product if crossing/copying dominates.
+
+## Practical mistakes
+
+- ❌ Support only the developer emulator ABI.
+- ✅ test every packaged/store-delivered ABI.
+- ❌ Strip symbols and discard them.
+- ✅ archive symbols keyed to artifact/build ID and verify symbolication.
+- ❌ Allocate from untrusted native length fields before bounds checks.
+- ✅ validate size/overflow before allocation and parsing.
+
+## Source
+
+- [Android ABIs](https://developer.android.com/ndk/guides/abis)
+

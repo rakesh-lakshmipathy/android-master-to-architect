@@ -1,0 +1,49 @@
+---
+id: compose-multiplatform
+title: Compose Multiplatform UI architecture
+---
+
+# Compose Multiplatform UI architecture
+
+Compose Multiplatform can share declarative UI across targets. That does not make every platform's navigation, accessibility, windowing, input, lifecycle, permissions, and design expectations identical.
+
+## Three sharing strategies
+
+| Strategy | Benefit | Cost |
+|---|---|---|
+| Shared domain/data only | Native UI/UX autonomy | Duplicate presentation/UI |
+| Shared state/presentation | Reuse behavior, native rendering | Adapter/state lifecycle work |
+| Shared UI | Maximum feature reuse | Platform integration and UX convergence risk |
+
+Choose per feature. A branded content screen may share UI well; platform-heavy camera, map, payment, accessibility, or automotive experiences may need native views.
+
+```kotlin
+@Composable
+fun OrdersScreen(
+    state: OrdersUiState,
+    onOrderSelected: (OrderId) -> Unit,
+    openPlatformReceipt: (ReceiptId) -> Unit,
+) { /* shared rendering; platform owns navigation/viewer */ }
+```
+
+Keep platform capabilities injected at a screen boundary. Avoid a global service locator or conditionals for every target throughout composables.
+
+## Validate per target
+
+Test semantics/screen readers, keyboard/mouse/touch, focus, back/window behavior, text input/IME, localization/font scale, adaptive sizes, high contrast, platform menus, performance/startup, binary size, resource loading, native interop, and screenshot differences. Shared UI code still requires target-specific test evidence.
+
+Theming should encode shared brand tokens while allowing platform adaptations. Pixel identity is not automatically good product consistency.
+
+## Practical mistakes
+
+- ❌ Set “100% shared UI” as the success metric.
+- ✅ measure delivery, defects, UX/accessibility, performance, and platform integration.
+- ❌ hide all platform differences behind one enormous interface.
+- ✅ define small capability contracts near their use.
+- ❌ assume Android screenshots prove iOS/desktop quality.
+- ✅ operate a per-target test and release matrix.
+
+## Exercise
+
+Choose sharing boundaries for login, product catalog, camera scan, checkout, and settings across Android/iOS. Justify each with UX, risk, team ownership, and testing cost.
+

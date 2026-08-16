@@ -1,0 +1,42 @@
+---
+id: platform-expansion-interview
+title: Platform-expansion case study and interview preparation
+---
+
+# Platform-expansion case study and interview preparation
+
+## Case study: shared audio product for phone, car, and iOS
+
+Share catalog, entitlement policy, playback queue model, sync, analytics contracts, and domain tests. Android owns MediaSession/service/lifecycle; Car App Library renders approved driver templates; AAOS handles vehicle identity/network/restrictions; iOS owns its audio/session/UI integrations. A native codec sits behind one coarse Kotlin API with explicit lifetime and cancellation.
+
+When the car disconnects, playback ownership and queue remain coherent. Restricted mode removes unsafe browsing actions without guessing vehicle state. Shared analytics distinguishes host/form factor but avoids unbounded vehicle identifiers. Native crashes carry ABI/build IDs and symbols.
+
+## Interview questions
+
+1. **Android Auto versus AAOS?** Auto is phone-powered projection; AAOS is Android installed in the vehicle.
+2. **Why query UX restrictions?** They vary by vehicle, geography, and display; gear inference is incorrect.
+3. **When use NDK?** Existing native assets, portability, or measured workloads where total cost/risk is justified.
+4. **Why keep JNI coarse?** Crossing, marshalling, references, threading, and ownership add cost and failure modes.
+5. **Can `JNIEnv` be cached globally?** No; it is thread-local. Use the VM to obtain the correct environment per thread.
+6. **What should KMP share?** Stable cross-platform product semantics, not platform APIs merely to maximize percentage.
+7. **`expect/actual` versus interface?** Expect/actual supplies compile-time platform declarations; interfaces make runtime dependencies/substitution explicit. Choose by boundary/testing semantics.
+8. **Does shared Compose UI remove platform testing?** No; behavior, accessibility, input, lifecycle, performance, and integration remain target-specific.
+
+## Checklist
+
+- [ ] Supported platform/category and store-quality rules verified.
+- [ ] Safety/privacy/identity/network differences modeled.
+- [ ] Shared semantics separated from platform capabilities.
+- [ ] JNI ownership, threading, errors, cancellation, and bounds documented.
+- [ ] Every native ABI packaged, tested, and symbolicated.
+- [ ] KMP API compatibility and cross-team release ownership defined.
+- [ ] UI sharing chosen feature-by-feature with native escape hatches.
+- [ ] Per-target accessibility, performance, and lifecycle evidence exists.
+
+## Exercises
+
+1. Design a car-safe podcast browse/play journey under changing UX restrictions.
+2. Review a JNI image decoder for malicious input, close/process races, and symbolication.
+3. Draw KMP source-set/dependency boundaries for Android/iOS offline-first notes.
+4. Decide whether maps and checkout UI should be shared with Compose Multiplatform.
+
