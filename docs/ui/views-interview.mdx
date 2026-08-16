@@ -1,0 +1,77 @@
+---
+id: views-interview
+title: View system and RecyclerView interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# View system and RecyclerView interview scenarios
+
+## Quick answers
+
+<details><summary><strong>Measure, layout, draw?</strong></summary><p>Measure negotiates dimensions from parent constraints, layout assigns child positions, and draw records visual content. Size changes request layout; visual-only changes invalidate.</p></details>
+
+<details><summary><strong>Why does RecyclerView recycle?</strong></summary><p>Only a small number of item View trees are needed for the viewport. Rebinding those holders reduces inflation/memory, so bind must reset all old visual state.</p></details>
+
+<details><summary><strong>Diff identity versus content?</strong></summary><p>Identity asks whether two rows represent the same logical entity; content asks whether everything rendered for that entity is unchanged.</p></details>
+
+<details><summary><strong>Why call performClick?</strong></summary><p>It preserves click semantics for accessibility, keyboard, sound, and framework behaviour rather than supporting touch only.</p></details>
+
+## Scenario 1: wrong badge after scrolling
+
+Binding sets badge visible for delayed orders but never hides it for normal orders.
+
+**Fix:** complete bind for both states; treat holder as dirty reusable object.
+
+## Scenario 2: clicked wrong item
+
+Listener captured bind-time `position` then a diff inserted above it.
+
+**Fix:** capture stable item ID or query current `bindingAdapterPosition` and handle `NO_POSITION`.
+
+## Scenario 3: custom View disappears
+
+Overridden `onMeasure` forgot `setMeasuredDimension` or ignored EXACTLY/AT_MOST.
+
+**Fix:** resolve desired size against specs/padding/minimums and always report dimensions.
+
+## Scenario 4: screen smooth at 60 Hz, janky at 120 Hz
+
+Frame interval drops from ~16.7 to ~8.3 ms; same main-thread bind/layout work now misses more frames. Trace on representative refresh rates and reduce critical path.
+
+## Scenario 5: tablet alternative loses form input
+
+Phone/tablet layouts maintain separate local state or Activity business logic.
+
+**Fix:** one semantic ViewModel/repository state; both layout presentations bind/events to it; save small restoration inputs.
+
+## Architect exercise: commerce feed
+
+Design a feed with 100k paged products, ads, carousels, selection, downloads, live prices, accessibility, tablets, and offline state.
+
+Address:
+
+1. row model/stable identities;
+2. Paging and database source;
+3. live update coalescing/payloads;
+4. nested list decision/pools/state;
+5. image sizing/cancellation/cache;
+6. selection/process restoration;
+7. compact/wide presentation;
+8. TalkBack/keyboard focus;
+9. scroll Macrobenchmark/frame metrics;
+10. error/retry/empty/offline states.
+
+## Mastery checklist
+
+- [ ] I trace input/main Looper/frame phases.
+- [ ] I explain MeasureSpecs and layout/draw invalidation.
+- [ ] I design XML for localization, fonts, widths, insets.
+- [ ] I implement custom View input and accessibility.
+- [ ] I bind recycled holders completely using stable IDs.
+- [ ] I use immutable diff snapshots and correct callbacks.
+- [ ] I diagnose rather than guess at list jank.
+
+<Admonition type="tip" title="Architect takeaway">
+View-system mastery is lifecycle plus frame-budget ownership. Correct state can still produce bad UX if main-thread measurement, binding, drawing, allocation, touch routing, or accessibility semantics are wrong.
+</Admonition>
+

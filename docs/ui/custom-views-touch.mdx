@@ -1,0 +1,139 @@
+---
+id: custom-views-touch
+title: Custom Views, Canvas, touch dispatch, and accessibility
+---
+import Admonition from '@theme/Admonition';
+
+# Custom Views, Canvas, touch dispatch, and accessibility
+
+## Extend existing widgets before starting from View
+
+If you need a styled Button with one behavior, subclass/decorate an existing accessible widget. A fully custom View owns measurement, drawing, input, state, accessibility, RTL, and testing.
+
+## Measurement contract
+
+```kotlin
+class ProgressRing @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null
+) : View(context, attrs) {
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val desired = 96.dpToPx() + paddingLeft + paddingRight
+        val width = resolveSize(desired, widthSpec)
+        val height = resolveSize(desired, heightSpec)
+        setMeasuredDimension(width, height)
+    }
+}
+```
+
+`setMeasuredDimension()` is mandatory. Respect parent constraints, padding, minimums, and measured state. Do not always force the desired size.
+
+## Drawing without per-frame allocation
+
+```kotlin
+private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val bounds = RectF()
+
+override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    bounds.set(
+        paddingLeft.toFloat(),
+        paddingTop.toFloat(),
+        (w - paddingRight).toFloat(),
+        (h - paddingBottom).toFloat()
+    )
+}
+
+override fun onDraw(canvas: Canvas) {
+    super.onDraw(canvas)
+    canvas.drawArc(bounds, -90f, progress * 360f, false, paint)
+}
+```
+
+Calculate size-dependent geometry in `onSizeChanged`, reuse Paint/Path/Rect where safe, and keep `onDraw` deterministic/fast.
+
+## Public property contract
+
+```kotlin
+var progress: Float = 0f
+    set(value) {
+        field = value.coerceIn(0f, 1f)
+        contentDescription = context.getString(
+            R.string.progress_percent,
+            (field * 100).roundToInt()
+        )
+        invalidate()
+    }
+```
+
+If property changes size, call `requestLayout`; if visual only, invalidate. Notify accessibility where semantics change.
+
+## Touch dispatch pipeline
+
+```text
+Activity/Window dispatch
+        ↓
+ViewGroup.dispatchTouchEvent
+        ↓
+ViewGroup.onInterceptTouchEvent?
+        ↓ no                    ↓ yes
+child dispatch/onTouch     parent onTouch
+```
+
+A gesture is a stream from DOWN through MOVE to UP/CANCEL. The target needs coherent ownership, not independent handling of each event.
+
+## Parent interception
+
+A horizontal pager contains a vertical list. Parent observes movement; intercepts only after horizontal movement exceeds touch slop and dominates vertical movement. When parent takes over, child receives CANCEL.
+
+### ❌ Intercept every MOVE
+
+Buttons/lists lose gestures and click semantics.
+
+### ✅ Use touch slop/direction/state
+
+Use `ViewConfiguration`, track active pointer, velocity where needed, handle CANCEL, multi-touch pointer changes, and nested scrolling APIs for complex cooperating scroll containers.
+
+## Click accessibility
+
+Do not fire actions directly only from raw `ACTION_UP`. Implement/override `performClick()`:
+
+```kotlin
+override fun onTouchEvent(event: MotionEvent): Boolean {
+    return when (event.actionMasked) {
+        MotionEvent.ACTION_UP -> {
+            performClick()
+            true
+        }
+        MotionEvent.ACTION_DOWN -> true
+        else -> super.onTouchEvent(event)
+    }
+}
+
+override fun performClick(): Boolean {
+    super.performClick()
+    listener?.invoke()
+    return true
+}
+```
+
+This integrates keyboard/accessibility click semantics. Real gesture code must also handle movement/cancel/multiple pointers.
+
+## Custom accessibility semantics
+
+For one logical control, set role/class, state description, content description, enabled/clickable/focusable semantics. For a custom chart with multiple interactive virtual points, use accessibility node helpers to expose virtual descendants rather than one giant unlabeled canvas.
+
+## Saved state
+
+If a custom View owns user-visible state not reconstructed externally, implement save/restore state. Prefer state hoisting where architecture can supply value again, avoiding two sources of truth.
+
+<Admonition type="tip" title="Interview-ready answer">
+A fully custom View owns measurement, drawing, state, input, and accessibility. I respect MeasureSpecs and call `setMeasuredDimension`, precompute size geometry, avoid allocations in `onDraw`, use invalidate versus requestLayout correctly, treat touch as a DOWN-to-UP/CANCEL stream with parent interception rules, route clicks through `performClick`, and expose meaningful accessibility nodes/actions.
+</Admonition>
+
+## Exercises
+
+1. Implement square measurement under EXACTLY/AT_MOST constraints.
+2. Explain what child receives when parent intercepts mid-gesture.
+3. Design accessibility for a five-star custom rating control.
+

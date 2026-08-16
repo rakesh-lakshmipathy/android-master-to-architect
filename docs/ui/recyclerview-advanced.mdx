@@ -1,0 +1,119 @@
+---
+id: recyclerview-advanced
+title: RecyclerView advanced — multiple types, payloads, nesting, and performance
+---
+import Admonition from '@theme/Admonition';
+
+# RecyclerView advanced — multiple types, payloads, nesting, and performance
+
+## Model heterogeneous rows explicitly
+
+```kotlin
+sealed interface FeedRow {
+    val stableId: String
+    data class Header(val title: String) : FeedRow { override val stableId = "header" }
+    data class Article(val id: String, val title: String) : FeedRow { override val stableId = "article:$id" }
+    data class Loading(val key: String = "loading") : FeedRow { override val stableId = key }
+}
+```
+
+`getItemViewType` maps model type to holder creation. Avoid magic server integers leaking directly into UI without validation/fallback.
+
+## Partial updates with payloads
+
+A progress value changes every second; title/image remain unchanged. Diff payload can update only progress rather than rebinding/reloading everything.
+
+```kotlin
+override fun getChangePayload(old: DownloadRow, new: DownloadRow): Any? =
+    if (old.copy(progress = new.progress) == new) ProgressPayload(new.progress)
+    else null
+```
+
+Payload binding must fall back to a full bind because RecyclerView can call either path. Do not build payload complexity unless traces show full binds are costly.
+
+## Images and recycled requests
+
+Use a lifecycle/View-aware image loader that cancels/replaces requests for recycled targets.
+
+### ❌ Async callback without ownership
+
+```kotlin
+scope.launch {
+    val bitmap = download(item.url)
+    imageView.setImageBitmap(bitmap) // Holder may now represent another item.
+}
+```
+
+### ✅ Bind target with proven image library
+
+Load URL into current ImageView with placeholder/error and automatic request cancellation. Clear sensitive/incorrect prior content immediately during bind.
+
+## Nested RecyclerViews
+
+Horizontal carousels inside vertical feed can create:
+
+- many holders/pools;
+- nested measurement;
+- lost scroll state;
+- competing prefetch;
+- complex touch/accessibility order.
+
+Share `RecycledViewPool` for identical inner holder types, preserve carousel state by stable section ID, tune prefetch only with evidence, and consider a single heterogeneous list/Compose layout.
+
+## Selection
+
+Selection belongs to stable IDs in ViewModel/state, not `View.isSelected` alone. Binding derives activated/checked visuals from state every time.
+
+## Adapter composition
+
+`ConcatAdapter` can combine header/content/footer adapters with separate ownership. Decide stable-ID/view-type isolation and state restoration policy; avoid every feature directly mutating one giant adapter.
+
+## State restoration
+
+If list data loads asynchronously, restoring scroll before data arrives can fail/jump. Configure adapter state restoration policy such as preventing restoration while empty when appropriate, then submit stable data.
+
+## Performance hot-path checklist
+
+- no disk/network/JSON/large formatting in `onBind`;
+- no new listener/watcher accumulation;
+- avoid repeated layout inflation beyond `onCreateViewHolder`;
+- simple row hierarchy and correctly sized images;
+- immutable diffing off main via ListAdapter/AsyncListDiffer;
+- stable IDs only when implementation is truly stable/unique;
+- release-like scroll Macrobenchmark/trace;
+- paging for unbounded datasets.
+
+## TextWatcher leak/duplication
+
+Editable row rebind adds another watcher each time, causing repeated callbacks.
+
+### ✅ Holder owns one watcher
+
+Create watcher once, track current item ID/suppress programmatic updates, and route edits by stable ID. Better: avoid large editable forms in recycled lists unless UX/state model is carefully designed.
+
+## Diff cost
+
+Diffing large lists uses CPU/memory and move detection can add cost. Do not submit identical regenerated lists at high frequency. Debounce/coalesce upstream state and page unbounded data. Measure before disabling move detection or hand-writing notifications.
+
+## Jank diagnosis
+
+Trace scroll and inspect:
+
+- expensive bind/inflation;
+- image decode/resize;
+- layout/measure passes;
+- GC/allocation spikes;
+- main-thread diff or formatting;
+- item animator/layer work;
+- nested Recycler behavior.
+
+<Admonition type="tip" title="Interview-ready answer">
+Advanced RecyclerView design uses explicit row types and stable IDs, payloads only for measured expensive partial changes, lifecycle-aware image requests, state-derived selection, and restoration after data availability. For nested lists I share pools cautiously and preserve state per stable section. I diagnose scrolling with traces/Macrobenchmark and move unbounded datasets to Paging instead of micro-optimizing enormous in-memory lists.
+</Admonition>
+
+## Exercises
+
+1. Design stable IDs/view types for header + ads + articles + loading/error.
+2. Fix an editable row that sends four callbacks after scrolling.
+3. Design scroll restoration when Room emits after process recreation.
+

@@ -1,0 +1,138 @@
+---
+id: xml-layouts
+title: XML layouts, ConstraintLayout, ViewBinding, and adaptive Views
+---
+import Admonition from '@theme/Admonition';
+
+# XML layouts, ConstraintLayout, ViewBinding, and adaptive Views
+
+## XML describes a View tree
+
+```xml
+<androidx.constraintlayout.widget.ConstraintLayout ...>
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/order_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+`0dp` in a constrained axis means match constraints—not zero rendered width. The constraints define available width.
+
+## Constraint completeness
+
+Each View needs enough horizontal and vertical relationships for deterministic placement. The editor may show a design-time position even when runtime constraints are missing.
+
+### ❌ Design-editor coordinates only
+
+```xml
+tools:layout_editor_absoluteX="40dp"
+tools:layout_editor_absoluteY="100dp"
+```
+
+`tools:` attributes are design-time only.
+
+### ✅ Runtime constraints
+
+Use `app:layout_constraint...` attributes and test all target widths/directions.
+
+## Match constraints and text growth
+
+For long localized text:
+
+```xml
+<TextView
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:maxLines="3"
+    android:ellipsize="end"
+    ... />
+```
+
+Define product policy: wrap, scroll, expand, or truncate. Ellipsizing an order total/action may be unacceptable; wrapping a decorative subtitle may be fine.
+
+## Barriers, guidelines, groups, and chains
+
+- Guideline: percentage/fixed layout reference.
+- Barrier: positions relative to the farthest referenced View, useful for variable text.
+- Chain: distributes/alines multiple constrained Views.
+- Group: changes visibility of referenced Views without adding layout container.
+
+Use helpers to express relationships, not as puzzle pieces without maintainable intent.
+
+## Reusable layouts
+
+`<include>` reuses a layout; `<merge>` can avoid an unnecessary root when parent/inflation contract supports it. Custom compound Views can package behavior and accessibility, but a reusable binding helper may be simpler.
+
+## ViewBinding versus Data Binding
+
+| Tool | Provides |
+|---|---|
+| ViewBinding | Type-safe generated View references |
+| Data Binding | XML expressions, observable binding, generated binding layer |
+
+ViewBinding is simpler and predictable. Data Binding can reduce glue but introduces expression/build/debug complexity. Select based on existing architecture and measured value—not fashion.
+
+## Adaptive View layouts
+
+Do not equate tablet with a particular device name. Use available window space.
+
+```text
+compact width: list → details navigation
+wide width:    list | details side by side
+```
+
+Resource layouts such as `layout-sw600dp` can help View apps, but modern resizable/windowed environments benefit from runtime window metrics and adaptive containers. Preserve navigation/state when layout mode changes.
+
+## Insets and edge-to-edge
+
+Content can draw under status/navigation bars, cutouts, and IME. Apply insets to the element that semantically needs them rather than adding a hardcoded 24 dp top padding.
+
+```kotlin
+ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+    val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+    view.updatePadding(top = bars.top, bottom = bars.bottom)
+    insets
+}
+```
+
+Avoid consuming insets too early if children also need types; define ownership.
+
+## Accessibility fundamentals
+
+- meaningful labels/content descriptions;
+- correct focus/traversal order;
+- minimum touch targets;
+- do not encode meaning only by color;
+- semantic native widgets where possible;
+- large text without clipping;
+- keyboard/D-pad interaction for large screens.
+
+## Practical mistakes
+
+### ❌ Hardcoded pixels/device dimensions
+
+### ✅ Constraints, dp/sp, current window/insets, semantic resources
+
+### ❌ Activity stores ViewBinding in singleton
+
+### ✅ Binding belongs to Activity/Fragment view lifecycle
+
+### ❌ Duplicate phone/tablet business logic in layouts
+
+### ✅ Same state/events, alternative presentation only
+
+<Admonition type="tip" title="Interview-ready answer">
+XML defines the View hierarchy; ConstraintLayout expresses runtime relationships, and ViewBinding only provides type-safe references. I design for variable text, font scale, RTL, window width, and insets, keep business state independent of alternative layouts, and use helpers such as barriers/chains only when they clarify relationships. Wide and compact presentations consume the same state and events.
+</Admonition>
+
+## Exercises
+
+1. Design a row whose label varies from 5 to 40 characters while values stay aligned.
+2. Explain `0dp` width in ConstraintLayout.
+3. Convert hardcoded status-bar padding into inset-aware ownership.
+

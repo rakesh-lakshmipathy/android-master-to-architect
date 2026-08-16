@@ -1,0 +1,146 @@
+---
+id: recyclerview
+title: RecyclerView — adapters, holders, recycling, and DiffUtil
+---
+import Admonition from '@theme/Admonition';
+
+# RecyclerView — adapters, holders, recycling, and DiffUtil
+
+## Why recycling exists
+
+A list may contain 10,000 rows but only ~10–20 are visible. Creating/retaining a View tree for every row wastes memory and inflation work. RecyclerView reuses a limited set of ViewHolders as items enter/leave the viewport.
+
+```text
+data positions: 0 1 2 3 4 5 ... 9999
+visible holders: [A][B][C][D][E]
+scroll ↓
+holder A rebound from position 0 to position 5
+```
+
+Recycling means `onBindViewHolder` must reset **all** visual state. A holder remembers old View properties unless binding overwrites them.
+
+## Core roles
+
+| Role | Responsibility |
+|---|---|
+| RecyclerView | Hosts/recycles children |
+| LayoutManager | Measures/positions and decides visible layout |
+| Adapter | Creates/binds holders and exposes item structure |
+| ViewHolder | Owns reusable item View references |
+| ItemDecoration/Animator | Decorations and change animations |
+
+## ListAdapter example
+
+```kotlin
+data class OrderRow(
+    val id: String,
+    val title: String,
+    val delayed: Boolean
+)
+
+class OrderAdapter(
+    private val onClick: (String) -> Unit
+) : ListAdapter<OrderRow, OrderViewHolder>(DIFF) {
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OrderViewHolder {
+        val binding = OrderRowBinding.inflate(
+            LayoutInflater.from(parent.context), parent, false
+        )
+        return OrderViewHolder(binding, onClick)
+    }
+
+    override fun onBindViewHolder(holder: OrderViewHolder, position: Int) {
+        holder.bind(getItem(position))
+    }
+
+    companion object {
+        val DIFF = object : DiffUtil.ItemCallback<OrderRow>() {
+            override fun areItemsTheSame(old: OrderRow, new: OrderRow) =
+                old.id == new.id
+
+            override fun areContentsTheSame(old: OrderRow, new: OrderRow) =
+                old == new
+        }
+    }
+}
+```
+
+## Stable identity versus equal content
+
+- `areItemsTheSame`: same logical entity, usually stable ID.
+- `areContentsTheSame`: everything rendered by this row is unchanged.
+
+### ❌ Position as identity
+
+After insertion at top, every position shifts. Animations/selection bind to the wrong logical items.
+
+### ✅ Domain stable ID
+
+Use database/server-generated identity that remains stable across refresh/order changes.
+
+## Binding reset
+
+```kotlin
+fun bind(item: OrderRow) = with(binding) {
+    title.text = item.title
+    delayedBadge.isVisible = item.delayed
+    root.isActivated = selectedIds.contains(item.id)
+    root.setOnClickListener { onClick(item.id) }
+}
+```
+
+Every conditional property has both true and false binding. Do not only set `VISIBLE` for delayed rows and forget `GONE` for recycled normal rows.
+
+## Click position trap
+
+### ❌ Capture bind-time position
+
+```kotlin
+root.setOnClickListener { onClick(currentList[position].id) }
+```
+
+Diff/animations can change adapter positions after binding.
+
+### ✅ Capture bound stable ID
+
+```kotlin
+root.setOnClickListener { onClick(item.id) }
+```
+
+Or query `bindingAdapterPosition` at click time and handle `NO_POSITION` when position semantics are truly needed.
+
+## Immutable submitted lists
+
+DiffUtil/ListAdapter expects lists/elements not to mutate while in use.
+
+### ❌ Mutate and resubmit same instance
+
+```kotlin
+rows[0].title = "Updated"
+adapter.submitList(rows)
+```
+
+Old and new snapshots can reference the same mutated data, so diff cannot observe a change reliably.
+
+### ✅ New immutable state
+
+```kotlin
+adapter.submitList(rows.map { row ->
+    if (row.id == id) row.copy(title = "Updated") else row
+})
+```
+
+## `notifyDataSetChanged()`
+
+It invalidates broad list knowledge and loses precise animations/efficiency. Use it only when granular identity/change cannot be described; prefer immutable list diffing or precise notifications for controlled mutable adapters.
+
+<Admonition type="tip" title="Interview-ready answer">
+RecyclerView creates a small pool of ViewHolders and rebinds them to different items, so binding must fully reset every visual property. ListAdapter computes differences between immutable list snapshots. `areItemsTheSame` compares stable entity identity; `areContentsTheSame` compares rendered content. I never use position as identity or capture stale positions in click handlers.
+</Admonition>
+
+## Exercises
+
+1. Find recycled-state bugs in a row with checkbox, alpha, error, and image.
+2. Define identity/content callbacks for chat messages.
+3. Explain why mutating the submitted list defeats diffing.
+

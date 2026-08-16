@@ -177,7 +177,28 @@ const sidebars: SidebarsConfig = {
         'android/platform-interview',
       ],
     },
-    {type: 'category', label: 'Parts III-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part III - UI Engineering',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'View System and RecyclerView',
+          collapsed: true,
+          items: [
+            'ui/views-rendering',
+            'ui/xml-layouts',
+            'ui/custom-views-touch',
+            'ui/recyclerview',
+            'ui/recyclerview-advanced',
+            'ui/views-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Parts IV-X - Android to Architect', items: ['roadmap']},
   ],
 };
 

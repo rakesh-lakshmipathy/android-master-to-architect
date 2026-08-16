@@ -1,0 +1,143 @@
+---
+id: views-rendering
+title: View rendering — main thread, measure, layout, and draw
+---
+import Admonition from '@theme/Admonition';
+
+# View rendering — main thread, measure, layout, and draw
+
+## A screen is produced one frame at a time
+
+Android’s UI thread processes input, lifecycle callbacks, view changes, and frame work. `Choreographer` coordinates work with display timing. If required work misses the frame deadline, the visible result arrives late and the user sees jank.
+
+```text
+input/state change
+      ↓
+main-thread message/callback
+      ↓
+measure → layout → draw/record
+      ↓
+render/composition pipeline
+      ↓
+displayed frame
+```
+
+At 60 Hz, a frame interval is about 16.7 ms; at 120 Hz, about 8.3 ms. Your code does not own the entire interval because framework/render/system work also needs time.
+
+:::warning Android-only chapter
+View, XML, Canvas, MotionEvent, and RecyclerView examples require Android.
+:::
+
+## Main Looper and MessageQueue
+
+The main thread runs a Looper that pulls messages/tasks from a queue. Lifecycle callbacks, input handling, posted Runnables, and many UI events execute serially.
+
+### ❌ Blocking click handler
+
+```kotlin
+checkoutButton.setOnClickListener {
+    val receipt = api.chargeBlocking(order)
+    receiptView.text = receipt.number
+}
+```
+
+Input, lifecycle, and frames wait behind the network call. The app can freeze and ANR.
+
+### ✅ Async work with main-thread rendering
+
+```kotlin
+checkoutButton.setOnClickListener {
+    viewModel.submitOrder()
+}
+
+lifecycleScope.launch {
+    repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.state.collect(::render)
+    }
+}
+```
+
+The data layer performs suspend work off the main thread where needed; immutable state returns for rendering.
+
+## Measure phase
+
+Parents pass each child a width and height `MeasureSpec`:
+
+- `EXACTLY`: parent requires a specific size;
+- `AT_MOST`: child may be up to a maximum;
+- `UNSPECIFIED`: parent imposes no bound on that axis.
+
+The child calculates and calls `setMeasuredDimension`. Measurement can involve multiple passes in complex hierarchies, so expensive work inside `onMeasure()` multiplies.
+
+## Layout phase
+
+After sizes are known, a ViewGroup positions children using their measured dimensions. A size/position-affecting property requires layout.
+
+```kotlin
+customView.showLabel = true
+customView.requestLayout()
+```
+
+## Draw phase
+
+Views draw backgrounds/content/children/decorations. A visual-only change calls `invalidate()`:
+
+```kotlin
+customView.progress = 0.75f
+customView.invalidate()
+```
+
+If progress changes intrinsic size too, call `requestLayout()` as well.
+
+## `invalidate()` versus `requestLayout()`
+
+| Change | Call |
+|---|---|
+| Color, progress fill, visual state only | `invalidate()` |
+| Width/height/padding/content size | `requestLayout()` (which leads to redraw as needed) |
+
+Calling `requestLayout()` for animation every frame can trigger costly hierarchy measurement. Prefer transform/property animation when visual semantics allow it.
+
+## ViewBinding and XML ownership
+
+```kotlin
+private lateinit var binding: CheckoutActivityBinding
+
+override fun onCreate(state: Bundle?) {
+    super.onCreate(state)
+    binding = CheckoutActivityBinding.inflate(layoutInflater)
+    setContentView(binding.root)
+}
+```
+
+ViewBinding creates type-safe references. It does not manage lifecycle, state, or memory automatically. Fragment bindings still must be cleared at `onDestroyView`.
+
+## Layout hierarchy cost
+
+Deep nesting can create extra traversal/measurement, but “flat at all cost” can make maintenance worse. Use ConstraintLayout or suitable containers when they express relationships clearly; measure before rewriting.
+
+### Practical audit
+
+- avoid weighted/nested structures that repeatedly measure large subtrees;
+- avoid `wrap_content` where it forces expensive unknown-size work in scrolling parents;
+- avoid invisible retained complex trees when `GONE`/replacement/lazy inflation fits;
+- inspect Layout Inspector and traces.
+
+## Overdraw and clipping
+
+Overdraw occurs when pixels are painted multiple times before final display. Remove redundant opaque backgrounds and offscreen layers where measured. Clipping/alpha/shadows may cause extra rendering work; optimize only after tracing a real bottleneck.
+
+## Frame diagnosis
+
+Use Perfetto/system tracing, CPU profiler, Layout Inspector, GPU rendering tools, and Macrobenchmark/frame metrics. Find whether delay is input, main-thread code, measure/layout, draw, GPU, or external wait.
+
+<Admonition type="tip" title="Interview-ready answer">
+The View system produces frames through main-thread state/input processing followed by measure, layout, and draw. Measure negotiates size using MeasureSpecs, layout positions children, and draw records visual content. I call `invalidate` for visual-only changes and `requestLayout` for size changes, keep blocking/allocation-heavy work off the frame path, and diagnose jank with traces rather than assuming every hierarchy needs flattening.
+</Admonition>
+
+## Exercises
+
+1. Decide `invalidate`/`requestLayout` for color, padding, text, translationX, and visibility changes.
+2. Explain why 10 ms app work may still miss a 60-Hz frame.
+3. Trace a click from MotionEvent to updated pixels.
+
