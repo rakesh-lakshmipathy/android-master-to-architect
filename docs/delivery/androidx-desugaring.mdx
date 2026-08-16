@@ -1,0 +1,49 @@
+---
+id: androidx-desugaring
+title: AndroidX, desugaring, and dependency compatibility
+---
+
+# AndroidX, desugaring, and dependency compatibility
+
+Compatibility is shared among the platform, Android Gradle Plugin, Gradle, JDK, Kotlin, Compose compiler/plugin, AndroidX, third-party SDKs, and app code. Upgrade from a documented version matrix, not by changing random numbers until sync succeeds.
+
+## Desugaring
+
+Language desugaring rewrites supported newer Java bytecode/language constructs for older devices. Core-library desugaring also supplies selected newer Java APIs. It does **not** backport Android framework APIs.
+
+```kotlin
+android {
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:<version>")
+}
+```
+
+Use the version supported by the current toolchain and verify the official compatibility tables. Never copy a stale version from a book blindly.
+
+## Dependency upgrade workflow
+
+Inventory direct/transitive dependencies, required SDK/tool versions, manifests/permissions/initializers, native ABIs, consumer ProGuard rules, licenses, vulnerabilities, and runtime behavior. Update in coherent batches, inspect dependency graphs and merged manifests, run release shrinking, and test minimum/newest APIs.
+
+AndroidX compatibility helpers reduce branches but do not guarantee identical behavior across every OS/OEM. Read each API contract.
+
+## Practical mistakes
+
+- ❌ Assume Java 17 source support means every Java 17 library API works on `minSdk`.
+- ✅ Check core-library desugaring/API availability separately.
+- ❌ Force dependency versions globally to silence resolution.
+- ✅ Understand the conflict and test binary/runtime compatibility.
+- ❌ Upgrade an SDK without inspecting new permissions/initializers/data collection.
+- ✅ review merged artifacts and privacy/operational effects.
+
+## Sources
+
+- [Use Java 8+ APIs through desugaring](https://developer.android.com/studio/write/java8-support)
+- [AndroidX releases](https://developer.android.com/jetpack/androidx/versions)
+

@@ -1,0 +1,55 @@
+---
+id: compat-sensitive-apis
+title: Storage, notification, permission, and background compatibility
+---
+
+# Storage, notification, permission, and background compatibility
+
+These areas evolve frequently because they affect privacy, battery, and user control. Model user intent and durable work first; then map it to platform-specific mechanisms.
+
+| Concern | Compatibility questions |
+|---|---|
+| Permissions | Declared? Runtime request needed? User denied/don't-ask-again? One-time/auto-reset? Enterprise policy? |
+| Notifications | Channel exists? Runtime permission? User/app/channel disabled? PendingIntent valid? |
+| Storage | App-private, MediaStore, SAF, or shared media? URI permission persisted? File moved/deleted? |
+| Background work | Immediate user-visible or deferrable? Constraints? FGS type/permission/start eligibility? Exact timing justified? |
+
+## State-machine example
+
+```kotlin
+sealed interface NotificationReadiness {
+    data object Ready : NotificationReadiness
+    data object NeedsRuntimePermission : NotificationReadiness
+    data object DisabledByUser : NotificationReadiness
+    data object ChannelDisabled : NotificationReadiness
+}
+```
+
+A Boolean `hasPermission` cannot explain the correct recovery UI. Query current state when acting rather than assuming yesterday's grant remains. WorkManager, foreground services, and alarms are not interchangeable fallbacks; each represents a different guarantee and policy.
+
+For storage, persist URI permission only when the provider offers it and still handle revoked/missing content. Never turn a content URI into a guessed filesystem path. For notifications, creating a channel after posting is too late, and channel importance is user-controlled after creation.
+
+## Upgrade test scenarios
+
+- Old app scheduled work, then OS/app target upgrades.
+- Permission was granted, auto-reset/revoked, then process restores.
+- User restores backup onto a device where a document URI is invalid.
+- Existing notification channel has user-modified importance.
+- Exact alarm/foreground-service eligibility changes while work is queued.
+
+## Practical mistakes
+
+- ❌ Route every platform failure to “Grant permission.”
+- ✅ Explain whether the remedy is request, settings, channel settings, retry, or unsupported.
+- ❌ Fall back from failed WorkManager to an unrestricted service.
+- ✅ redesign around allowed platform guarantees.
+- ❌ Test only new installs.
+- ✅ test historical upgrades and persisted system references.
+
+## Sources
+
+- [Request runtime permissions](https://developer.android.com/training/permissions/requesting)
+- [Notification permission](https://developer.android.com/develop/ui/views/notifications/notification-permission)
+- [Storage use cases](https://developer.android.com/training/data-storage/use-cases)
+- [Background work guidance](https://developer.android.com/develop/background-work)
+

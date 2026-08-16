@@ -1,0 +1,46 @@
+---
+id: target-behavior
+title: Platform and target-SDK behavior changes
+---
+
+# Platform and target-SDK behavior changes
+
+Android platform changes fall into two operational groups:
+
+1. **Changes for all apps** can affect the currently published app as soon as users update their OS.
+2. **Target-gated changes** become active when the app raises `targetSdk` (on applicable OS versions).
+
+## Safer two-phase migration
+
+### Phase 1 — new-OS compatibility
+
+Install the current production artifact on the new OS. Review all-app changes, non-SDK access, system UI, background work, storage, media, networking, WebView, notifications, and third-party SDKs. Publish compatibility fixes without necessarily changing the target.
+
+### Phase 2 — target adoption
+
+Raise `compileSdk`/`targetSdk`, enumerate every relevant target-gated change, assign an owner/test, use compatibility-framework toggles to isolate changes when available, and retest release/upgrade flows.
+
+```text
+change ID -> affected feature -> owner -> test evidence -> telemetry -> status
+```
+
+Do not assume a compatibility toggle is a production strategy. It is a debugging/migration tool. The final app must work with required changes enabled.
+
+## Scenario
+
+A target upgrade changes background-start or edge-to-edge behavior. The unit suite remains green because it does not run system policy. Device tests and exploratory upgrade sessions reveal a notification flow that no longer starts work and a screen hidden behind system bars. The fix belongs in component/UX architecture, not a blanket exception.
+
+## Practical mistakes
+
+- ❌ Read only the target-specific change page.
+- ✅ Review both all-app and target-gated changes.
+- ❌ Test only a fresh install after target upgrade.
+- ✅ Test upgrade, restored backup, revoked permissions, queued jobs, and old local data.
+- ❌ Update target on the policy deadline.
+- ✅ begin during preview/beta and ship compatibility fixes early.
+
+## Sources
+
+- [App compatibility in Android](https://developer.android.com/guide/app-compatibility)
+- [Compatibility framework tools](https://developer.android.com/guide/app-compatibility/test-debug)
+

@@ -1,0 +1,53 @@
+---
+id: api-checks
+title: Runtime checks and compatibility wrappers
+---
+
+# Runtime checks and compatibility wrappers
+
+An API-level check answers whether a framework API exists. A capability check answers whether this device and current state can actually perform the feature. Often you need both.
+
+```kotlin
+interface NotificationPermissionPolicy {
+    fun canPostNotifications(): Boolean
+}
+
+class AndroidNotificationPermissionPolicy(
+    private val context: Context,
+) : NotificationPermissionPolicy {
+    override fun canPostNotifications(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+}
+```
+
+Centralized wrappers keep version branches out of ViewModels/composables and create one place for tests, OEM workarounds, logging, and future deletion.
+
+## Capability before version
+
+```kotlin
+fun Context.canUseCamera(): Boolean =
+    packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) &&
+    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+        PackageManager.PERMISSION_GRANTED
+```
+
+Still handle runtime failure: hardware may be busy, policy-disabled, disconnected, or misreported. Version/capability checks reduce expected failures; they cannot eliminate races.
+
+Annotations such as `@RequiresApi` document caller obligations but do not perform a runtime guard. Lint is evidence only for code paths it can analyze; reflection/native code and library bugs need testing.
+
+## Practical mistakes
+
+- ❌ Scatter `SDK_INT` checks through screens.
+- ✅ Expose a semantic policy such as `canScheduleExactReminder()`.
+- ❌ Assume a tablet has telephony because the API exists.
+- ✅ Query features/services and degrade the UX.
+- ❌ Catch every exception and silently hide a feature.
+- ✅ Distinguish unsupported, permission denied, temporary failure, and product policy.
+
+## Exercise
+
+Design a wrapper for biometric sign-in that considers API, hardware, enrollment, lockout, user choice, and server token policy.
+

@@ -1,0 +1,41 @@
+---
+id: compatibility-interview
+title: Compatibility case study and interview preparation
+---
+
+# Compatibility case study and interview preparation
+
+## Case study: target upgrade breaks reminders
+
+After raising target SDK, reminder delivery falls on one OS range and selected OEMs. Do not immediately add a manufacturer workaround. Segment scheduled versus attempted versus shown, exact/inexact need, permission/app-op, notification/channel state, background restriction, app version, OS/OEM, reboot/upgrade, and device clock.
+
+Separate failures: scheduling rejected, alarm delayed, receiver not invoked, background start forbidden, notification denied, or analytics missing. Choose WorkManager for deferrable work, alarms only for justified user-facing timing, and an allowed foreground path for immediate user-visible work. Preserve reminder intent in durable data so platform scheduling can be reconciled.
+
+## Interview questions
+
+1. **Does `compileSdk` change runtime behavior?** It exposes compile-time APIs/tooling; target and OS behavior contracts are separate.
+2. **Is `targetSdk` the maximum OS?** No. Higher OS versions can run the app.
+3. **API check versus capability check?** API check proves availability of a framework symbol; capability checks device/current state. Runtime calls can still fail.
+4. **Why two migration phases?** It separates new-OS all-app changes from target-gated changes and enables earlier compatibility fixes.
+5. **What does desugaring not do?** It does not backport Android framework APIs or guarantee every new JDK API.
+6. **How handle OEM differences?** Capability-first code, defensive boundaries, representative physical tests, cohort telemetry, and temporary owned workarounds.
+7. **Why are permission states not Boolean?** Denied, requestable, permanently denied/policy-controlled, one-time, auto-reset, and feature-disabled require different UX.
+
+## Checklist
+
+- [ ] All-app and target-gated platform changes mapped to owners/tests.
+- [ ] Current production artifact tested on newest OS before target change.
+- [ ] Fresh install, upgrade, restore, process death, and old data covered.
+- [ ] API/capability checks centralized and failures degradable.
+- [ ] Toolchain/dependency compatibility matrix verified.
+- [ ] Release shrinking, manifests, permissions, and native ABIs tested.
+- [ ] Representative OEM/hardware and production cohorts observed.
+- [ ] Storage, notification, permission, and background state transitions tested.
+
+## Exercises
+
+1. Plan a target-SDK upgrade for an app using camera, exact reminders, and shared media.
+2. Design tests for a feature introduced above `minSdk` but absent on some new tablets.
+3. Diagnose why a notification “permission granted” metric disagrees with notifications shown.
+4. Write a deletion plan for a temporary OEM-specific workaround.
+

@@ -1,0 +1,49 @@
+---
+id: sdk-levels
+title: minSdk, targetSdk, and compileSdk
+---
+
+# `minSdk`, `targetSdk`, and `compileSdk`
+
+These values answer different questions.
+
+| Setting | Meaning | Does not mean |
+|---|---|---|
+| `minSdk` | Lowest API level the built app supports installing/running on | Every device at that API has every optional capability |
+| `targetSdk` | Platform behavior contract the app declares it has tested/adopted | Maximum OS version supported |
+| `compileSdk` | APIs available to the compiler and Android resource tooling | New APIs are safe on old devices |
+
+```kotlin
+android {
+    compileSdk = 36
+    defaultConfig {
+        minSdk = 26
+        targetSdk = 36
+    }
+}
+```
+
+An Android 16 device can run an app targeting an older SDK, subject to changes affecting all apps and platform compatibility behavior. Raising `compileSdk` lets code reference newer APIs, but runtime checks or compatibility libraries are still required below the API that introduced them.
+
+## Choosing `minSdk`
+
+Use real active-user/device distribution, security support, dependency requirements, QA cost, feature degradation, revenue/accessibility impact, and engineering capacity. Raising it removes users from future updates; it is a product and security decision, not merely Gradle cleanup.
+
+## Compatibility is a matrix
+
+Test combinations of OS, target behavior, installed app upgrade path, device form/capability, OEM, backend/schema version, locale, and persisted data. A fresh emulator install does not prove an upgrade from a two-year-old database works.
+
+## Practical mistakes
+
+- ❌ “Our `targetSdk` is 35, so Android 36 cannot affect us.”
+- ✅ Review behavior changes applying to all apps on every new OS.
+- ❌ Raise all three SDK values and every dependency in one pull request.
+- ✅ Separate changes when practical so failures are attributable.
+- ❌ Keep an ancient `minSdk` without testing it.
+- ✅ Support what CI/device evidence and incident ownership can defend.
+
+## Source
+
+- [Configure an Android build](https://developer.android.com/build)
+- [Device compatibility overview](https://developer.android.com/guide/practices/compatibility)
+

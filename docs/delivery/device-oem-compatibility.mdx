@@ -1,0 +1,43 @@
+---
+id: device-oem-compatibility
+title: Device, OEM, and capability compatibility
+---
+
+# Device, OEM, and capability compatibility
+
+API level does not describe screen, memory, sensors, codecs, camera behavior, Bluetooth stack, Play services, WebView version, enterprise policy, or OEM power management.
+
+## Risk-based matrix
+
+Choose dimensions from product use:
+
+- min, dominant, and newest OS/target combinations;
+- low-memory/slow-storage and representative flagship devices;
+- phone, tablet, foldable, Automotive/Wear/TV where supported;
+- important OEMs and regions;
+- camera/BLE/NFC/GNSS/media codecs actually used;
+- Google Play services present, absent, outdated, or restricted;
+- accessibility, locale, font scale, dark mode, rotation/multi-window;
+- fresh install, update, restore, offline, low storage, and battery restriction.
+
+Emulators provide deterministic platform coverage; physical labs provide drivers, thermal/power, radio, camera, sensor, and OEM evidence. Production telemetry then finds the long tail. None replaces the others.
+
+## Defensive integration
+
+Treat vendor/hardware calls as fallible boundaries. Time out, permit cancellation, close resources, serialize operations where required, distinguish permanent unsupported from temporary unavailable, and attach device/API/app-version context to privacy-safe diagnostics.
+
+Use remote degradation for a proven bad device/OS combination only with an owner and removal plan. A permanent manufacturer-name `if` is technical debt, not architecture.
+
+## Practical mistakes
+
+- ❌ “Works on Pixel emulator, so Android supports it.”
+- ✅ Test hardware/OEM paths and observe production cohorts.
+- ❌ Filter devices from Play for an optional feature.
+- ✅ Declare optional manifest features and degrade when absent.
+- ❌ Use model-string allowlists as the primary capability check.
+- ✅ Query capabilities and handle runtime failure.
+
+## Exercise
+
+Build the smallest defensible matrix for a BLE medical companion app and explain which dimensions run on every PR, nightly, release candidate, and production monitoring.
+
