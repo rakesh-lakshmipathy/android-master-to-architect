@@ -1,0 +1,72 @@
+---
+id: di-testing-performance
+title: DI testing, graph validation, startup, and leaks
+---
+import Admonition from '@theme/Admonition';
+
+# DI testing, graph validation, startup, and leaks
+
+## Test behavior without a graph when possible
+
+```kotlin
+val vm = CheckoutViewModel(
+    savedStateHandle = SavedStateHandle(),
+    placeOrder = FakePlaceOrder(result = acceptedOrder),
+)
+```
+
+Constructor injection makes unit tests cheap. Use Hilt tests when the test question is wiring, Android integration, qualifiers, replacements, or scopes.
+
+## Replace bindings deliberately
+
+Test modules can uninstall/replace production modules or bind test values. Keep replacements narrow; a giant test graph that silently swaps many dependencies can pass while production wiring is wrong.
+
+Useful graph tests:
+
+- production variants compile all roots
+- each qualifier resolves expected implementation
+- scoped identity is same within scope and different across scope instances
+- optional/multibound plugins are present exactly where intended
+- debug/release/flavor graphs do not accidentally expose test endpoints
+
+## Startup cost is often provider work
+
+Dagger-generated lookup is normally cheap; constructors/provider methods can be expensive. Avoid database opening, disk reads, key generation, SDK initialization, or network work merely because a singleton is requested at startup.
+
+Use lazy/provider only when delayed or repeated creation semantics are understood:
+
+```kotlin
+class Feature @Inject constructor(private val sdk: dagger.Lazy<HeavySdk>) {
+    fun open() = sdk.get().show()
+}
+```
+
+`Lazy` caches once for that injected Lazy; `Provider.get()` may create according to binding scope each call.
+
+## Scope leak scenarios
+
+- singleton holds Activity, View, NavController, or callback
+- ActivityRetained object holds old Activity after rotation
+- flow component remains in Application after logout
+- listener registration outlives component disposal
+- multibound startup task captures feature UI
+
+Memory profiler/LeakCanary finds symptoms; scope design prevents them.
+
+## Build performance
+
+Large generated graphs affect annotation processing and incremental builds. Prefer constructor injection, avoid monolithic modules/components, keep module dependencies acyclic, use supported KSP/tooling where appropriate, and measure build scans rather than guessing.
+
+## Security/configuration
+
+Qualifiers can accidentally wire debug endpoint, logging interceptor, or mock auth into release. Add variant-specific graph tests and release configuration assertions. DI is configuration code and deserves security review.
+
+<Admonition type="warning" title="False confidence">
+A compiling graph proves constructibility, not correct scope, endpoint, thread behavior, privacy, or business semantics. Those require targeted tests and runtime evidence.
+</Admonition>
+
+## Interview exercises
+
+1. Investigate slow startup caused by eager singleton construction.
+2. Write a scope identity test across two Activity instances.
+3. Prevent debug network bindings from entering release.

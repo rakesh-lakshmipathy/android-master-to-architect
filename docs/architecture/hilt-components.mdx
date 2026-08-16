@@ -1,0 +1,75 @@
+---
+id: hilt-components
+title: Hilt components and Android integration
+---
+import Admonition from '@theme/Admonition';
+
+# Hilt components and Android integration
+
+Hilt standardizes Dagger component creation for Android framework lifetimes.
+
+```kotlin
+@HiltAndroidApp
+class App : Application()
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity()
+
+@HiltViewModel
+class OrdersViewModel @Inject constructor(
+    private val orders: OrdersRepository,
+    savedStateHandle: SavedStateHandle,
+) : ViewModel()
+```
+
+## Lifetime map
+
+| Binding scope | Component lifetime | Typical use |
+|---|---|---|
+| `@Singleton` | application process graph | database/client/repository with app state |
+| `@ActivityRetainedScoped` | logical Activity across configuration | state shared by its ViewModels |
+| `@ViewModelScoped` | one ViewModel | state shared within that ViewModel graph |
+| `@ActivityScoped` | one Activity instance | UI-instance coordinator |
+| `@FragmentScoped` | one Fragment instance | Fragment UI helper |
+| `@ServiceScoped` | one Service | service-local state |
+
+`ActivityRetainedComponent` and `ActivityComponent` are not the same: the first survives configuration replacement, the second does not.
+
+## Install modules at the narrowest valid component
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+    @Provides @Singleton
+    fun client(auth: AuthInterceptor): OkHttpClient =
+        OkHttpClient.Builder().addInterceptor(auth).build()
+}
+```
+
+A binding installed in a parent is available to children and kept as long as its scope dictates. Do not install screen-only mutable objects in `SingletonComponent` for convenience.
+
+## Framework entry points
+
+Hilt integrates Application, Activity, Fragment, View, Service, BroadcastReceiver, ViewModel, and supported Workers. Compose content is reached through an `@AndroidEntryPoint` Activity; individual composables do not need field injection.
+
+For unsupported/non-Hilt-created classes, use constructor injection from an injected owner or a carefully defined Hilt entry point. Entry points should expose narrow capabilities, not the whole graph.
+
+## Worker limitation
+
+WorkManager creates Workers with runtime `Context` and `WorkerParameters`; use `@HiltWorker`/assisted parameters and configure `HiltWorkerFactory`. Worker dependencies must come from compatible long-lived components—do not inject Activity-scoped state.
+
+<Admonition type="warning" title="Scope is retention">
+Every scoped binding remains reachable for the component lifetime. Scope only when identity/state/creation cost requires it; Hilt's availability is not a reason to retain everything.
+</Admonition>
+
+## Sources
+
+- [Dependency injection with Hilt](https://developer.android.com/training/dependency-injection/hilt-android)
+- [Hilt and Jetpack integrations](https://developer.android.com/training/dependency-injection/hilt-jetpack)
+
+## Interview exercises
+
+1. Choose scopes for database, screen cache, Activity navigator, and Worker helper.
+2. Explain ActivityRetained versus Activity scope through rotation.
+3. Diagnose why a Worker cannot inject an Activity-scoped object.

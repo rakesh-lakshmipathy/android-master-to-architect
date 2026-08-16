@@ -1,0 +1,80 @@
+---
+id: di-inversion-manual
+title: Dependency inversion and manual DI
+---
+import Admonition from '@theme/Admonition';
+
+# Dependency inversion and manual DI
+
+## Three different ideas
+
+- Dependency inversion: high-level policy depends on abstractions it owns, not volatile mechanisms.
+- Inversion of control: an external owner controls creation/calls.
+- Dependency injection: dependencies arrive from outside, usually through constructors.
+
+Hilt can inject a badly designed dependency. A hand-written composition root can implement dependency inversion well. Tool choice and architecture quality are related but not identical.
+
+```kotlin
+class SyncOrders(
+    private val orders: OrderRepository,
+    private val connectivity: Connectivity,
+    private val clock: Clock,
+) { suspend operator fun invoke(): SyncReport { /* policy */ } }
+```
+
+The class does not construct Retrofit, ask a singleton locator, or read the system clock directly. Dependencies are visible and replaceable.
+
+## Composition root
+
+```kotlin
+class AppContainer(app: Application) {
+    private val client = buildOkHttpClient()
+    private val database = AppDatabase.create(app)
+    private val api = buildOrdersApi(client)
+
+    val orders: OrderRepository = OfflineFirstOrdersRepository(
+        dao = database.ordersDao(),
+        remote = api,
+    )
+
+    fun checkoutFactory(saved: SavedStateHandle) = CheckoutViewModel(
+        saved,
+        PlaceOrder(orders, SystemClock),
+    )
+}
+```
+
+Creation is centralized; application classes only consume dependencies. For small apps this is transparent and sufficient.
+
+## Flow-scoped containers
+
+Login/checkout may need state shared only for that flow. Create a child container when flow starts and discard it when the flow ends. If kept in `Application`, the supposedly short-lived graph leaks state across sessions.
+
+## Service locator is not injection
+
+```kotlin
+class CheckoutViewModel : ViewModel() {
+    private val repo = GlobalServices.get<OrderRepository>() // hidden dependency
+}
+```
+
+This defers errors to runtime, hides requirements, and creates global test ordering. A container is acceptable at the composition root; pulling from it throughout business code is service location.
+
+## When to automate
+
+Manual DI becomes costly with many constructors, Android framework entry points, multiple scopes, qualifiers, and feature graphs. Dagger/Hilt generates and validates wiring. It does not remove the need to design lifetimes.
+
+<Admonition type="tip" title="Architect takeaway">
+First design visible constructor contracts and ownership. Adopt a DI framework when graph automation produces more value than its build/tooling complexity.
+</Admonition>
+
+## Sources
+
+- [Dependency injection in Android](https://developer.android.com/training/dependency-injection)
+- [Manual dependency injection](https://developer.android.com/training/dependency-injection/manual)
+
+## Exercises
+
+1. Replace a global locator in a ViewModel with constructor injection.
+2. Design an app container and per-login child container.
+3. Explain DI versus dependency inversion using one counterexample.

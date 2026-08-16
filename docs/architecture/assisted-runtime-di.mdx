@@ -1,0 +1,63 @@
+---
+id: assisted-runtime-di
+title: Assisted injection and runtime parameters
+---
+import Admonition from '@theme/Admonition';
+
+# Assisted injection and runtime parameters
+
+DI graphs provide known dependencies. Some values exist only at runtime: Worker parameters, navigation IDs, user-selected files, or a server-created session token.
+
+## Assisted factory
+
+```kotlin
+class ReportGenerator @AssistedInject constructor(
+    private val repository: ReportsRepository,
+    private val formatter: ReportFormatter,
+    @Assisted private val reportId: ReportId,
+) {
+    @AssistedFactory
+    interface Factory {
+        fun create(reportId: ReportId): ReportGenerator
+    }
+}
+```
+
+The graph injects stable services; caller supplies `reportId`. This preserves visible runtime input without placing it in a global mutable holder.
+
+## When not to use assisted injection
+
+- ViewModel navigation arguments often arrive naturally through `SavedStateHandle`.
+- Plain data objects should usually be constructed directly.
+- If runtime value is durable application truth, repository should own/query it rather than pushing stale copies through factories.
+- If every object has many assisted values, boundary design may be leaking presentation details inward.
+
+## Factory identity and validation
+
+Validate runtime input at the boundary:
+
+```kotlin
+@JvmInline value class ReportId private constructor(val value: String) {
+    companion object { fun parse(raw: String): ReportId? = /* validate */ }
+}
+```
+
+A factory should not accept an unvalidated arbitrary string when the constructed service requires a valid domain identifier.
+
+## Worker example mental model
+
+`Context` and `WorkerParameters` are supplied by WorkManager (assisted). Repository/client dependencies come from Hilt. InputData carries small serializable work identifiers, not large object graphs.
+
+## Testing
+
+Test the class directly with fake injected dependencies and explicit assisted values. Test factory wiring once; do not route every unit test through the full Hilt graph.
+
+<Admonition type="tip" title="Rule">
+Runtime input describes this operation instance. Injected dependency describes how operations are performed. Keep that distinction visible.
+</Admonition>
+
+## Interview exercises
+
+1. Decide how a product ID reaches a ViewModel, Worker, and short-lived formatter.
+2. Replace a global “currentReportId” with assisted construction.
+3. Explain why large objects should not travel through Worker InputData.

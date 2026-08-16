@@ -1,0 +1,60 @@
+---
+id: di-interview
+title: Dependency injection interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Dependency injection interview lab
+
+## Rapid answers
+
+<details><summary><strong>@Binds versus @Provides?</strong></summary><p>Use @Binds for mapping an injectable implementation to an abstraction without executing construction logic. Use @Provides when calling a builder/factory, creating third-party types, or applying custom construction.</p></details>
+
+<details><summary><strong>Does @Singleton mean one forever?</strong></summary><p>It means one instance per SingletonComponent/component instance. A new graph creates another; process death creates another.</p></details>
+
+<details><summary><strong>@ViewModelScoped versus @ActivityRetainedScoped?</strong></summary><p>ViewModelScoped shares within one ViewModel component. ActivityRetainedScoped can be shared across multiple ViewModels belonging to the same retained Activity lifetime.</p></details>
+
+## Scenario: user data survives logout
+
+Cause: user-specific repository/session was application-scoped or a child container was never discarded. Create explicit authenticated-session lifetime, clear durable sensitive caches by policy, and ensure consumers cannot retain old references.
+
+## Scenario: two OkHttp clients resolve ambiguously
+
+Add semantic qualifiers at provider and consumer sites. Audit transitive consumers; do not “fix” by deleting one binding or using fragile string names.
+
+## Scenario: startup regressed after Hilt migration
+
+Generated wiring is unlikely the whole cause. Trace provider/constructor work, inspect eager roots, delay optional SDK initialization, and compare release Macrobenchmark/startup traces before and after.
+
+## System design: white-label commerce
+
+- base app graph: database, network, auth/session owner
+- product flavor qualifiers: endpoint/branding/payment capabilities
+- feature multibindings: payment handlers and validators
+- Activity/graph/ViewModel scopes: UI flow state only
+- Workers: Hilt worker factory with stable IDs
+- tests: production variant graph compilation, qualifier assertions, plugin presence, scope identity, release endpoint safeguards
+- observability: record plugin failures and graph-config version without secrets
+
+## Review checklist
+
+- [ ] Constructors expose real dependencies.
+- [ ] Composition root is the only graph-access boundary.
+- [ ] Scope matches ownership and cleanup lifetime.
+- [ ] Qualifiers express semantics.
+- [ ] Assisted values are true runtime inputs.
+- [ ] Multibinding has ordering/failure/discovery policy.
+- [ ] Unit tests bypass full graph where possible.
+- [ ] Variant and integration tests validate production wiring.
+- [ ] Provider work is measured for startup.
+- [ ] Long-lived bindings do not retain UI objects.
+
+<Admonition type="tip" title="Interview framing">
+Start with dependency visibility and lifetimes. Then explain graph key, binding source, scope identity, runtime inputs, replacement strategy, failure modes, and measured cost.
+</Admonition>
+
+## Exercises
+
+1. Draw Hilt component ownership for checkout plus background retry.
+2. Refactor a locator-based legacy feature incrementally.
+3. Design a DI test pyramid for a multi-flavor app.

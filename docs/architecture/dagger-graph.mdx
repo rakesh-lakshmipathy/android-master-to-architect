@@ -1,0 +1,81 @@
+---
+id: dagger-graph
+title: Dagger graph, bindings, qualifiers, and scopes
+---
+import Admonition from '@theme/Admonition';
+
+# Dagger graph, bindings, qualifiers, and scopes
+
+Dagger generates the object-creation code a manual container would contain and validates the graph at compile time.
+
+## Prefer constructor injection
+
+```kotlin
+class OrdersRepositoryImpl @Inject constructor(
+    private val local: OrdersDao,
+    private val remote: OrdersApi,
+) : OrdersRepository
+
+@Module
+interface OrdersModule {
+    @Binds fun bindOrdersRepository(impl: OrdersRepositoryImpl): OrdersRepository
+}
+```
+
+Use `@Binds` for an implementation already constructible by Dagger. Use `@Provides` for third-party builders, conditional construction, or factory methods you do not own.
+
+```kotlin
+@Provides
+fun provideOrdersApi(client: OkHttpClient): OrdersApi =
+    Retrofit.Builder().client(client).baseUrl(BASE_URL).build().create()
+```
+
+## Qualifiers distinguish meaning
+
+```kotlin
+@Qualifier annotation class Authenticated
+@Qualifier annotation class Public
+
+class ApiClients @Inject constructor(
+    @Authenticated val privateClient: OkHttpClient,
+    @Public val publicClient: OkHttpClient,
+)
+```
+
+Qualify both binding and injection site. Prefer semantic names; `@Named("client2")` is typo-prone and does not explain policy.
+
+## Scope means one per component instance
+
+`@Singleton` does not mean one JVM object independent of graph. It means one instance per singleton-scoped component instance. Tests can build another component and get another object.
+
+Scope stateful, synchronized, or measured-expensive objects whose lifetime matches the component. Unscoped objects are created as needed and are often correct.
+
+❌ Singleton repository retains Activity callback.
+
+✅ Application-scoped repository depends only on application-safe dependencies and exposes observable state.
+
+## Components and subcomponents
+
+Parent bindings are visible to a child; child bindings are not visible upward. A login subcomponent can use app network/database bindings while owning login-flow objects. Its scope must be different from ancestor scope.
+
+Component dependencies expose selected parent APIs rather than inheriting the graph; useful across Gradle/dynamic feature boundaries but more explicit wiring is required.
+
+## Graph errors teach contracts
+
+- missing binding: graph cannot construct a required type
+- duplicate binding: two unqualified providers claim same key
+- scope mismatch: shorter/longer lifetime is inconsistent
+- dependency cycle: creation requires itself
+
+Do not silence errors with broad modules or global providers; fix ownership/identity.
+
+## Sources
+
+- [Dagger basics](https://developer.android.com/training/dependency-injection/dagger-basics)
+- [Using Dagger in Android apps](https://developer.android.com/training/dependency-injection/dagger-android)
+
+## Interview exercises
+
+1. Choose `@Inject`, `@Binds`, or `@Provides` for five dependencies.
+2. Explain why two component instances yield two “singletons.”
+3. Fix duplicate authenticated/public client bindings.

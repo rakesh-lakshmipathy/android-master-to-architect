@@ -1,0 +1,65 @@
+---
+id: di-multibinding
+title: Dagger multibinding and plugin architectures
+---
+import Admonition from '@theme/Admonition';
+
+# Dagger multibinding and plugin architectures
+
+Multibindings assemble independently contributed implementations into `Set<T>` or `Map<K, V>`.
+
+```kotlin
+interface AnalyticsEnricher { fun enrich(event: Event): Event }
+
+@Module
+interface AnalyticsContributions {
+    @Binds @IntoSet
+    fun deviceEnricher(impl: DeviceEnricher): AnalyticsEnricher
+
+    @Binds @IntoSet
+    fun sessionEnricher(impl: SessionEnricher): AnalyticsEnricher
+}
+
+class AnalyticsPipeline @Inject constructor(
+    private val enrichers: Set<@JvmSuppressWildcards AnalyticsEnricher>,
+)
+```
+
+Feature modules can contribute without editing a central list. This supports validators, serializers, navigation destinations, startup tasks, debug tools, and command handlers.
+
+## Map binding for keyed dispatch
+
+```kotlin
+@MapKey annotation class PaymentTypeKey(val value: PaymentType)
+
+@Binds @IntoMap @PaymentTypeKey(PaymentType.Card)
+fun card(handler: CardPaymentHandler): PaymentHandler
+```
+
+Map keys must be unique at compile time. Lookup failure still needs a product policy for unsupported server-configured types.
+
+## Ordering is not guaranteed
+
+A Set is not a workflow sequence. If order matters, contribute objects with explicit priority and sort, or model a chain centrally. Equal priorities need deterministic tie-breaking.
+
+## Plugin failure isolation
+
+One analytics enricher should not prevent core event delivery unless contract says so. Decide exception isolation, timeout, threading, observability, and whether plugins may mutate shared objects. Prefer immutable input/output.
+
+## Avoid hidden magic
+
+Multibinding can make “who runs?” difficult to discover. Provide documentation/graph tests, meaningful map keys, ownership rules, and duplicate-policy checks. For three fixed handlers in one module, an explicit list may be clearer.
+
+## Dynamic features
+
+Compile-time Dagger graph cannot automatically know code absent from the base build. Dynamic feature integration may need component dependencies/entry points and runtime registration; design availability and uninstall/update behavior explicitly.
+
+<Admonition type="tip" title="Architect takeaway">
+Use multibinding when independent contributors are a real organizational extension point. Do not replace understandable control flow with DI-driven discovery by default.
+</Admonition>
+
+## Interview exercises
+
+1. Design an ordered validation plugin pipeline.
+2. Isolate a crashing analytics plugin.
+3. Choose explicit list versus Set/Map multibinding for four scenarios.
