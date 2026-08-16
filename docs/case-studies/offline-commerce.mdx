@@ -1,0 +1,41 @@
+---
+id: offline-commerce
+title: Case study — offline-first commerce
+---
+
+# Case study — offline-first commerce
+
+## Requirements and invariants
+
+Browse cached catalog/cart offline; queue cart edits; order requires current server price/inventory/payment; intent survives restart; no duplicate charge/order. Catalog freshness target and cart conflict UX must be explicit.
+
+```text
+Compose -> ViewModel -> Catalog/Cart repositories -> Room
+                                      |              ^
+                                      v              |
+                             Sync coordinator -> REST APIs
+Checkout command -> Orders API -> inventory/payment/order DB
+```
+
+Room is the UI source of truth for catalog pages, cart, sync metadata and pending commands. Paging `RemoteMediator` transactionally stores pages/remote keys. Cart mutation carries operation ID, item version and desired change. Server owns price, inventory, promotions and authorization.
+
+At checkout, client submits idempotency key and cart snapshot/version. Server returns `accepted`, `requires_review` (price/stock changed), or durable order state. Never queue a raw card credential. Payment state is reconciled server-side after timeout; “client timed out” does not mean “payment failed.”
+
+## Conflicts and failure
+
+Product removal, quantity limit and cross-device cart edits require domain policy. Show actionable conflicts instead of silent last-write-wins. Backoff/retry only retry-safe failures; preserve commands across process death; partition/clear private data on account switch.
+
+## Security, testing, operations
+
+Server authorizes every cart/order, validates totals and idempotency. Protect tokens, redact logs, minimize cached personal data. Test Room migrations, paging refresh, 409 conflicts, duplicate requests, payment timeout, clock skew, logout, disk-full and old clients. Observe cache hit/staleness, queue age, conflict rate, duplicate-prevention, checkout latency/funnel and payment/order mismatch.
+
+## Scale and trade-offs
+
+CDN/search/catalog services scale reads; partition order writes and keep payment/order workflow auditable. Local-first improves latency/resilience but adds schema, conflict and reconciliation complexity. Full offline checkout is intentionally rejected because payment/inventory authority is online.
+
+## Interview follow-ups
+
+- Why is push not catalog truth?
+- How does an order resume after app kill?
+- What can rollback do after a new command schema is written?
+

@@ -1,0 +1,35 @@
+---
+id: secure-banking
+title: Case study — secure banking application
+---
+
+# Case study — secure banking application
+
+## Requirements and trust
+
+Secure sign-in, account/transaction view, beneficiary and transfer with step-up authorization, device/session management, offline read of minimal safe data, fraud/risk controls, accessibility and auditable outcomes. Server is authoritative for identity, balance, authorization and transfer state.
+
+```text
+UI -> domain policy -> repositories -> encrypted/minimized local cache
+                    -> API gateway -> identity/risk/accounts/payments
+secure credential/key -> Android Keystore/biometric-gated operation
+```
+
+Use standards-based auth with short-lived access token, protected refresh/session mechanism, rotation/revocation and one serialized refresh. Biometrics unlock a local cryptographic/session action; they do not prove server authorization forever. Device integrity/risk signals inform policy but are not sole authorization.
+
+Transfer uses server quote/challenge, beneficiary/amount/currency, idempotency key and explicit confirmation bound to transaction details. Timeout produces `UNKNOWN/PENDING`, followed by status reconciliation—never blind retry with a new key. Display server-confirmed receipt.
+
+## Data and failure
+
+Cache minimal masked accounts/recent activity with account-scoped encryption and freshness; no offline money movement. Clear/protect on logout, work-profile removal, key invalidation and backup/restore. Handle clock error, rooted/tampered signal, accessibility, SIM/device/account recovery and lost authenticator through risk-based server flows.
+
+## Security/testing/operations
+
+Threat-model exported components/deep links, overlay/screenshot policy, clipboard, logs, TLS/network config, WebView, supply chain and social engineering. Audit server events with actor/action/target/result/correlation—separate from analytics and never include secrets.
+
+Test auth expiry races, duplicate transfer, process death at confirmation, key invalidation, network interception, old versions, accessibility and fraud-service outage. Observe auth/step-up outcomes, token refresh storms, transfer state latency, duplicate prevention, crash/ANR, risk challenges and reconciliation discrepancies without leaking financial data.
+
+## Trade-offs
+
+More friction may reduce fraud but harm accessibility/conversion; risk-based step-up balances. Certificate pinning can reduce interception paths but creates rotation/outage recovery burden. Make choices through explicit threat/risk analysis.
+

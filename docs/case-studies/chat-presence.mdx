@@ -1,0 +1,37 @@
+---
+id: chat-presence
+title: Case study — real-time chat and presence
+---
+
+# Case study — real-time chat and presence
+
+## Requirements
+
+One-to-one/group messages, offline send, ordered conversation view, delivery/read states, attachments, push fallback, multi-device sync, presence/typing with bounded freshness, abuse controls and optional encryption model.
+
+```text
+UI <- Room(messages, conversations, outbox)
+         ^                 |
+         |                 v
+WebSocket events <- sync/message API -> durable message log
+push = wake/invalidation       -> fan-out/presence/media services
+```
+
+Client creates `clientMessageId`, persists outbox/message atomically, renders `SENDING`, and sends at least once. Server deduplicates per sender/id, assigns conversation sequence/server time and returns authoritative message ID. Client reconciles without inserting a duplicate. Gaps trigger paged sync from last sequence/cursor.
+
+Ordering is per conversation/server sequence, not device clock. Global total ordering is unnecessary. Edits/deletes are versioned events/tombstones. Attachments use pre-signed upload, checksum, size/type limits, scanning and a message reference only after accepted policy.
+
+## Presence
+
+Presence is ephemeral/approximate: heartbeat/lease with `online`, `lastSeen`, privacy and fan-out limits. Typing expires quickly and is never persisted as truth. Push may be delayed/duplicated and contains minimal sensitive content; opening app fetches server truth.
+
+## Security/testing/observability
+
+Authorize membership on send/read/media; rate-limit spam; model block/report; secure notification previews. End-to-end encryption changes key/device verification, backup, search, moderation and multi-device recovery—state the trade-off.
+
+Test reconnect/gaps, duplicate/out-of-order events, simultaneous edits, huge groups, attachment failure, notification races, logout and database migration. Observe send-to-ack/delivery latency, outbox age/failure, socket reconnect, gap recovery, push-to-sync, fan-out lag and abuse signals with bounded labels.
+
+## Scale trade-offs
+
+Partition by conversation for ordered append; large groups may use pull/inbox hybrid rather than per-recipient write fan-out. WebSockets improve latency but cost connection state/battery; fallback sync preserves correctness.
+

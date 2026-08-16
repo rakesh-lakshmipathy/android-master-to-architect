@@ -1,0 +1,34 @@
+---
+id: ride-tracking
+title: Case study — ride tracking with location and maps
+---
+
+# Case study — ride tracking with location and maps
+
+## Requirements
+
+Request/match ride, driver location/ETA, trip state, navigation handoff, background tracking during active trip, poor-network recovery, battery/privacy safety and emergency/support flows.
+
+```text
+Rider/driver apps -> trip API/state store
+Driver location -> location ingest -> stream/latest-location store
+                                  -> ETA/map matching
+Rider updates <- WebSocket/push + authoritative trip refresh
+```
+
+Trip is a server state machine (`REQUESTED`, `MATCHED`, `ARRIVED`, `IN_PROGRESS`, `COMPLETED`, `CANCELED`) with allowed transitions/version. Commands carry idempotency and expected version. UI stores current trip/last route locally; server resolves conflicts.
+
+Driver samples based on trip phase, movement/accuracy and power. Batch/compress under poor network with sequence and monotonic capture time; server rejects impossible/stale points and deduplicates. Never infer trustworthy fare/trip completion solely from client GPS. Rider interpolation smooths display but labels/stops stale movement.
+
+## Android and privacy
+
+Ask permission in context and degrade when approximate/background unavailable. Active background tracking must follow current foreground-service/user-visible requirements and stop promptly after trip. Minimize retention/precision/access, separate support/audit needs and protect notification/deep-link data.
+
+## Testing/observability
+
+Replay recorded/synthetic routes: tunnels, jumps, mock/stale, clock change, app kill, reboot, permission revoke, low battery, multi-device and canceled trip. Test state races and duplicate commands. Observe ingest age, accuracy, dropped/batched points, ETA error, socket gaps, trip transition failures, power and privacy-policy events.
+
+## Scaling/trade-offs
+
+Partition location streams by region/driver; latest-location store differs from historical analytics. High frequency improves smoothness but costs battery/network/backend/privacy. Adapt sampling and send only what the user journey needs.
+

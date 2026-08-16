@@ -1,0 +1,46 @@
+---
+id: system-design-method
+title: Mobile system-design method
+---
+
+# Mobile system-design method
+
+An interview design is a reasoned conversation, not a diagram dump.
+
+## Repeatable sequence
+
+1. Clarify users, top journeys, scale, platforms, offline expectation and non-goals.
+2. State security/data/business invariants.
+3. Quantify quality attributes: latency, freshness, availability, durability, battery, storage and cost.
+4. Draw client, APIs/services, durable stores, streams/push and third parties.
+5. Walk one write and one read, including retries, duplicates, races and process death.
+6. Explain local source of truth, paging/cache, sync/conflict and account boundaries.
+7. Cover authorization, privacy, abuse, encryption/key/session recovery.
+8. Add testing, observability, staged rollout and incident controls.
+9. Identify bottlenecks/evolution and state trade-offs.
+
+```text
+UI state <- repository <- local source of truth
+                       <- sync/API <- authoritative server
+durable user intent -> idempotent command -> reconciliation
+```
+
+Avoid claiming exactly-once delivery across distributed/mobile boundaries. Use at-least-once attempts plus idempotent server processing, stable IDs, deduplication and reconciliation. Push is usually an invalidation/wake hint—not the source of truth.
+
+## Estimation
+
+Use rough math only when it changes architecture: daily active users × actions/session, concurrent connections, media bytes/day, cache/device, event fan-out, retention and peak multiplier. State assumptions and revise when challenged.
+
+## Interview communication
+
+Start simple, label authority/ownership, narrate failures, and offer deeper branches. Ask whether the interviewer wants client depth, backend scaling or security next. End with unresolved risks and what evidence/POC you would gather.
+
+## Practical mistakes
+
+- ❌ Choose Kafka/WebSockets/Room before requirements.
+- ✅ derive mechanisms from delivery, freshness and durability needs.
+- ❌ describe only online happy path.
+- ✅ walk offline, retry, duplication, stale data, logout and upgrade.
+- ❌ optimize hypothetical billion-user scale while ignoring data loss.
+- ✅ protect invariants first and evolve measured bottlenecks.
+

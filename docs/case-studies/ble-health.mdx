@@ -1,0 +1,37 @@
+---
+id: ble-health
+title: Case study — BLE-connected health device
+---
+
+# Case study — BLE-connected health device
+
+## Requirements and safety
+
+Discover/pair approved device, receive measurements, offline history, reconnect/sync, firmware update, multi-user/device isolation, consent/privacy and clinically honest status. Decide whether product is wellness or regulated medical; claims/control evidence differ.
+
+```text
+UI <- device/measurement repositories <- encrypted Room
+                   |
+             BLE session state machine
+ scan -> connect -> discover -> authenticate -> subscribe/sync
+measurements -> validated domain -> server sync/clinician APIs
+```
+
+BLE state is explicit and serialized; callbacks are not business state. Verify device identity/protocol/version, service/characteristic and application-layer authentication where required. Parse untrusted bytes with lengths/ranges/checksum/sequence; persist raw data only if justified and protected.
+
+Measurements carry device ID, sequence, device capture time, receive time, unit, quality and protocol version. Deduplicate by stable device sequence; detect gaps and request history. Never silently reinterpret units/time zones. Clock sync and DST need a documented policy.
+
+## Android/lifecycle
+
+Permissions vary by platform/use; request in context. Background/long-lived connection must use allowed user-visible mechanisms and realistic OEM/power behavior. Reconnect with bounded backoff/jitter; distinguish unsupported, permission, radio off, out-of-range, auth and protocol failure.
+
+Firmware update is a resumable state machine with signed firmware, compatibility, battery precondition, integrity, recovery/rollback supported by device, and no concurrent measurement operation.
+
+## Testing/operations
+
+Use protocol simulator plus physical OEM/device/firmware matrix. Inject malformed/truncated packets, duplicates/gaps, disconnect each state, process kill, permission revoke, Bluetooth toggle, low battery and failed firmware. Observe connection phase latency/failure, disconnect/retry, packet gaps/invalids, clock drift, sync backlog and firmware outcome—without exposing health data.
+
+## Trade-offs
+
+Continuous connection improves freshness but costs battery/reliability complexity. Raw retention helps investigation but increases privacy/storage/regulatory risk. Define needs and retention explicitly.
+

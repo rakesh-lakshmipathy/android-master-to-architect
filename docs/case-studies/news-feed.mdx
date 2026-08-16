@@ -1,0 +1,33 @@
+---
+id: news-feed
+title: Case study — large news feed with Paging
+---
+
+# Case study — large news feed with Paging
+
+## Requirements
+
+Personalized/topical feed, fast cached open, pagination/refresh, offline reading, media, bookmarks, ranking freshness, insertion/removal, ads/content policy and accessible adaptive UI.
+
+```text
+Compose Lazy list <- PagingSource(Room items/feed entries)
+                            ^
+                            |
+                    RemoteMediator <-> Feed API/cursor
+Article details/bookmarks -> repositories/local source of truth
+```
+
+Separate article entity from feed-entry rank/reason/cursor metadata. One article may occur in multiple feeds. `RemoteMediator` transactionally stores page and remote keys; refresh policy considers age, user action and invalidation. Opaque server cursors avoid client offset errors when ranking changes.
+
+Stable item IDs prevent wrong UI state. Do not use list position as identity. Deduplicate by content/entry contract, preserve scroll anchor across refresh, model refresh versus append errors separately and cache media with bounded quota.
+
+Offline read uses Room truth and displays freshness. Bookmark/action commands are idempotent and sync later. Ranking/exposure analytics fire when meaningfully visible, deduplicated per contract—not on every recomposition/bind. Server validates ad/content eligibility.
+
+## Failure/testing/operations
+
+Test empty/duplicate/overlapping/reordered pages, cursor expiry, deleted article, refresh during append, process death, huge DB, low storage, offline bookmark, account switch, font scale and fast scroll/jank. Observe time-to-content, cache hit/age, page latency/error, duplicate/gap rate, DB/size, image failures, slow frames and exposure data quality.
+
+## Scale/trade-offs
+
+Precomputed feeds/cursors improve read latency at storage/fan-out cost; fan-out-on-read improves flexibility at latency/compute cost. Hybrid by user activity. Aggressive prefetch improves smoothness but costs data/battery/backend; tune from evidence.
+

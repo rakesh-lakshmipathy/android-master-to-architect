@@ -1,0 +1,39 @@
+---
+id: super-app
+title: Case study — multi-module super-app
+---
+
+# Case study — multi-module super-app
+
+## Requirements
+
+Many independently owned features, common identity/payments/design/analytics, global navigation/deep links, separate release velocities, bounded startup/binary/build cost, offline behavior, policy and incident isolation.
+
+```text
+app shell/composition
+ ├─ feature API + implementation modules (domain teams)
+ ├─ domain data API/impl
+ └─ platform products: identity, navigation, design, sync,
+                       observability, build/release, experimentation
+```
+
+Features do not import each other's implementations. App shell mediates destination contracts using stable IDs. API modules expose minimal semantics; implementations/data remain internal. Enforce graph rules, API compatibility and ownership in CI. Dynamic delivery is a distribution decision, not the definition of a feature module; handle install/unavailable/failure state.
+
+One identity layer owns account/session/refresh/logout. Payment and sensitive actions remain server-authorized. Typed configuration separates operational flags, experiments, entitlement and managed policy. Shared offline platform owns scheduling/idempotency/quota; each domain owns conflict semantics.
+
+## Team/release architecture
+
+Domain teams own feature reliability and deprecation; platform teams run paved roads as products. Risk-tiered releases, feature flags and backend compatibility allow staged exposure, but installed clients require additive contracts. Budget startup, binary, build, memory and release health with owned exceptions.
+
+## Failure/testing/operations
+
+Test contract/provider compatibility, app-shell navigation, login/logout/account switch, startup initializer inventory, feature absence/install, config combinations, dependency cycles, release shrinking and cross-feature journeys. Observe per-feature crashes/ANRs/latency, startup contribution, binary/build delta, API errors, flag snapshot and ownership routing.
+
+## Trade-offs
+
+More modules/contracts improve autonomy only when boundaries match ownership/change; excessive granularity adds Gradle, DI, API and coordination cost. Central platform consistency can become monopoly/bottleneck; federate decisions and measure user-team outcomes.
+
+## Interview exercise
+
+Grow from 3 to 20 teams. Identify the first seams, platform capabilities, contracts, budgets and migration order; explain what you deliberately leave in the app module.
+

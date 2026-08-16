@@ -1,0 +1,34 @@
+---
+id: media-streaming
+title: Case study — media streaming and offline downloads
+---
+
+# Case study — media streaming and offline downloads
+
+## Requirements
+
+Browse/search, adaptive playback, queue/resume across devices, background/lockscreen/car controls, subtitles/accessibility, DRM/entitlements, offline downloads, network/storage policy and analytics.
+
+```text
+Catalog API/CDN -> metadata/cache
+Playback URL/license -> media player/cache -> MediaSession
+Download request -> durable manager -> encrypted/DRM-managed files
+progress -> server sync (versioned)
+```
+
+Use Media3/player service and MediaSession boundary; UI observes playback state rather than owning the player. CDN manifests/segments support adaptive bitrate. Tokenized URLs/licenses are short-lived and server entitlement is authoritative.
+
+Download state is durable (`QUEUED`, `DOWNLOADING`, `PAUSED`, `COMPLETED`, `EXPIRED`, `FAILED`) with media/version/quality, bytes/checksum, license expiry and account. Resume ranges only when server/object identity supports it. Reconcile disk files with DB after crash; use quota/LRU while protecting active/user-pinned content.
+
+## Failure/corners
+
+Handle audio focus, noisy route, Bluetooth disconnect, call, process kill, network switch, insufficient storage, corrupted segment, expired license, account switch, logout, changed media and multi-device progress conflict. Never report completed until integrity/license checks pass.
+
+## Security/testing/operations
+
+DRM reduces casual copying but cannot make a hostile client trusted. Protect licenses/tokens, authorize media, avoid sensitive URL logs and clear account content by policy. Test variable bandwidth, CDN errors, seeking, long playback, background restrictions, car controls, subtitles and download restart. Observe startup/rebuffer, bitrate, playback errors, CDN/license latency, download completion/corruption, storage and battery by bounded cohorts.
+
+## Trade-offs
+
+Larger buffer reduces rebuffers but increases startup/data/memory. High-quality offline media costs storage and download. Cross-device progress needs conflict rule (furthest meaningful position, explicit reset, version/time) rather than raw last-write-wins.
+
