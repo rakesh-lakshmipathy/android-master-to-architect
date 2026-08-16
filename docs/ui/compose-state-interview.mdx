@@ -1,0 +1,72 @@
+---
+id: compose-state-interview
+title: Compose state and side-effects interview scenarios
+---
+import Admonition from '@theme/Admonition';
+
+# Compose state and side-effects interview scenarios
+
+## Rapid answers
+
+<details><summary><strong>remember versus rememberSaveable?</strong></summary><p><code>remember</code> survives recomposition at the same composition identity. <code>rememberSaveable</code> additionally saves supported small UI state for recreation through saved instance state.</p></details>
+
+<details><summary><strong>ViewModel versus rememberSaveable?</strong></summary><p>A ViewModel owns screen/business state across configuration changes. rememberSaveable owns small UI state in the Composition. ViewModel alone does not survive process death; SavedStateHandle can retain minimal reconstruction inputs.</p></details>
+
+<details><summary><strong>LaunchedEffect(Unit) means once?</strong></summary><p>Once for that effect's current composition lifetime. If the call leaves and re-enters Composition it starts again.</p></details>
+
+<details><summary><strong>derivedStateOf versus remember(key)?</strong></summary><p>remember caches a calculation until keys change. derivedStateOf observes snapshot reads and only invalidates consumers when the derived result changes.</p></details>
+
+## Scenario: search fires too many requests
+
+❌ Calling repository search from composition repeats work.
+
+✅ Send query events to ViewModel and debounce/cancel in a Flow pipeline, or use a correctly keyed UI effect for UI-scoped work. Repository results become `UiState`. Decide whether the query must survive process restoration.
+
+## Scenario: snackbar appears twice after rotation
+
+Cause candidates include replayed event, two active collectors, or state that was not acknowledged. Specify delivery semantics, keep one lifecycle-scoped collector, and model important completion as acknowledged state rather than a fire-and-forget event.
+
+## Scenario: mutable list does not update
+
+`remember { mutableListOf() }` is not observable snapshot state. Use immutable list replacement inside `MutableState`, `SnapshotStateList`, or preferably a ViewModel `StateFlow` with immutable UI state.
+
+## Scenario: effect uses old callback
+
+If callback changes should not restart the long-lived effect, wrap it with `rememberUpdatedState`. If the changed value defines a new operation, make it an effect key.
+
+## Scenario: saving full API response
+
+Reject it. Bundles are for small reconstruction inputs. Save the entity/query ID, reload from repository/cache, and show loading/error states. Persist user-critical drafts in durable storage.
+
+## Architect design exercise
+
+Design a checkout screen that survives rotation and process death:
+
+1. Durable cart/order truth: Room/server through repository.
+2. Business screen state and payment operation: ViewModel/use case.
+3. Selected address ID and promo input: SavedStateHandle if needed for reconstruction.
+4. Password visibility and focus: local saveable/ephemeral UI state.
+5. Payment completion: durable order status, not only a transient navigation event.
+6. Navigation: derived from acknowledged completion with duplicate protection.
+7. Background retry: WorkManager/data layer if it must outlive the screen.
+
+## Review checklist
+
+- [ ] Every mutable value has one clear owner.
+- [ ] State flows down; intent events flow up.
+- [ ] Composable bodies do not start uncontrolled work.
+- [ ] Effect keys match cancellation/restart identity.
+- [ ] Saved state contains small reconstruction inputs only.
+- [ ] Flow collection is lifecycle-aware on Android.
+- [ ] Transient-event loss/replay semantics are documented.
+- [ ] Stability changes are measured and truthful.
+
+<Admonition type="tip" title="Interview framing">
+Do not merely name an API. State the lifetime, source of truth, cancellation behavior, restoration requirement, and delivery guarantee. That is the architect-level answer.
+</Admonition>
+
+## Exercises
+
+1. Whiteboard state ownership for chat compose, upload progress, drafts, and snackbar errors.
+2. Write tests for effect restart when a key changes.
+3. Explain recovery after the OS kills checkout in the background.

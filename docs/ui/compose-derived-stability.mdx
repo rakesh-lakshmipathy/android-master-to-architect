@@ -1,0 +1,103 @@
+---
+id: compose-derived-stability
+title: Snapshot state, derivedStateOf, and stability
+---
+import Admonition from '@theme/Admonition';
+
+# Snapshot state, `derivedStateOf`, and stability
+
+## Observable state must be observable
+
+Compose tracks reads of snapshot state. Changing a plain mutable collection is invisible:
+
+```kotlin
+// ❌ No observable assignment; UI may remain stale.
+val names = remember { mutableListOf<String>() }
+names.add("Rakesh")
+
+// ✅ Replace immutable value in observable state.
+var names by remember { mutableStateOf(emptyList<String>()) }
+names = names + "Rakesh"
+```
+
+Alternatively use `mutableStateListOf`, but expose mutation carefully so one owner preserves invariants.
+
+## `derivedStateOf` is a frequency gate
+
+Use it when inputs change more frequently than the UI result needs to change.
+
+```kotlin
+val listState = rememberLazyListState()
+val showScrollToTop by remember {
+    derivedStateOf { listState.firstVisibleItemIndex > 0 }
+}
+```
+
+Scroll offset changes many times; the Boolean changes only around the boundary. This can reduce recompositions.
+
+Do not use it for ordinary cheap combination:
+
+```kotlin
+// ❌ needless machinery
+val fullName by remember { derivedStateOf { "$first $last" } }
+
+// ✅ direct and clear
+val fullName = "$first $last"
+```
+
+## Remember keys versus derived state
+
+```kotlin
+val formatter = remember(locale) { PriceFormatter(locale) }
+val formatted = formatter.format(price)
+```
+
+`remember(locale)` caches creation and recreates when the key changes. `derivedStateOf` observes snapshot reads and suppresses downstream invalidation while its result remains equal. They are not synonyms.
+
+## Stability is a contract
+
+A stable parameter allows Compose to determine whether it changed. Immutability is the safest route:
+
+```kotlin
+@Immutable
+data class ProductUiModel(
+    val id: String,
+    val title: String,
+    val priceLabel: String,
+)
+```
+
+Never add `@Stable` or `@Immutable` merely to silence a report. If a mutable field changes without observable state, Compose may skip required UI work.
+
+```kotlin
+// ❌ Annotation promises more than implementation provides.
+@Stable
+class Cart(var count: Int)
+```
+
+Standard `List` is treated conservatively because the compiler cannot guarantee immutability. Options include immutable UI models/collections, an observable holder, or accepting recomposition until measurement proves it costly.
+
+## Diagnose before optimizing
+
+1. Reproduce in a release-like build.
+2. Use Layout Inspector recomposition counts/tracing and compiler stability reports.
+3. Locate the expensive scope, allocation, or state read.
+4. Narrow state reads or fix the data contract.
+5. Measure the same user journey again.
+
+<Admonition type="tip" title="Practical rule">
+Correctness first. A fast screen showing stale state is a broken screen. Avoid premature annotations and `derivedStateOf` everywhere.
+</Admonition>
+
+## Sources and next steps
+
+- [Stability in Compose](https://developer.android.com/develop/ui/compose/performance/stability)
+- [Fix stability issues](https://developer.android.com/develop/ui/compose/performance/stability/fix)
+- [Compose performance best practices](https://developer.android.com/develop/ui/compose/performance/bestpractices)
+- Next: [side effects and effect keys](./compose-side-effects)
+
+## Exercises
+
+1. Fix a stale UI backed by `ArrayList`.
+2. Decide whether scroll offset, full name, and filtered database results need `derivedStateOf`.
+3. Explain why lying with `@Stable` can break correctness.

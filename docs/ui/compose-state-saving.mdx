@@ -1,0 +1,96 @@
+---
+id: compose-state-saving
+title: remember, rememberSaveable, and state restoration
+---
+import Admonition from '@theme/Admonition';
+
+# remember, rememberSaveable, and state restoration
+
+## They solve different lifetime problems
+
+| Owner/API | Recomposition | Configuration recreation | System process death | Durable after user closes app |
+|---|---:|---:|---:|---:|
+| local variable | ❌ | ❌ | ❌ | ❌ |
+| `remember` | ✅ | ❌ | ❌ | ❌ |
+| `rememberSaveable` | ✅ | ✅ | ✅ supported small state | ❌ not guaranteed |
+| `ViewModel` | ✅ | ✅ | ❌ alone | ❌ |
+| `SavedStateHandle` | ✅ | ✅ | ✅ supported small state | ❌ not durable storage |
+| Room/DataStore | ✅ when observed | ✅ | ✅ | ✅ |
+
+`remember` remembers an object while that call remains at the same place in the Composition:
+
+```kotlin
+var expanded by remember { mutableStateOf(false) }
+```
+
+It survives recomposition, not Activity recreation. `rememberSaveable` also registers supported data in saved instance state:
+
+```kotlin
+var query by rememberSaveable { mutableStateOf("") }
+```
+
+## Save the recipe, not the meal
+
+Bundle-backed saved state has size and type limits. Save the minimum input needed to rebuild a screen.
+
+❌ Saving 5,000 product objects in `rememberSaveable` risks `TransactionTooLargeException` and stale data.
+
+✅ Save `categoryId`, query, and selected product ID; reload products from the repository.
+
+```kotlin
+class SearchViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
+    val query = savedStateHandle.getStateFlow("query", "")
+
+    fun changeQuery(value: String) {
+        savedStateHandle["query"] = value
+    }
+}
+```
+
+## Custom Saver for small custom state
+
+```kotlin
+data class Range(val start: Int, val endInclusive: Int)
+
+val RangeSaver = listSaver<Range, Int>(
+    save = { listOf(it.start, it.endInclusive) },
+    restore = { Range(it[0], it[1]) },
+)
+
+@Composable
+fun Filter() {
+    var range by rememberSaveable(stateSaver = RangeSaver) {
+        mutableStateOf(Range(0, 100))
+    }
+}
+```
+
+Only the two integers are saved. If `Range` represents server data, save an ID instead.
+
+## Keys reset remembered state intentionally
+
+```kotlin
+var draft by rememberSaveable(userId) { mutableStateOf("") }
+```
+
+When `userId` changes, the old user's draft is discarded. Without the key, state may leak logically between users even though memory is safe.
+
+## Test the real failure mode
+
+Rotation is not sufficient to prove process restoration because ViewModel survives rotation. Use the developer option **Don't keep activities** for recreation checks and instrumentation `StateRestorationTester` for saveable Compose state. Also test relaunch after background process death.
+
+<Admonition type="warning" title="Common mistake">
+Saved state is not a database and ViewModel is not process-persistent. Drafts users cannot afford to lose should be stored durably, with explicit cleanup rules.
+</Admonition>
+
+## Sources and next steps
+
+- [Save UI state in Compose](https://developer.android.com/develop/ui/compose/state-saving)
+- [State and Jetpack Compose](https://developer.android.com/develop/ui/compose/state)
+- Next: [derived state, snapshots, and stability](./compose-derived-stability)
+
+## Interview questions
+
+1. Why can a ViewModel pass rotation testing but fail after process death?
+2. What should be saved for a product details screen: the product or product ID?
+3. When would a text draft belong in Room instead of `SavedStateHandle`?

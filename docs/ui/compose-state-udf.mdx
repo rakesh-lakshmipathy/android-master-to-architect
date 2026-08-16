@@ -1,0 +1,131 @@
+---
+id: compose-state-udf
+title: Compose state, events, hoisting, and UDF
+---
+import Admonition from '@theme/Admonition';
+
+# Compose state, events, hoisting, and UDF
+
+:::warning Android-only examples
+These snippets use the Compose runtime and Android architecture libraries, so they need an Android project rather than Kotlin Playground.
+:::
+
+## The practical mental model
+
+A screen is a function of state. A user action is an event; it is not the state itself.
+
+```text
+repository data + saved input -> ViewModel -> immutable UiState -> composables
+                                          <- UiEvent ----------
+```
+
+For checkout, `PayClicked` is an event. `isPaying`, `total`, and `paymentError` are state. The ViewModel processes the event, calls business code, and publishes new state. Compose renders it.
+
+```kotlin
+data class CheckoutUiState(
+    val total: Money,
+    val isPaying: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+sealed interface CheckoutEvent {
+    data object PayClicked : CheckoutEvent
+    data object ErrorDismissed : CheckoutEvent
+}
+
+@Composable
+fun CheckoutContent(
+    state: CheckoutUiState,
+    onEvent: (CheckoutEvent) -> Unit,
+) {
+    Button(
+        enabled = !state.isPaying,
+        onClick = { onEvent(CheckoutEvent.PayClicked) },
+    ) {
+        Text(if (state.isPaying) "Paying..." else "Pay ${state.total}")
+    }
+}
+```
+
+The content composable is deterministic and previewable because it does not fetch data or own business state.
+
+## State hoisting: who needs to control it?
+
+Hoisting replaces internal state with a value and event callback:
+
+```kotlin
+// Stateful convenience wrapper
+@Composable
+fun SearchBox() {
+    var query by rememberSaveable { mutableStateOf("") }
+    SearchBox(query = query, onQueryChange = { query = it })
+}
+
+// Stateless, reusable content
+@Composable
+fun SearchBox(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(value = query, onValueChange = onQueryChange)
+}
+```
+
+Hoist to the lowest owner that must read or change the value:
+
+| State | Good owner | Why |
+|---|---|---|
+| Password visibility | field or form composable | local presentation detail |
+| Selected tab shared by body and app bar | common screen composable | two siblings need it |
+| Search query that drives repository calls | ViewModel | business/data work depends on it |
+| Authenticated user | app/session state holder | many destinations need it |
+
+Do not put every ripple, focus flag, and expansion boolean in a ViewModel. That creates plumbing without adding durability or business value.
+
+## One source of truth
+
+❌ Two independently mutable copies drift:
+
+```kotlin
+var localName by remember { mutableStateOf(viewModel.state.name) }
+TextField(localName, onValueChange = { localName = it })
+```
+
+If repository data changes, which name wins?
+
+✅ Choose one owner and send edits to it:
+
+```kotlin
+TextField(
+    value = state.name,
+    onValueChange = { onEvent(ProfileEvent.NameChanged(it)) },
+)
+```
+
+For an intentional edit buffer, model it explicitly (`draft`, `savedValue`, `isDirty`) and define cancel/save conflict behavior.
+
+## Events should describe intent
+
+Prefer `RetryClicked` or `QuantityChanged(id, value)` over giving UI code setters for internal fields. Intent events preserve invariants in one place.
+
+```kotlin
+fun onEvent(event: CartEvent) {
+    when (event) {
+        is CartEvent.QuantityChanged -> updateQuantity(event.id, event.value.coerceAtLeast(1))
+        CartEvent.CheckoutClicked -> checkout()
+    }
+}
+```
+
+<Admonition type="tip" title="Architect takeaway">
+State ownership follows responsibility, not framework fashion. Keep ephemeral UI mechanics close to UI; put screen business state in a screen state holder; put durable truth in the data layer.
+</Admonition>
+
+## Sources and next steps
+
+- [State and Jetpack Compose](https://developer.android.com/develop/ui/compose/state)
+- [Where to hoist state](https://developer.android.com/develop/ui/compose/state-hoisting)
+- Next: [remember, rememberSaveable, and restoration](./compose-state-saving)
+
+## Exercises
+
+1. Assign owners for map camera position, selected place, search query, and logged-in user.
+2. Design edit/cancel/save events for a profile draft.
+3. Explain why duplicating ViewModel state with `remember` is dangerous.

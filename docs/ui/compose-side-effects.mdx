@@ -1,0 +1,119 @@
+---
+id: compose-side-effects
+title: Compose side effects and effect keys
+---
+import Admonition from '@theme/Admonition';
+
+# Compose side effects and effect keys
+
+## Why effects exist
+
+Composition can run repeatedly, be skipped, or be abandoned. Therefore this is unsafe:
+
+```kotlin
+@Composable
+fun Profile(vm: ProfileViewModel) {
+    vm.load() // ❌ may run on every recomposition
+}
+```
+
+An effect ties non-UI work to a defined Composition lifetime.
+
+## API decision table
+
+| Need | API |
+|---|---|
+| Run suspend work; cancel/restart with keys | `LaunchedEffect` |
+| Launch from click callback | `rememberCoroutineScope` |
+| Register listener and always unregister | `DisposableEffect` |
+| Publish Compose state after successful composition | `SideEffect` |
+| Convert callback/suspend source into Compose `State` | `produceState` |
+| Use latest lambda/value without restarting effect | `rememberUpdatedState` |
+| Turn snapshot reads into a Flow | `snapshotFlow` |
+
+## Keys define identity
+
+```kotlin
+LaunchedEffect(userId) {
+    viewModel.loadUser(userId)
+}
+```
+
+When `userId` changes, the old coroutine is cancelled and a new one begins. `LaunchedEffect(Unit)` means one lifetime for that call site, not once forever.
+
+❌ Wrong key captures stale ID:
+
+```kotlin
+LaunchedEffect(Unit) { viewModel.loadUser(userId) }
+```
+
+❌ Unstable key restarts continuously:
+
+```kotlin
+LaunchedEffect(SearchRequest(query)) { search(query) }
+```
+
+Use the stable primitive input `query`.
+
+## Latest callback without restarting timer
+
+```kotlin
+@Composable
+fun Splash(onTimeout: () -> Unit) {
+    val latestOnTimeout by rememberUpdatedState(onTimeout)
+    LaunchedEffect(Unit) {
+        delay(2_000)
+        latestOnTimeout()
+    }
+}
+```
+
+The timer keeps its lifetime; the invoked callback stays current after recomposition.
+
+## Register and dispose symmetrically
+
+```kotlin
+DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event -> analytics.record(event) }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+}
+```
+
+If registration depends on another value, include it as a key or use `rememberUpdatedState` for the changing callback.
+
+## `produceState` bridges a source
+
+```kotlin
+@Composable
+fun rememberStockPrice(symbol: String): State<PriceUiState> =
+    produceState<PriceUiState>(PriceUiState.Loading, symbol) {
+        value = runCatching { repository.latest(symbol) }
+            .fold(PriceUiState::Ready, PriceUiState::Failed)
+    }
+```
+
+It is cancelled when removed or when `symbol` changes. Prefer existing lifecycle-aware Flow collection when the source is already a Flow.
+
+## SideEffect is not a background-work launcher
+
+```kotlin
+SideEffect { analytics.setUserProperty("plan", plan.name) }
+```
+
+It runs after every successful composition of that scope. The operation must be quick and idempotent. Network requests belong outside it.
+
+<Admonition type="warning" title="Architecture boundary">
+Effects coordinate UI lifecycle work. Durable uploads, sync, or guaranteed retry belong in the data layer and often WorkManager—not in a composable coroutine.
+</Admonition>
+
+## Sources and next steps
+
+- [Side-effects in Compose](https://developer.android.com/develop/ui/compose/side-effects)
+- Next: [Flow and lifecycle-aware collection](./compose-flow-lifecycle)
+
+## Exercises
+
+1. Choose an API for snackbar click, location listener, analytics property, and keyed network load.
+2. Explain what changing a `LaunchedEffect` key does.
+3. Fix an effect that must keep its timer but invoke the latest callback.

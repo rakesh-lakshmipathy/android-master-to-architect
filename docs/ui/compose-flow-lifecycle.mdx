@@ -1,0 +1,102 @@
+---
+id: compose-flow-lifecycle
+title: Flow, lifecycle-aware collection, and one-time events
+---
+import Admonition from '@theme/Admonition';
+
+# Flow, lifecycle-aware collection, and one-time events
+
+## Collect screen state with lifecycle awareness
+
+```kotlin
+@Composable
+fun OrdersRoute(viewModel: OrdersViewModel) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    OrdersContent(state, viewModel::onEvent)
+}
+```
+
+On Android, `collectAsStateWithLifecycle` stops upstream collection below its configured active lifecycle, avoiding invisible-screen work. Use plain `collectAsState` for platform-independent Compose where Android lifecycle is unavailable.
+
+The ViewModel normally exposes read-only `StateFlow`:
+
+```kotlin
+private val _uiState = MutableStateFlow(OrdersUiState())
+val uiState: StateFlow<OrdersUiState> = _uiState.asStateFlow()
+
+fun retry() = viewModelScope.launch {
+    _uiState.update { it.copy(loading = true, error = null) }
+    // repository call, then another atomic update
+}
+```
+
+## `snapshotFlow`: Compose state to Flow
+
+```kotlin
+LaunchedEffect(listState) {
+    snapshotFlow { listState.firstVisibleItemIndex }
+        .map { it > 0 }
+        .distinctUntilChanged()
+        .filter { it }
+        .collect { analytics.log("list_scrolled") }
+}
+```
+
+Use it when Flow operators or a suspending collector are useful. For merely showing a button, `derivedStateOf` is simpler.
+
+## State versus transient effects
+
+Navigation and snackbars are tricky because a `SharedFlow` event can be lost while no collector is active, while replaying it can repeat navigation after recreation.
+
+Ask first: can this be state?
+
+```kotlin
+data class FormUiState(
+    val savedOrderId: String? = null,
+)
+```
+
+The UI observes the ID, navigates, then acknowledges consumption through an event. This is testable but must be designed to avoid repeated handling.
+
+For a truly ephemeral message, a buffered channel/SharedFlow may be acceptable when loss semantics are intentional. Document:
+
+- Can it be lost while backgrounded?
+- May multiple collectors receive it?
+- Must it survive process death?
+- What prevents duplicate handling?
+
+There is no universal `SingleLiveEvent` replacement; delivery semantics are a product decision.
+
+## Avoid duplicate collectors
+
+```kotlin
+// ❌ Starts collection whenever this body recomposes.
+viewModel.effects.onEach { showSnackbar(it) }.launchIn(scope)
+
+// ✅ Collection has a Composition lifetime.
+LaunchedEffect(viewModel) {
+    viewModel.effects.collect { effect -> snackbarHostState.showSnackbar(effect.message) }
+}
+```
+
+If the screen must stop handling effects while not active, combine collection with lifecycle APIs or design the source/acknowledgement accordingly.
+
+## Backpressure and UI
+
+`StateFlow` conflates to latest state, which is correct for rendering. It is wrong for an audit trail where every value matters. UI state says what is true now; events describe occurrences. Choose types based on semantics, not habit.
+
+<Admonition type="tip" title="Architect takeaway">
+Define delivery guarantees before choosing StateFlow, SharedFlow, or Channel. Lifecycle-aware collection controls work; it does not magically make transient events durable.
+</Admonition>
+
+## Sources and next steps
+
+- [Lifecycle-aware Flow collection in Compose](https://developer.android.com/develop/ui/compose/state#flow-livedata-rxjava)
+- [Side-effects and snapshotFlow](https://developer.android.com/develop/ui/compose/side-effects#snapshotFlow)
+- Next: [Chapter 15 interview scenarios](./compose-state-interview)
+
+## Exercises
+
+1. Model payment completion so it neither disappears nor navigates twice.
+2. Explain why StateFlow fits screen state but not an audit log.
+3. Find the duplicate collector bug in a composable using `launchIn` in its body.
