@@ -1,0 +1,80 @@
+---
+id: repository-boundaries
+title: Repository responsibilities and boundaries
+---
+import Admonition from '@theme/Admonition';
+
+# Repository responsibilities and boundaries
+
+A repository owns application data for one cohesive domain and the policy for obtaining, mutating, caching, and reconciling it.
+
+```kotlin
+interface OrdersRepository {
+    fun observeOrder(id: OrderId): Flow<Order?>
+    suspend fun refreshOrder(id: OrderId)
+    suspend fun placeOrder(draft: OrderDraft): OrderId
+    suspend fun cancelOrder(id: OrderId): CancelOutcome
+}
+```
+
+## What belongs here
+
+- expose data to higher layers
+- centralize mutations
+- choose/coordinate sources
+- define source of truth and freshness
+- map storage/transport models
+- resolve source conflicts
+- provide main-safe APIs
+- own durable operation policy
+
+What does not belong: UI strings/navigation, `MutableStateFlow` for widget state, Activity lifecycle, or a grab-bag of unrelated “services.”
+
+## Repository versus DAO/API
+
+DAO says how to access database. Retrofit service says how to speak HTTP. Repository says what application data means across both.
+
+```kotlin
+class OfflineFirstOrdersRepository(
+    private val dao: OrdersDao,
+    private val remote: OrdersRemoteDataSource,
+    private val transactionRunner: TransactionRunner,
+) : OrdersRepository
+```
+
+If there is one simple source and no additional policy, directly injecting the DAO into a repository is reasonable. A separate local-data-source wrapper is not mandatory.
+
+## Repository granularity
+
+Prefer `OrdersRepository`, `CatalogRepository`, `SessionRepository` over one `AppRepository`. Split when data has different ownership, source-of-truth, lifecycle, privacy, or mutation policy. Avoid one repository per table if operations span a domain transaction.
+
+## Behavioral contract
+
+Signatures are insufficient. Document:
+
+- Flow initial/replay/completion behavior
+- null/not-found/error distinction
+- freshness and refresh effect
+- main safety and cancellation
+- ordering/deduplication
+- offline writes and conflict handling
+- account/session scope
+- fake equivalence
+
+## Lifecycle
+
+Repository may be app/session/feature scoped based on cache and connection ownership. A singleton holding user A data after logout is a privacy bug. Clear or replace session-scoped graph and durable caches according to policy.
+
+<Admonition type="warning" title="Repository illusion">
+A class that only forwards every DAO and API method but lets callers choose source, retry, mapping, and transactions does not own data policy; it merely relocates calls.
+</Admonition>
+
+## Sources
+
+- [Android data layer](https://developer.android.com/topic/architecture/data-layer)
+
+## Exercises
+
+1. Split an `AppRepository` by cohesive ownership.
+2. Write the full contract for `observeOrder`.
+3. Decide whether a DAO needs a data-source wrapper.

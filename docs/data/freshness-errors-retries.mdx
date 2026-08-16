@@ -1,0 +1,63 @@
+---
+id: freshness-errors-retries
+title: Errors, retries, freshness, caching, and invalidation
+---
+import Admonition from '@theme/Admonition';
+
+# Errors, retries, freshness, caching, and invalidation
+
+## Error model guides recovery
+
+```kotlin
+sealed interface DataFailure {
+    data object Offline : DataFailure
+    data object Unauthorized : DataFailure
+    data object NotFound : DataFailure
+    data class RateLimited(val retryAfter: Duration?) : DataFailure
+    data class Validation(val fields: Map<String, String>) : DataFailure
+    data class Unknown(val incidentId: String) : DataFailure
+}
+```
+
+Translate HTTP/SQL/IO exceptions at boundaries. Preserve diagnostic cause internally; expose product-relevant recovery. Cancellation generally propagates rather than becoming “Unknown.”
+
+## Retry only eligible operations
+
+Retry transient timeout/connection/5xx/429 according to method/idempotency and server guidance. Do not retry authentication, validation, not-found, or deterministic parse errors blindly.
+
+Use bounded exponential backoff with jitter. Mutation retries require idempotency key or application-level deduplication. Coordinate retry layers so OkHttp × repository × Worker does not multiply attempts.
+
+## Freshness is domain policy
+
+```kotlin
+data class FreshnessPolicy(
+    val maxAge: Duration,
+    val staleWhileRevalidate: Duration,
+)
+```
+
+Stock price, profile photo, and country list have different freshness. Store fetched/server version time with clock semantics. Device clock can jump; server validators/versions are stronger where available.
+
+## Stale-while-revalidate
+
+Render cached data immediately with refreshing indicator; fetch in background; update source of truth. If refresh fails, retain useful stale data and expose non-destructive error. Initial empty failure differs from refresh-with-content failure.
+
+## Invalidation
+
+Invalidation triggers include successful mutation, server push/version change, account switch, permission change, app version/schema change, TTL, and explicit user refresh.
+
+Cache key must include every input affecting output: user/account, locale, filters, authorization, experiment, pagination/version. Missing account in key can leak data across users.
+
+## Cache bounds
+
+Define memory/disk budget, LRU/expiry, pinning, cleanup timing, corruption handling, and observability. Cache stampede requires per-key request sharing/coalescing where useful.
+
+<Admonition type="tip" title="Architect takeaway">
+Caching is a consistency and resource policy, not a map. Specify truth, key, freshness, invalidation, retry, stale behavior, bounds, and privacy scope.
+</Admonition>
+
+## Exercises
+
+1. Classify retry behavior for eight HTTP failures.
+2. Design stale-while-revalidate profile UI.
+3. Find a cross-account cache-key leak.

@@ -266,12 +266,12 @@ Do not try to memorize everything in one pass. Learn a topic, run its examples, 
 
 ### Chapter 24: Repository and data-layer design
 
-- ○ Repository responsibilities and boundaries
-- ○ Local and remote data sources
-- ○ Mapping DTOs, entities, domain models, and UI models
-- ○ Error models, retries, freshness, caching, and invalidation
-- ○ Use cases and business-rule orchestration
-- ○ Single source of truth and reactive read streams
+- ✅ [Repository responsibilities, cohesive ownership, behavioral contracts, scope, and boundary failures](./data/repository-boundaries)
+- ✅ [Local/remote source coordination, read strategies, refresh races, partial failure, and connectivity](./data/local-remote-sources)
+- ✅ [DTO, entity, domain, and UI mapping: units, nullability, evolution, corruption, and diagnostics](./data/data-mapping)
+- ✅ [Error models, retry eligibility, freshness, stale-while-revalidate, cache keys, and invalidation](./data/freshness-errors-retries)
+- ✅ [Use cases, business-rule orchestration, atomicity limits, concurrency, and avoiding ceremony](./data/usecase-orchestration)
+- ✅ [Single source of truth, reactive read streams, interview scenarios, and optimistic favorites case study](./data/ssot-reactive-interview)
 
 ### Chapter 25: Networking
 

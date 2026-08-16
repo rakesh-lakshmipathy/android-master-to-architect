@@ -1,0 +1,68 @@
+---
+id: data-mapping
+title: DTO, entity, domain, and UI model mapping
+---
+import Admonition from '@theme/Admonition';
+
+# DTO, entity, domain, and UI model mapping
+
+Models differ because boundaries have different ownership and constraints.
+
+```text
+JSON DTO -> validated application/domain model -> database entity
+                                             -> UI projection
+```
+
+## DTO
+
+Matches wire schema: nullable/optional/unknown fields, transport names, pagination envelopes. Never assume server field presence just because today's sample contains it.
+
+## Entity
+
+Matches storage schema: primary/foreign keys, indexes, sync metadata, stable scalar representation. It may contain fields not exposed to product domain.
+
+## Domain/application model
+
+Expresses valid business meaning:
+
+```kotlin
+data class Money(val minorUnits: Long, val currency: CurrencyCode)
+
+fun PriceDto.toDomain(): Money = Money(
+    minorUnits = minorUnits ?: throw MappingFailure.MissingPrice,
+    currency = CurrencyCode.parse(currency) ?: throw MappingFailure.BadCurrency(currency),
+)
+```
+
+Do not default missing price to zero; that converts schema failure into financial corruption.
+
+## UI model
+
+Contains presentation-ready grouping/labels/icons only when useful. Localization usually happens with UI resources/locale. Do not store localized text in DB as truth unless it is server-authored content.
+
+## Map where meaning changes
+
+Separate models when nullability, units, naming, lifetime, security, schema evolution, or ownership differs. Reusing one immutable stable model across adjacent layers is fine when semantics truly match. Mechanical copies of 50 identical fields in every layer increase bugs.
+
+## Evolution
+
+- unknown enum: preserve `Unknown(raw)` or controlled fallback
+- unknown JSON fields: ignore for forward compatibility unless strict security contract
+- missing required field: explicit mapping failure/skip record with diagnostics
+- renamed field: version-compatible serializer/mapper
+- numeric overflow: validate before narrowing
+- dates: parse offset/zone explicitly
+
+## Batch mapping and diagnostics
+
+One malformed record can fail whole response or be quarantined. Choose based on domain safety. For feed content, skip and report may be acceptable; for account permissions/payment, fail closed. Never log sensitive raw payloads.
+
+<Admonition type="warning" title="Mapping is policy">
+Mappings decide defaults, trust, units, precision, and compatibility. They require tests with missing, unknown, overflow, Unicode, duplicate, and versioned inputs.
+</Admonition>
+
+## Exercises
+
+1. Map unknown payment status safely.
+2. Decide whether to skip one malformed feed item.
+3. Identify needless versus protective model copies.

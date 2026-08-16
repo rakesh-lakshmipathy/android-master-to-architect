@@ -1,0 +1,70 @@
+---
+id: local-remote-sources
+title: Local and remote data-source coordination
+---
+import Admonition from '@theme/Admonition';
+
+# Local and remote data-source coordination
+
+Each data source works with one external mechanism. It translates protocol/storage details; repository coordinates them.
+
+```kotlin
+class OrdersRemoteDataSource(private val api: OrdersApi) {
+    suspend fun fetch(id: OrderId): OrderDto = api.order(id.value)
+}
+
+class OrdersLocalDataSource(private val dao: OrdersDao) {
+    fun observe(id: OrderId): Flow<OrderEntity?> = dao.observe(id.value)
+    suspend fun upsert(entity: OrderEntity) = dao.upsert(entity)
+}
+```
+
+## Read patterns
+
+### Network-only
+
+Suitable for inherently live/non-cacheable operations. UI must handle no connectivity and process recreation. Do not call an app “offline first” if critical reads are network-only.
+
+### Cache-aside
+
+Read cache, fetch on miss/stale, write cache, return. If callers receive network result directly while observers read cache, two truths may temporarily diverge.
+
+### Database source of truth
+
+Observe DB exclusively; refresh only writes DB. This gives consistent online/offline UI and process recovery.
+
+```kotlin
+override fun observeOrder(id: OrderId): Flow<Order?> =
+    dao.observe(id.value).map { it?.toDomain() }
+
+override suspend fun refreshOrder(id: OrderId) {
+    val dto = remote.fetch(id)
+    dao.upsert(dto.toEntity())
+}
+```
+
+## Refresh race
+
+Two refreshes can finish out of order and older response overwrite newer. Use server versions/ETags, compare version transactionally, serialize per key, or ensure endpoint guarantees monotonic data. Mutex alone is process-local and does not solve server/multi-process ordering.
+
+## Partial failure
+
+Fetching page 2 must not delete page 1. A full snapshot refresh may delete absent rows only when response is authoritative and scoped completely. Record sync token/page ownership; transact updates and metadata.
+
+## Connectivity
+
+Network capability means a route may exist, not that DNS/TLS/server/auth succeeds. Attempt operations, classify real failures, and use connectivity mainly as scheduling hint—not truth.
+
+## Testing
+
+Use deterministic sources to simulate stale cache, timeout, malformed DTO, out-of-order versions, partial page, deletion, process restart, and concurrent refresh.
+
+<Admonition type="tip" title="Architect takeaway">
+Data-source coordination is a consistency protocol. Specify which source can be read, which can write truth, and how version/order/partial failure is resolved.
+</Admonition>
+
+## Exercises
+
+1. Fix two-truth cache-aside UI.
+2. Prevent stale refresh overwrite.
+3. Decide when absent remote rows mean deletion.

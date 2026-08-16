@@ -1,0 +1,75 @@
+---
+id: usecase-orchestration
+title: Use cases and business-rule orchestration
+---
+import Admonition from '@theme/Admonition';
+
+# Use cases and business-rule orchestration
+
+Use case is optional domain/application operation that coordinates reusable or complex policy across repositories.
+
+```kotlin
+class PlaceOrder(
+    private val cart: CartRepository,
+    private val inventory: InventoryRepository,
+    private val orders: OrdersRepository,
+    private val idempotency: IdempotencyKeyGenerator,
+) {
+    suspend operator fun invoke(): PlaceOrderOutcome {
+        val snapshot = cart.currentSnapshot()
+        val violations = validate(snapshot)
+        if (violations.isNotEmpty()) return PlaceOrderOutcome.Invalid(violations)
+        return orders.place(snapshot, idempotency.forCart(snapshot.id))
+    }
+}
+```
+
+## Good reasons
+
+- rule reused by multiple ViewModels/Workers/platform UIs
+- combines repositories
+- complex operation deserves independent tests/name
+- keeps screen holder cohesive
+- enforces invariant so callers cannot bypass it
+
+## Ceremony signals
+
+```kotlin
+class GetUserUseCase(private val repo: UsersRepository) {
+    operator fun invoke(id: UserId) = repo.observe(id)
+}
+```
+
+Pass-through can still be an intentional capability boundary, but if every repository method receives one identical class, navigation/refactoring cost rises without policy.
+
+## Atomicity across repositories
+
+Two repositories may share one database; independent calls cannot guarantee transaction unless a transaction owner coordinates at lower boundary. Do not claim atomicity merely because use case calls sequentially.
+
+Network + database cannot be one ACID transaction. Use local transaction/outbox/state machine/idempotency and reconciliation.
+
+## Concurrency
+
+Use case must define double-click/concurrent invocation: serialize, deduplicate, latest wins, parallel by key, or reject. An in-memory mutex does not survive process death; durable unique constraints/idempotency protect important operations.
+
+## Main safety and state
+
+Use cases should be main-safe. Prefer stateless instances; durable mutable state belongs in repositories/data source, screen state in ViewModel. Inject dispatchers for truly CPU/blocking work, not because “all use cases use IO.”
+
+## Composition
+
+Use cases may call other use cases, but deep chains hide flow. Keep orchestration readable and avoid generic base use-case classes that force one error/thread model on unrelated operations.
+
+<Admonition type="warning" title="Boundary bypass">
+If a critical rule exists only in one use case but callers can mutate repository directly, the invariant is optional. Design API/module visibility so the safe operation is the available operation.
+</Admonition>
+
+## Sources
+
+- [Android domain layer](https://developer.android.com/topic/architecture/domain-layer)
+
+## Exercises
+
+1. Decide which of five operations deserves a use case.
+2. Make checkout duplicate-safe across process death.
+3. Explain why sequential repository calls are not atomic.

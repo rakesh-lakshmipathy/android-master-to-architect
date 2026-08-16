@@ -1,0 +1,77 @@
+---
+id: ssot-reactive-interview
+title: Single source of truth and data-layer interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Single source of truth and data-layer interview lab
+
+## Reactive source-of-truth pipeline
+
+```text
+remote/push/user mutation -> repository policy -> local transaction -> Room Flow
+                                                              |
+                                                              v
+                                               ViewModel UI projection -> UI
+```
+
+Higher layers read the authoritative local stream. Network results never bypass it.
+
+```kotlin
+val uiState: StateFlow<OrdersUiState> = repository.observeOrders()
+    .map { orders -> OrdersUiState.Content(orders.map(Order::toUi)) }
+    .catch { emit(OrdersUiState.Failed(/* mapped */)) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OrdersUiState.Loading)
+```
+
+Be careful: `catch` does not catch exceptions thrown downstream and should not convert cancellation. Repository streams should define whether data errors are emitted as values or terminate.
+
+## “Single” does not mean one database for everything
+
+Each data type has one authoritative owner. Session may be memory + secure token store, products Room, live call state remote connection. Repository reconciles its sources and exposes one truth contract.
+
+## Interview scenarios
+
+<details><summary><strong>Should refresh return data?</strong></summary><p>In a DB-source-of-truth design, refresh can return completion/outcome while UI continues observing DB. Returning network objects for rendering creates a second path/truth.</p></details>
+
+<details><summary><strong>Where should errors live?</strong></summary><p>Transport/storage errors are translated in data layer; business outcomes may be domain types; UI maps recoverable meaning into presentation state/messages. Keep diagnostics without leaking framework exceptions.</p></details>
+
+<details><summary><strong>Can repository depend on another repository?</strong></summary><p>Yes for cohesive aggregated application data, but use case may better represent cross-domain operation. Watch cycles, ownership, and unclear source of truth.</p></details>
+
+## Case study: product favorites
+
+1. Room product/favorite state is readable truth.
+2. Toggle transaction updates desired state and outbox operation.
+3. UI immediately observes optimistic value.
+4. Worker/repository sync uses idempotency and server version.
+5. Accepted response updates version/clears pending.
+6. Rejection applies product policy: rollback or show conflict.
+7. Account ID scopes rows/cache/work to prevent leakage.
+
+## Review checklist
+
+- [ ] Repository owns cohesive data and source policy.
+- [ ] Data sources each wrap one mechanism.
+- [ ] Higher layers read one truth path.
+- [ ] DTO/entity/domain/UI mappings protect real semantic differences.
+- [ ] Errors and cancellation preserve recovery/diagnostics.
+- [ ] Retry attempt budget and idempotency are explicit.
+- [ ] Cache has full key, freshness, bounds, invalidation, and account scope.
+- [ ] Use cases add policy/reuse/orchestration.
+- [ ] Reactive streams define sharing, replay, lifecycle, and failure.
+- [ ] Fakes pass behavioral contract tests.
+
+<Admonition type="tip" title="Interview framing">
+Explain data owner, source of truth, read/write paths, consistency, mapping, freshness, failure/retry/cancellation, lifecycle, privacy, and contract tests.
+</Admonition>
+
+## Sources
+
+- [Android data layer](https://developer.android.com/topic/architecture/data-layer)
+- [Offline-first data layer](https://developer.android.com/topic/architecture/data-layer/offline-first)
+
+## Exercises
+
+1. Draw two-truth failure and refactor it.
+2. Contract-test fake versus Room-backed repository.
+3. Design account-safe optimistic favorite sync.
