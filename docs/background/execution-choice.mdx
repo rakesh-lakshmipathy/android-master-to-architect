@@ -1,0 +1,76 @@
+---
+id: execution-choice
+title: Choosing the right background API
+---
+import Admonition from '@theme/Admonition';
+
+# Choosing the right background API
+
+“Run this in the background” is incomplete. First ask **how long**, **when**, **must it survive process death**, and **must the user know it is running?**
+
+| Requirement | Usually choose | Why |
+|---|---|---|
+| Work needed only while this screen/ViewModel exists | coroutine in a lifecycle scope | Cancellation follows the owner |
+| Deferrable upload that must eventually finish | WorkManager | Persists and reschedules durable work |
+| User-visible, ongoing activity now | foreground service | Explicit notification and stronger execution eligibility |
+| Exact user-facing alarm at 07:00 | AlarmManager exact alarm, if permitted | Timing—not eventual execution—is the contract |
+| Continuous same-process client/server interaction | bound service | Components bind to a service interface |
+
+## Scenario 1: save a form
+
+```kotlin
+fun saveDraft() = viewModelScope.launch {
+    repository.saveDraft(editorState.value)
+}
+```
+
+This coroutine is correct if cancellation when the ViewModel is cleared is acceptable. A coroutine is **not durable scheduling**. The OS may kill the process after the app leaves the screen.
+
+## Scenario 2: upload a receipt even after the app closes
+
+```kotlin
+val request = OneTimeWorkRequestBuilder<ReceiptUploadWorker>()
+    .setInputData(workDataOf("receiptId" to receiptId))
+    .setConstraints(
+        Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+    )
+    .build()
+
+WorkManager.getInstance(context).enqueueUniqueWork(
+    "receipt-upload-$receiptId",
+    ExistingWorkPolicy.KEEP,
+    request,
+)
+```
+
+Pass an ID, not a bitmap or large JSON document. The worker reloads current data from durable storage.
+
+## Scenario 3: navigation recording
+
+A visible trip recording initiated by the user may require a location foreground service. WorkManager is wrong for an unbounded, continuously active session; an ordinary coroutine is too easy for the system to terminate once the app is backgrounded.
+
+## Common mistakes
+
+- ❌ Start a service for every asynchronous operation.
+- ✅ Use a coroutine for in-process work and WorkManager for durable, deferrable work.
+- ❌ Use an exact alarm for periodic synchronization.
+- ✅ Let WorkManager batch deferrable sync for battery efficiency.
+- ❌ Assume WorkManager starts at an exact clock time.
+- ✅ Treat it as “not before constraints permit, eventually,” not a punctual scheduler.
+
+<Admonition type="warning" title="A foreground service is not a loophole">
+It must perform a user-beneficial, user-visible task, declare the correct service type, show a notification, and comply with background-start restrictions.
+</Admonition>
+
+## Sources
+
+- [Background tasks overview](https://developer.android.com/develop/background-work/background-tasks)
+- [Choose the right API](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work)
+
+## Interview check
+
+**Question:** Why not put every operation in `viewModelScope`?  
+**Answer:** Its lifetime is the ViewModel and therefore the current process. It does not guarantee execution after process death or reboot.
+

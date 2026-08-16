@@ -1,0 +1,86 @@
+---
+id: workmanager-chains
+title: Unique work, chains, retries, backoff, and idempotency
+---
+import Admonition from '@theme/Admonition';
+
+# Unique work, chains, retries, backoff, and idempotency
+
+WorkManager may run a request again after interruption. Therefore “execute once” must mean **repeating it produces the same business outcome**, not “this function is invoked exactly once.”
+
+## Unique work prevents duplicate local schedules
+
+```kotlin
+workManager.enqueueUniqueWork(
+    "profile-sync:$accountId",
+    ExistingWorkPolicy.KEEP,
+    syncRequest,
+)
+```
+
+- `KEEP`: retain existing unfinished work.
+- `REPLACE`: cancel existing work and enqueue new work.
+- `APPEND`: add to the existing chain.
+- `APPEND_OR_REPLACE`: append unless the chain is failed/cancelled.
+
+The unique name is a domain decision. `sync-all` incorrectly merges different signed-in accounts; include identity where needed.
+
+## Chain dependent steps
+
+```kotlin
+workManager.beginUniqueWork(
+    "publish:$draftId",
+    ExistingWorkPolicy.KEEP,
+    compressRequest,
+).then(uploadRequest)
+ .then(confirmRequest)
+ .enqueue()
+```
+
+If compression output is a large file, write it to an app-controlled location and pass the path/ID. A failed prerequisite prevents dependent work from running.
+
+## Classify failures
+
+```kotlin
+return when (response.code) {
+    in 200..299 -> Result.success()
+    401 -> Result.failure(workDataOf("reason" to "reauth_required"))
+    408, 429 -> Result.retry()
+    in 500..599 -> Result.retry()
+    else -> Result.failure(workDataOf("reason" to "permanent_http_${response.code}"))
+}
+```
+
+Use exponential backoff for temporary failures. Retrying invalid input or an authorization failure forever wastes battery and hides the action the user must take.
+
+## Idempotency across the network
+
+```kotlin
+@POST("orders")
+suspend fun createOrder(
+    @Header("Idempotency-Key") operationId: String,
+    @Body body: CreateOrderBody,
+): OrderDto
+```
+
+Generate `operationId` once and persist it with the pending operation. Reuse it on retry. The server stores/replays the first result for that key. A new UUID inside every `doWork()` defeats idempotency.
+
+<Admonition type="info" title="Exactly once is an end-to-end protocol">
+Unique work deduplicates WorkManager requests on one installation. It cannot stop duplicate server effects after a timeout. That requires a stable operation identity and server-side idempotency or deduplication.
+</Admonition>
+
+## Corner cases
+
+- Process dies after server creates the order but before local success is saved: retry with the same key and reconcile the returned order.
+- User edits a queued draft: decide whether worker reads latest state or a versioned snapshot.
+- Sign-out occurs: cancel account-tagged work and ensure the worker validates account identity before reading data.
+
+## Sources
+
+- [Manage unique work](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work)
+- [Chain work](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/chain-work)
+
+## Interview question
+
+**Does `enqueueUniqueWork` guarantee an order is created exactly once?** No. It only controls matching local work chains. Network ambiguity still requires server-supported idempotency and reconciliation.
+

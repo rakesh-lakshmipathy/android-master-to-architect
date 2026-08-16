@@ -1,0 +1,69 @@
+---
+id: alarms-doze
+title: Alarms, Doze, App Standby, and battery
+---
+
+# Alarms, Doze, App Standby, and battery
+
+AlarmManager schedules a time-based wake-up. WorkManager schedules constraint-based durable work. They solve different problems.
+
+## Inexact by default
+
+Use an inexact alarm when batching is acceptable. The system can move it to reduce wakeups. For normal periodic synchronization, prefer WorkManager.
+
+Use an exact alarm only when the user-facing function genuinely requires precise time, such as an alarm clock or calendar alert. Exact alarms are resource-intensive and may require special access depending on API level and use case.
+
+```kotlin
+val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    alarmManager.canScheduleExactAlarms()
+} else true
+
+if (canExact) {
+    alarmManager.setExactAndAllowWhileIdle(
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        pendingIntent,
+    )
+}
+```
+
+“Allow while idle” is still rate-limited. It is not permission to run frequent polling.
+
+## Doze
+
+When a device remains unused, Doze defers network access, jobs, syncs, and ordinary alarms, then opens maintenance windows. Design deferrable work to resume later rather than fighting the policy.
+
+## App Standby
+
+An app the user has not recently used may receive fewer background execution opportunities. Standby buckets further adjust quotas based on engagement. Delivery time therefore depends on both your request and system policy.
+
+## PendingIntent identity matters
+
+To update/cancel an alarm, construct a matching `PendingIntent` identity. Extras do not determine identity. Use explicit intents, stable request codes/data, and the appropriate immutable/mutable flag.
+
+## Scenario: medication reminder
+
+- If “around 09:00” is acceptable, use an inexact mechanism.
+- If the product contract truly promises exactly 09:00, assess exact-alarm eligibility/access and explain degraded behavior if unavailable.
+- Store reminder definitions in Room.
+- Receiver does short work: post a notification, then return.
+- Reschedule after reboot/time-zone/time changes as required by product semantics.
+
+## Mistakes
+
+- ❌ `setExactAndAllowWhileIdle()` every five minutes for analytics.
+- ✅ Batch analytics with WorkManager.
+- ❌ Ask users to disable battery optimization as the first solution.
+- ✅ Design for Doze and request exemptions only for qualifying core functions.
+- ❌ Store only epoch milliseconds for “every day at 9 local time.”
+- ✅ Store the civil-time rule and compute the next instant after time-zone/DST changes.
+
+## Sources
+
+- [Schedule alarms](https://developer.android.com/develop/background-work/services/alarms)
+- [Optimize for Doze and App Standby](https://developer.android.com/training/monitoring-device-state/doze-standby)
+
+## Interview question
+
+**Why can a correct alarm still be late?** It may be inexact, restricted by idle policy, revoked special access, device state, or vendor policy. Exact alarms narrow timing variance but still require correct permissions and receiver behavior.
+

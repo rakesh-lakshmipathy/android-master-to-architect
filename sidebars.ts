@@ -403,7 +403,30 @@ const sidebars: SidebarsConfig = {
         'roadmap',
       ],
     },
-    {type: 'category', label: 'Parts VI-X - Android to Architect', items: ['roadmap']},
+    {
+      type: 'category',
+      label: 'Part VI - Background Work and Device Capabilities',
+      collapsed: true,
+      items: [
+        {
+          type: 'category',
+          label: 'Background Execution',
+          collapsed: true,
+          items: [
+            'background/execution-choice',
+            'background/workmanager-basics',
+            'background/workmanager-chains',
+            'background/worker-di-testing',
+            'background/services',
+            'background/foreground-services',
+            'background/alarms-doze',
+            'background/durability-interview',
+          ],
+        },
+        'roadmap',
+      ],
+    },
+    {type: 'category', label: 'Parts VII-X - Android to Architect', items: ['roadmap']},
   ],
 };
 

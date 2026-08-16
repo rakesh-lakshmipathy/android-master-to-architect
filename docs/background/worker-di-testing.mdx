@@ -1,0 +1,86 @@
+---
+id: worker-di-testing
+title: CoroutineWorker, dependency injection, and testing
+---
+
+# CoroutineWorker, dependency injection, and testing
+
+Keep a worker thin: validate input, call a reusable use case, translate domain outcomes to `Result`. Do not bury synchronization policy inside Android framework code.
+
+```kotlin
+@HiltWorker
+class OutboxWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted params: WorkerParameters,
+    private val sendOutbox: SendOutbox,
+) : CoroutineWorker(appContext, params) {
+
+    override suspend fun doWork(): Result = when (
+        val outcome = sendOutbox(accountId = inputData.requireString("accountId"))
+    ) {
+        SendOutcome.Complete -> Result.success()
+        SendOutcome.TemporaryFailure -> Result.retry()
+        SendOutcome.AuthenticationRequired ->
+            Result.failure(workDataOf("reason" to "authentication_required"))
+    }
+}
+```
+
+Configure the application with `HiltWorkerFactory` and make WorkManager use it. Assisted values come from WorkManager; normal dependencies come from DI.
+
+## Separate two test levels
+
+### 1. Test business behavior without WorkManager
+
+```kotlin
+@Test
+fun `temporary network failure keeps outbox row pending`() = runTest {
+    val store = FakeOutboxStore(message = pendingMessage)
+    val sender = FakeSender(result = TemporaryFailure)
+
+    val result = SendOutbox(store, sender)("account-1")
+
+    assertEquals(SendOutcome.TemporaryFailure, result)
+    assertTrue(store.message.isPending)
+}
+```
+
+This test is fast and verifies the important rule.
+
+### 2. Test Worker mapping and constraints
+
+Use `work-testing` helpers (`TestListenableWorkerBuilder` or WorkManager test initialization) to supply input and test that temporary failure maps to retry, missing input maps to failure, and constraints prevent premature execution.
+
+## Cancellation and cleanup
+
+`CoroutineWorker` cancels its coroutine when stopped. Do not catch `CancellationException` and convert it into retry:
+
+```kotlin
+try {
+    sender.send(message)
+} catch (cancelled: CancellationException) {
+    throw cancelled // ✅ preserve structured cancellation
+} catch (io: IOException) {
+    return Result.retry()
+}
+```
+
+## Tests worth keeping
+
+- repeated execution does not duplicate a remote effect;
+- process interruption between remote success and local commit reconciles correctly;
+- retryable and permanent errors map differently;
+- account switch cannot send the previous account’s rows;
+- cancellation closes streams/temp files;
+- scheduler test verifies unique name, policy, tags, constraints, and backoff.
+
+## Sources
+
+- [Threading in CoroutineWorker](https://developer.android.com/develop/background-work/background-tasks/persistent/threading/coroutineworker)
+- [Test Worker implementation](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/test-worker-implementation)
+- [Hilt and WorkManager](https://developer.android.com/training/dependency-injection/hilt-jetpack)
+
+## Exercise
+
+Refactor a worker that directly calls Retrofit and Room into `Worker -> SendOutbox use case -> ports`. Prove the use case with fakes, then write one adapter-level worker test.
+

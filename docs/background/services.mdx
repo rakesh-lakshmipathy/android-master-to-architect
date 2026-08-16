@@ -1,0 +1,73 @@
+---
+id: services
+title: Started and bound services
+---
+
+# Started and bound services
+
+A `Service` is an Android component, **not a background thread**. Its lifecycle callbacks run on the app’s main thread unless you move work to another dispatcher/thread.
+
+## Started service: command-oriented
+
+```kotlin
+class PlaybackService : Service() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_PLAY -> player.play()
+            ACTION_PAUSE -> player.pause()
+        }
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        player.release()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?) = null
+}
+```
+
+`START_NOT_STICKY`, `START_STICKY`, and `START_REDELIVER_INTENT` describe restart behavior after the system kills the service. They are not persistence guarantees; persist essential session state yourself.
+
+## Bound service: relationship-oriented
+
+```kotlin
+class SensorSessionService : Service() {
+    inner class LocalBinder : Binder() {
+        fun service(): SensorSessionService = this@SensorSessionService
+    }
+    private val binder = LocalBinder()
+    override fun onBind(intent: Intent): IBinder = binder
+}
+```
+
+A local binder is only safe when client and service are in the same process. Cross-process interfaces require IPC (for example AIDL) and must treat all input as untrusted.
+
+## Started and bound at the same time
+
+A music service may be started so playback continues after UI unbinds, and bound so the visible UI can control/query it. It stops only after both the started state is stopped and all clients unbind.
+
+## Common mistakes
+
+- ❌ Perform blocking database/network I/O inside `onStartCommand`.
+- ✅ Launch managed asynchronous work and define cancellation/cleanup.
+- ❌ Use a service merely because work is “background.”
+- ✅ Choose based on lifetime and user visibility.
+- ❌ Keep Activity references/listeners after unbind.
+- ✅ Remove callbacks and avoid UI ownership inside the service.
+- ❌ Assume `onDestroy()` always runs.
+- ✅ Persist critical state incrementally; abrupt process death skips callbacks.
+
+## Sources
+
+- [Services overview](https://developer.android.com/develop/background-work/services)
+- [Bound services](https://developer.android.com/develop/background-work/services/bound-services)
+
+## Interview question
+
+**Does a Service prevent process death?** No. It communicates ongoing importance to the system, and a foreground service receives stronger priority, but the process can still die. Correct apps recover from persisted state.
+

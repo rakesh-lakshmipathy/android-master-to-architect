@@ -1,0 +1,83 @@
+---
+id: durability-interview
+title: Process death, reboot, durable scheduling, and interview lab
+---
+import Admonition from '@theme/Admonition';
+
+# Process death, reboot, durable scheduling, and interview lab
+
+Android can remove your process without calling cleanup callbacks. Reboot removes all processes. Force-stop is stronger: the package enters a stopped state and scheduled/background delivery is restricted until the user launches/interacts with it again.
+
+## What survives?
+
+| Mechanism/state | Process death | Reboot | Notes |
+|---|---:|---:|---|
+| ordinary coroutine | ❌ | ❌ | belongs to memory/process |
+| started/foreground service instance | ❌ | ❌ | may be recreated in allowed cases; persist state |
+| WorkManager request | ✅ | ✅ | persisted and rescheduled by the library |
+| AlarmManager alarm | ✅ | ❌ | normally reschedule after boot |
+| Room/file/DataStore state | ✅ | ✅ | unless cleared/corrupted/uninstalled |
+
+## Boot receiver pattern
+
+```xml
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+<receiver
+    android:name=".ReminderBootReceiver"
+    android:enabled="true"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+    </intent-filter>
+</receiver>
+```
+
+The receiver should query durable reminder rules and quickly reschedule them. `onReceive()` has a short execution window; do not perform a long database migration or network sync there. Enqueue appropriate work instead.
+
+## Architect’s recovery model
+
+```text
+Persist intent -> schedule trigger -> execute idempotently -> persist outcome
+       ↑                                      |
+       └──────── reconcile after restart ─────┘
+```
+
+For an upload, persist an outbox row before scheduling. On startup, reconcile rows whose work was lost, cancelled, or ambiguously completed. The database is business truth; the scheduler is an execution mechanism.
+
+## System-design lab: reliable evidence upload
+
+Requirements: photos upload on Wi-Fi, survive reboot, show user progress, avoid duplicates, support sign-out.
+
+1. Save encrypted file and Room outbox row in one application transaction boundary.
+2. Enqueue uniquely by upload ID with network/battery constraints.
+3. Worker streams file, checkpoints multipart state, and uses an idempotency key.
+4. Progress UI joins Room state with `WorkInfo`; Room owns durable status.
+5. Retry timeouts/5xx with backoff; mark permanent validation/auth failures actionable.
+6. On sign-out, cancel tagged work, revoke credentials, and decide whether local evidence is retained or deleted.
+7. Cleanup occurs only after server confirmation and retention rules allow it.
+
+## Interview questions
+
+1. **WorkManager versus foreground service?** Durable deferrable completion versus immediate, user-visible ongoing work. A long-running worker may promote itself when justified, but restrictions still apply.
+2. **Can WorkManager guarantee exact execution time?** No. Constraints and system policy determine timing.
+3. **Why must a worker be idempotent?** It can restart/retry after partial execution or ambiguous failure.
+4. **What belongs in input `Data`?** Small stable identifiers/configuration—not large business payloads.
+5. **Does `BOOT_COMPLETED` arrive after force-stop?** Do not design recovery around it; stopped-package behavior prevents normal background delivery until user interaction.
+6. **How do you test reboot recovery?** Persist rules, recreate scheduler/process state in tests, and verify reconciliation/rescheduling; also run device tests with process kill/reboot/Doze commands.
+
+<Admonition type="tip" title="The architect-level answer">
+Name the required guarantee, choose the weakest API that provides it, persist business intent independently, make execution repeatable, and define recovery from every boundary between local and remote commits.
+</Admonition>
+
+## Sources
+
+- [Persistent work with WorkManager](https://developer.android.com/develop/background-work/background-tasks/persistent)
+- [Broadcasts overview](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
+- [Test background behavior](https://developer.android.com/develop/background-work/background-tasks/testing)
+
+## Exercises
+
+1. Draw the failure timeline when the server succeeds and the process dies before Room is updated.
+2. Create a decision table for chat message send, daily cache refresh, workout tracking, and alarm clock.
+3. Test unique work replacement while the previous worker is already performing a non-cancellable remote call.

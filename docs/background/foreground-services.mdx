@@ -1,0 +1,70 @@
+---
+id: foreground-services
+title: Foreground services, types, and restrictions
+---
+import Admonition from '@theme/Admonition';
+
+# Foreground services, types, and restrictions
+
+A foreground service (FGS) is for work the user actively notices: navigation, a workout, media playback, device connection, or a user-started large transfer. It shows an ongoing notification and must obey type-specific permissions and restrictions.
+
+## Lifecycle handshake
+
+```kotlin
+ContextCompat.startForegroundService(
+    context,
+    Intent(context, TripService::class.java).setAction(ACTION_START),
+)
+```
+
+Inside the service, call `startForeground(...)` promptly with a real notification. Delaying while a database or network request runs can cause the system to stop/crash the service.
+
+```xml
+<service
+    android:name=".TripService"
+    android:exported="false"
+    android:foregroundServiceType="location" />
+```
+
+Declare the general foreground-service permission plus type-specific permissions required by the target SDK/platform. The runtime service type must match manifest declarations and actual behavior.
+
+## Background-start restrictions
+
+Modern Android generally prevents an app already in the background from starting an FGS unless a documented exemption applies. While-in-use permissions add another constraint: a background app may not have usable camera, microphone, or location access simply because it declared an FGS.
+
+Practical design:
+
+1. User taps **Start trip** while the app is visible.
+2. Validate permission and location settings.
+3. Start FGS and immediately publish notification.
+4. Persist trip checkpoints.
+5. Notification offers pause/stop actions.
+6. Stop foreground state and the service when the trip ends.
+
+## Time limits and failure recovery
+
+Some FGS types have time limits or special rules on newer releases. Handle timeout callbacks where applicable, stop promptly, and do not assume indefinite execution. If durable follow-up remains, enqueue WorkManager separately.
+
+<Admonition type="danger" title="Notification permission is not the FGS permission">
+An app may be allowed to start a foreground service while its notification is not visible in the notification drawer because the notification permission was denied; platform UI still exposes running services. Design honest user controls and request notification permission contextually.
+</Admonition>
+
+## ✅ / ❌
+
+- ❌ Start an FGS at boot to pre-warm caches.
+- ✅ Use durable deferrable work within boot/platform restrictions.
+- ❌ Label every service `dataSync` to satisfy the manifest.
+- ✅ Select the type representing actual user-visible work.
+- ❌ Hide the stop action for a user-started continuous operation.
+- ✅ Give the user control and clear status.
+
+## Sources
+
+- [Foreground services overview](https://developer.android.com/develop/background-work/services/fgs)
+- [Foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types)
+- [Restrictions on starting from the background](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
+
+## Exercise
+
+Design a workout tracker for Android 12 through the current target SDK. List start trigger, service type, runtime permissions, notification actions, persisted recovery state, and what happens when the user force-stops the app.
+

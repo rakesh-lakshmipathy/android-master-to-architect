@@ -1,0 +1,91 @@
+---
+id: workmanager-basics
+title: Work requests, constraints, data, progress, and cancellation
+---
+
+# Work requests, constraints, data, progress, and cancellation
+
+WorkManager stores a request, evaluates constraints, runs a `Worker`, and records its state. It guarantees eligible work is **scheduled**, not that every server operation succeeds.
+
+## One-time and periodic requests
+
+```kotlin
+val oneTime = OneTimeWorkRequestBuilder<ThumbnailWorker>()
+    .addTag("thumbnail:$assetId")
+    .setInputData(workDataOf("assetId" to assetId))
+    .build()
+
+val periodic = PeriodicWorkRequestBuilder<FeedSyncWorker>(6, TimeUnit.HOURS)
+    .setConstraints(
+        Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+    )
+    .build()
+```
+
+Periodic work is inexact and has a platform-enforced minimum interval. Runs can be delayed by constraints, Doze, quotas, or system load.
+
+## Data is a small control envelope
+
+```kotlin
+class ThumbnailWorker(
+    appContext: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(appContext, params) {
+    override suspend fun doWork(): Result {
+        val assetId = inputData.getString("assetId")
+            ?: return Result.failure(workDataOf("reason" to "missing_id"))
+        // Load the real record/file using assetId.
+        return Result.success(workDataOf("assetId" to assetId))
+    }
+}
+```
+
+`Data` supports a limited set of value types and has a size limit. Store business payloads in Room/files; pass keys through WorkManager.
+
+## Progress is observable, not durable business truth
+
+```kotlin
+setProgress(workDataOf("uploadedBytes" to sent, "totalBytes" to total))
+```
+
+The UI can observe `WorkInfo`, but a progress percentage can reset when a worker retries. Store completed upload parts/checkpoints durably when resume correctness matters.
+
+## Cancellation is cooperative
+
+```kotlin
+workManager.cancelUniqueWork("receipt-upload-$receiptId")
+```
+
+Cancellation changes WorkManager state and stops the worker. Suspending APIs should cooperate with coroutine cancellation. A remote HTTP request already accepted by the server may still complete; cancellation is not a distributed rollback.
+
+## Practical state model
+
+```text
+ENQUEUED -> RUNNING -> SUCCEEDED
+                   -> FAILED
+                   -> ENQUEUED (retry/backoff)
+ENQUEUED/RUNNING    -> CANCELLED
+BLOCKED -> ENQUEUED when prerequisites finish
+```
+
+## Common mistakes
+
+- ❌ Pass a 5 MB image in `Data`.
+- ✅ Persist the URI/file and pass its stable ID.
+- ❌ Display “upload cancelled” as proof the server removed it.
+- ✅ Model remote cancellation/compensation separately.
+- ❌ Use periodic work as a clock.
+- ✅ Design periodic work to tolerate delayed and skipped opportunities.
+
+## Sources
+
+- [Define work requests](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work)
+- [Observe intermediate progress](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/observe)
+
+## Exercise
+
+Build an upload screen that survives rotation, shows `WorkInfo` state, and loads the final server result from Room rather than treating output `Data` as the source of truth.
+
