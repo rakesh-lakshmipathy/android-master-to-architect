@@ -24,6 +24,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'kotlin/null-safety',
+        'kotlin/string-manipulation-reference',
         {
           type: 'category',
           label: 'Functions and functional Kotlin',
