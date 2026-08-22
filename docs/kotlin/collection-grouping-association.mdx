@@ -1,0 +1,141 @@
+---
+id: collection-grouping-association
+title: Grouping, association, and map lookup
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Grouping, association, and map lookup
+
+Choose based on cardinality: can one key have one value, or many values?
+
+| Operation | Result shape | Duplicate-key behavior |
+|---|---|---|
+| `associateBy` | `Map<K, T>` | Later item replaces earlier item |
+| `groupBy` | `Map<K, List<T>>` | Every item is retained in a list |
+| `groupingBy` | `Grouping<T, K>` | Deferred grouping source for aggregation |
+
+## One value versus many values
+
+```kotlin
+data class Employee(val id: Int, val name: String, val department: String)
+
+fun main() {
+    val employees = listOf(
+        Employee(1, "Rakesh", "Android"),
+        Employee(2, "Anu", "Backend"),
+        Employee(3, "Sam", "Android"),
+    )
+
+    val byId: Map<Int, Employee> = employees.associateBy { it.id }
+    val byDepartment: Map<String, List<Employee>> =
+        employees.groupBy { it.department }
+
+    println(byId[2]?.name)                         // Anu
+    println(byDepartment["Android"].orEmpty())    // Rakesh and Sam
+}
+```
+
+<PlaygroundLink code={`data class Employee(val id: Int, val name: String, val department: String)
+
+fun main() {
+    val employees = listOf(
+        Employee(1, "Rakesh", "Android"),
+        Employee(2, "Anu", "Backend"),
+        Employee(3, "Sam", "Android"),
+    )
+    val byId = employees.associateBy { it.id }
+    val byDepartment = employees.groupBy { it.department }
+    println(byId[2]?.name)
+    println(byDepartment["Android"].orEmpty())
+}`}>
+  Run association and grouping
+</PlaygroundLink>
+
+Map lookup returns a nullable value because the key may be absent. `orEmpty()` is useful only when “missing group means empty group” is the intended domain rule.
+
+## Counting without constructing lists per key
+
+```kotlin
+data class Employee(val name: String, val department: String)
+
+fun main() {
+    val employees = listOf(
+        Employee("A", "Android"),
+        Employee("B", "Backend"),
+        Employee("C", "Android"),
+    )
+
+    val counts = employees
+        .groupingBy { it.department }
+        .eachCount()
+
+    println(counts) // {Android=2, Backend=1}
+}
+```
+
+<PlaygroundLink code={`data class Employee(val name: String, val department: String)
+
+fun main() {
+    val employees = listOf(
+        Employee("A", "Android"),
+        Employee("B", "Backend"),
+        Employee("C", "Android"),
+    )
+    val counts = employees.groupingBy { it.department }.eachCount()
+    println(counts)
+}`}>
+  Run groupingBy and eachCount
+</PlaygroundLink>
+
+`groupBy` constructs `Map<K, List<T>>`. `groupingBy` creates a grouping abstraction consumed by operations such as `eachCount`, `fold`, or `aggregate`; it is useful when the final result is an aggregate rather than lists.
+
+## Duplicate IDs are a policy decision
+
+```kotlin
+data class User(val id: Int, val name: String)
+
+fun main() {
+    val users = listOf(User(1, "Old"), User(1, "New"))
+    val byId = users.associateBy { it.id }
+    println(byId) // {1=User(id=1, name=New)}
+}
+```
+
+<PlaygroundLink code={`data class User(val id: Int, val name: String)
+
+fun main() {
+    val users = listOf(User(1, "Old"), User(1, "New"))
+    val byId = users.associateBy { it.id }
+    println(byId)
+}`}>
+  Run the duplicate-key example
+</PlaygroundLink>
+
+If duplicates violate the server or database contract, overwriting silently is dangerous. Detect them before choosing a winner:
+
+```kotlin
+val duplicates = users.groupBy { it.id }.filterValues { it.size > 1 }
+require(duplicates.isEmpty()) { "Duplicate user IDs: ${duplicates.keys}" }
+```
+
+<PlaygroundLink code={`data class User(val id: Int, val name: String)
+
+fun main() {
+    val users = listOf(User(1, "Old"), User(1, "New"))
+    val duplicates = users.groupBy { it.id }.filterValues { it.size > 1 }
+    val result = runCatching {
+        require(duplicates.isEmpty()) { "Duplicate user IDs: \${duplicates.keys}" }
+    }
+    println(result.exceptionOrNull()?.message)
+}`}>
+  Run duplicate validation
+</PlaygroundLink>
+
+## Interview questions
+
+1. Why did an earlier value disappear after `associateBy`?
+2. What is the inferred type returned by `groupBy`?
+3. When is `groupingBy().eachCount()` preferable to `groupBy()`?
+4. Why does `map[key]` return `V?`?
+

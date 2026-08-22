@@ -1,0 +1,152 @@
+---
+id: collection-access-search-filter
+title: Access, search, and filter collections
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Access, search, and filter collections
+
+These operations answer three different questions:
+
+- **Access:** Which element is at this position?
+- **Search:** Where is the first element matching this rule?
+- **Filter:** Give me every element matching this rule.
+
+## Safe element access
+
+| Need | Throwing operation | Safer nullable operation |
+|---|---|---|
+| First element | `first()` | `firstOrNull()` |
+| Last element | `last()` | `lastOrNull()` |
+| Exactly one element | `single()` | `singleOrNull()` |
+| Element at index | `list[index]` / `elementAt()` | `getOrNull()` / `elementAtOrNull()` |
+
+```kotlin
+fun main() {
+    val names = listOf("Rakesh", "Anu")
+    val empty = emptyList<String>()
+
+    println(names.first())          // Rakesh
+    println(names.getOrNull(10))    // null
+    println(empty.firstOrNull())    // null
+    println(empty.singleOrNull())   // null
+
+    val failure = runCatching { empty.first() }
+    println(failure.exceptionOrNull()!!::class.simpleName)
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val names = listOf("Rakesh", "Anu")
+    val empty = emptyList<String>()
+    println(names.first())
+    println(names.getOrNull(10))
+    println(empty.firstOrNull())
+    println(empty.singleOrNull())
+    val failure = runCatching { empty.first() }
+    println(failure.exceptionOrNull()!!::class.simpleName)
+}`}>
+  Run safe-access examples
+</PlaygroundLink>
+
+Use a throwing operation when absence means a broken invariant. Use the nullable form when absence is expected business behavior. Do not automatically replace every exception with `null`; that can hide corrupted state.
+
+## Search by value, position, or predicate
+
+```kotlin
+fun main() {
+    val skills = listOf("Java", "Kotlin", "Compose", "Kotlin")
+
+    println(skills.indexOf("Kotlin"))                 // 1
+    println(skills.lastIndexOf("Kotlin"))             // 3
+    println(skills.indexOfFirst { it.length > 6 })     // 2
+    println(skills.indexOfLast { it.startsWith("K") }) // 3
+    println(skills.find { it.startsWith("C") })        // Compose
+    println(skills.find { it.startsWith("X") })        // null
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val skills = listOf("Java", "Kotlin", "Compose", "Kotlin")
+    println(skills.indexOf("Kotlin"))
+    println(skills.lastIndexOf("Kotlin"))
+    println(skills.indexOfFirst { it.length > 6 })
+    println(skills.indexOfLast { it.startsWith("K") })
+    println(skills.find { it.startsWith("C") })
+    println(skills.find { it.startsWith("X") })
+}`}>
+  Run search examples
+</PlaygroundLink>
+
+`find(predicate)` is an alias for `firstOrNull(predicate)`. Index-search operations return `-1` when nothing matches; element-search operations commonly return `null`.
+
+## Filter families
+
+| Operator | What remains |
+|---|---|
+| `filter` | Matching values |
+| `filterNot` | Non-matching values |
+| `filterIndexed` | Values selected using index and value |
+| `filterNotNull` | Non-null values, with nullable type removed |
+| `filterIsInstance<T>` | Runtime values of type `T` |
+
+```kotlin
+fun main() {
+    val values: List<Any?> = listOf(10, 20L, 30.5f, "Android", null, 40)
+
+    val ints = values.filterIsInstance<Int>()
+    val numbers = values.filterIsInstance<Number>()
+    val total = numbers.sumOf { it.toDouble() }
+
+    println(ints)       // [10, 40]
+    println(numbers)    // [10, 20, 30.5, 40]
+    println(total)      // 100.5
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val values: List<Any?> = listOf(10, 20L, 30.5f, "Android", null, 40)
+    val ints = values.filterIsInstance<Int>()
+    val numbers = values.filterIsInstance<Number>()
+    val total = numbers.sumOf { it.toDouble() }
+    println(ints)
+    println(numbers)
+    println(total)
+}`}>
+  Run filterIsInstance example
+</PlaygroundLink>
+
+<Admonition type="warning" title="Interview trap: Int is not every Number">
+`filterIsInstance<Int>()` keeps only `Int`. It excludes `Long`, `Float`, and `Double`. Use `Number` when the domain genuinely accepts different numeric representations, then convert deliberately before arithmetic.
+</Admonition>
+
+## Predict before revealing
+
+```kotlin
+val words = listOf("one", "three", "two")
+println(words.first { it.length == 3 })
+println(words.filter { it.length == 3 })
+```
+
+<details><summary><strong>Reveal the output and explanation</strong></summary><p><code>first</code> stops at <code>one</code>. <code>filter</code> examines the complete list and returns <code>[one, two]</code>.</p></details>
+
+<PlaygroundLink code={`fun main() {
+    val words = listOf("one", "three", "two")
+    println(words.first { it.length == 3 })
+    println(words.filter { it.length == 3 })
+}`}>
+  Check your prediction
+</PlaygroundLink>
+
+## Android scenario
+
+When reading a selected item from UI state, `firstOrNull` may correctly represent “nothing selected.” When reading a required database migration record, returning null may hide a violated invariant. The operation is a product decision, not merely a syntax preference.
+
+## Interview questions
+
+1. Why can `firstOrNull()` be safer but still logically wrong?
+2. What does `indexOfFirst` return when no element matches?
+3. Why does `filterIsInstance<Int>()` exclude a `Long`?
+4. When should `single()` be preferred over `first()`?
+

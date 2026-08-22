@@ -1,0 +1,176 @@
+---
+id: collection-mutation-copying
+title: Mutation, references, and copying
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Mutation, references, and copying
+
+<Admonition type="tip" title="The distinction to remember">
+`val` prevents a variable from being reassigned. A mutable collection controls whether the referenced object can change. These are different rules.
+</Admonition>
+
+## `val` does not make an object immutable
+
+```kotlin
+fun main() {
+    val numbers = mutableListOf(10, 20)
+    numbers.add(30)       // allowed: mutate the object
+    numbers[0] = 100      // allowed: mutate the object
+    // numbers = mutableListOf(1, 2) // compile error: reassign val
+    println(numbers)
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val numbers = mutableListOf(10, 20)
+    numbers.add(30)
+    numbers[0] = 100
+    println(numbers)
+}`}>
+  Run val with a mutable object
+</PlaygroundLink>
+
+With `var`, both mutation and reassignment are possible. Prefer the narrowest mutability that fits the ownership model.
+
+## Assignment creates an alias, not a copy
+
+```text
+list1 -----+
+           +----> one MutableList object
+list2 -----+
+```
+
+```kotlin
+fun main() {
+    val list1 = mutableListOf("Kotlin", "Java")
+    val list2 = list1
+
+    list2.add("Compose")
+
+    println(list1)           // [Kotlin, Java, Compose]
+    println(list1 === list2) // true: same object
+    println(list1 == list2)  // true: equal contents
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val list1 = mutableListOf("Kotlin", "Java")
+    val list2 = list1
+    list2.add("Compose")
+    println(list1)
+    println(list1 === list2)
+    println(list1 == list2)
+}`}>
+  Run the aliasing example
+</PlaygroundLink>
+
+## `toMutableList()` creates another outer list
+
+```text
+list1 --------> MutableList object #1
+list2 --------> MutableList object #2
+```
+
+```kotlin
+fun main() {
+    val list1 = mutableListOf("Kotlin", "Java")
+    val list2 = list1.toMutableList()
+
+    list2.add("Compose")
+
+    println(list1)           // [Kotlin, Java]
+    println(list2)           // [Kotlin, Java, Compose]
+    println(list1 === list2) // false
+    println(list1 == list2)  // false after mutation
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val list1 = mutableListOf("Kotlin", "Java")
+    val list2 = list1.toMutableList()
+    list2.add("Compose")
+    println(list1)
+    println(list2)
+    println(list1 === list2)
+    println(list1 == list2)
+}`}>
+  Run the outer-copy example
+</PlaygroundLink>
+
+## Copies are normally shallow
+
+Creating a new outer list does not recursively copy mutable elements inside it.
+
+```kotlin
+fun main() {
+    val original = listOf(mutableListOf("Kotlin"))
+    val copied = original.toList()
+
+    copied[0].add("Compose")
+
+    println(original) // [[Kotlin, Compose]]
+    println(original[0] === copied[0]) // true
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val original = listOf(mutableListOf("Kotlin"))
+    val copied = original.toList()
+    copied[0].add("Compose")
+    println(original)
+    println(original[0] === copied[0])
+}`}>
+  Run the shallow-list-copy example
+</PlaygroundLink>
+
+The same trap applies to a data-class `copy()`:
+
+```kotlin
+data class User(val name: String, val skills: MutableList<String>)
+
+fun main() {
+    val user1 = User("Rakesh", mutableListOf("Kotlin"))
+    val user2 = user1.copy()
+    user2.skills.add("Compose")
+    println(user1.skills) // [Kotlin, Compose]
+
+    val independent = user1.copy(skills = user1.skills.toMutableList())
+    independent.skills.add("Android")
+    println(user1.skills)       // [Kotlin, Compose]
+    println(independent.skills) // [Kotlin, Compose, Android]
+}
+```
+
+<PlaygroundLink code={`data class User(val name: String, val skills: MutableList<String>)
+
+fun main() {
+    val user1 = User("Rakesh", mutableListOf("Kotlin"))
+    val user2 = user1.copy()
+    user2.skills.add("Compose")
+    println(user1.skills)
+    val independent = user1.copy(skills = user1.skills.toMutableList())
+    independent.skills.add("Android")
+    println(user1.skills)
+    println(independent.skills)
+}`}>
+  Run data-class shallow copying
+</PlaygroundLink>
+
+## Mutation operations
+
+`MutableCollection` provides operations such as `add`, `addAll`, `remove`, `removeAll`, `retainAll`, and `clear`. `MutableList` additionally supports indexed replacement and `removeAt`.
+
+<Admonition type="warning" title="Android ownership rule">
+Do not expose a ViewModel's internal mutable list and expect callers to behave. Keep mutation inside the owner and publish snapshots or an immutable collection model. Copying protects the outer structure only; nested mutable objects still need an ownership strategy.
+</Admonition>
+
+## Interview questions
+
+1. Why can an object referenced by `val` still change?
+2. What is the difference between `==` and `===` for lists?
+3. Does `toList()` perform a deep copy?
+4. Why can `data class.copy()` still share mutable state?
+5. What should a ViewModel expose to Compose?
+

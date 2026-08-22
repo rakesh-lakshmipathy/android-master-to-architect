@@ -1,22 +1,39 @@
 ---
 id: collections-overview
-title: Collections and advanced Kotlin APIs
+title: Kotlin Collections learning path
 ---
 import Admonition from '@theme/Admonition';
 
-# Collections, sequences, generics, variance, extensions, delegates, and DSLs
+# Kotlin Collections: from first list to production ownership
 
 <Admonition type="tip" title="Simple idea">
-Collections store groups of values. Sequences process values lazily. Generics keep reusable APIs type-safe. Variance controls safe subtype relationships. Extensions, delegates, and DSLs improve how reusable behavior is expressed.
+Collections store and transform groups of values. Mastery also requires understanding absence, duplicate keys, ordering, mutation, aliases, copying, allocation, and ownership—not merely memorizing operator names.
 </Admonition>
 
 ## Chapter pages
 
-1. [Collection hierarchy, read-only versus mutable, implementations, and variance](./collection-hierarchy)
-2. [Collection foundations](./collections)
-3. [Collection operations through practical scenarios](./collection-operations)
-4. [Sequences and performance](./sequences)
-5. [Generics and variance](./generics-variance)
-6. [Extension functions in depth](./extensions-deep-dive)
-7. [Delegates and DSLs](./delegates-dsls)
-8. [Android scenarios and interviews](./collections-android-interview)
+1. [Hierarchy, read-only versus mutable, and implementations](./collection-hierarchy)
+2. [List, Set, Map, and transformation foundations](./collections)
+3. [Access, search, filtering, safe absence, and runtime type filtering](./collection-access-search-filter)
+4. [Sorting, comparators, aggregation, and domain folds](./collection-sorting-aggregation)
+5. [Grouping, association, duplicate keys, and map lookup](./collection-grouping-association)
+6. [Mutation, references, aliases, shallow copying, and ownership](./collection-mutation-copying)
+7. [Advanced collection operations through practical scenarios](./collection-operations)
+8. [Sequence execution order and performance](./sequences)
+9. [Android scenarios and interview exercises](./collections-android-interview)
+
+Generics and variance now live under **Kotlin type system**. Extensions, delegates, and DSLs live under **Advanced Kotlin**, so the navigation does not imply that they are collection concepts.
+
+## How to learn each page
+
+Use the same cycle repeatedly:
+
+```text
+Understand the simple idea
+-> predict the code output
+-> run it
+-> explain what happened internally
+-> change an input or edge case
+-> answer the interview question
+-> connect it to Android ownership and performance
+```

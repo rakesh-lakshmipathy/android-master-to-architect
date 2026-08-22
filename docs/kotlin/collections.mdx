@@ -1,97 +1,123 @@
 ---
 id: collections
-title: Collections
+title: List, Set, Map, and operator directory
 ---
 import Admonition from '@theme/Admonition';
 import PlaygroundLink from '@site/src/components/PlaygroundLink';
 
-# Collections
+# List, Set, Map, and operator directory
 
-## List, Set, and Map
+Start by choosing the correct shape:
 
-- `List`: ordered values; duplicates allowed.
-- `Set`: unique values.
-- `Map`: keys mapped to values.
+| Shape | Meaning | Example |
+|---|---|---|
+| `List<T>` | Ordered; duplicates allowed; indexed | Search results |
+| `Set<T>` | Unique elements by equality | Selected IDs |
+| `Map<K, V>` | Unique keys associated with values | User by ID |
 
-```kotlin
-val names = listOf("Ada", "Ada", "Grace")
-val unique = names.toSet()
-val ages = mapOf("Ada" to 36, "Grace" to 85)
-```
-
-Read-only interfaces prevent mutation through that reference, but do not guarantee the underlying object can never change.
-
-## Transformations
+## See the behavioral differences
 
 ```kotlin
-val result = numbers
-    .filter { number -> number % 2 == 0 }
-    .map { number -> number * number }
+fun main() {
+    val names: List<String> = listOf("Ada", "Ada", "Grace")
+    val uniqueNames: Set<String> = names.toSet()
+    val ages: Map<String, Int> = mapOf("Ada" to 36, "Grace" to 85)
+
+    println(names)               // [Ada, Ada, Grace]
+    println(uniqueNames)         // [Ada, Grace]
+    println(ages["Ada"])        // 36
+    println(ages["Missing"])    // null
+}
 ```
 
-For `[1,2,3,4]`, `filter` produces `[2,4]`; `map` produces `[4,16]`.
+<PlaygroundLink code={`fun main() {
+    val names: List<String> = listOf("Ada", "Ada", "Grace")
+    val uniqueNames: Set<String> = names.toSet()
+    val ages: Map<String, Int> = mapOf("Ada" to 36, "Grace" to 85)
+    println(names)
+    println(uniqueNames)
+    println(ages["Ada"])
+    println(ages["Missing"])
+}`}>
+  Run List, Set, and Map
+</PlaygroundLink>
+
+A Set is not “a faster List.” It represents a different domain rule: duplicates have no meaning. A Map lookup is nullable because the requested key may not exist.
+
+## Transformation pipeline
+
+```kotlin
+fun main() {
+    val numbers = listOf(1, 2, 3, 4)
+    val result = numbers
+        .filter { number -> number % 2 == 0 }
+        .map { number -> number * number }
+
+    println(numbers) // [1, 2, 3, 4]
+    println(result)  // [4, 16]
+}
+```
 
 <PlaygroundLink code={`fun main() {
     val numbers = listOf(1, 2, 3, 4)
     val result = numbers
         .filter { number -> number % 2 == 0 }
         .map { number -> number * number }
+    println(numbers)
     println(result)
-}`} />
+}`}>
+  Run the transformation pipeline
+</PlaygroundLink>
 
-<div className="expected-output"><strong>Expected:</strong> `[4, 16]`.</div>
+`filter` creates the matching result; `map` creates one transformed value per input. Neither operation mutates `numbers`.
 
-## Useful operations
+## Complete operator directory
 
-| Operation | Meaning |
-|---|---|
-| `map` | One output per input |
-| `mapNotNull` | Transform and drop null results |
-| `flatMap` | Transform each input into several outputs, then flatten |
-| `associateBy` | Build a map using a selected key |
-| `groupBy` | Group all items under keys |
-| `partition` | Split into matching and non-matching lists |
-| `fold` | Accumulate one result |
+Use this as a discovery index, then open the linked lesson for behavior, edge cases, output, and runnable examples.
 
-```kotlin
-val total = listOf(10, 20, 30).fold(0) { sum, value -> sum + value }
-```
+| Family | Important operations | Detailed lesson |
+|---|---|---|
+| Access | `first`, `firstOrNull`, `last`, `lastOrNull`, `single`, `getOrNull`, `elementAtOrNull` | [Access and search](./collection-access-search-filter) |
+| Search | `find`, `indexOf`, `indexOfFirst`, `indexOfLast` | [Access and search](./collection-access-search-filter) |
+| Filter | `filter`, `filterNot`, `filterIndexed`, `filterNotNull`, `filterIsInstance` | [Filtering and types](./collection-access-search-filter) |
+| Transform | `map`, `mapIndexed`, `mapNotNull`, `flatMap`, `flatten` | [Advanced operations](./collection-operations) |
+| Check | `any`, `all`, `none`, `contains`, `containsAll` | [Advanced operations](./collection-operations) |
+| Slice | `take`, `takeLast`, `drop`, `dropLast`, `takeWhile`, `dropWhile` | [Advanced operations](./collection-operations) |
+| Sort | `sorted`, `sortedDescending`, `sortedBy`, `sortedWith`, `sortBy` | [Sorting](./collection-sorting-aggregation) |
+| Aggregate | `sum`, `sumOf`, `count`, `minOrNull`, `maxOrNull`, `fold`, `reduce` | [Aggregation](./collection-sorting-aggregation) |
+| Group | `groupBy`, `groupingBy`, `eachCount` | [Grouping](./collection-grouping-association) |
+| Map creation | `associate`, `associateBy`, `associateWith` | [Association](./collection-grouping-association) |
+| Unique | `distinct`, `distinctBy`, `toSet` | [Advanced operations](./collection-operations) |
+| Combine | `zip`, `unzip`, `plus`, `minus` | [Advanced operations](./collection-operations) |
+| Split | `partition`, `chunked`, `windowed` | [Advanced operations](./collection-operations) |
+| Mutation | `add`, `addAll`, `remove`, `removeAt`, `clear`, `retainAll` | [Mutation and copying](./collection-mutation-copying) |
 
-## Mutation and aliases
-
-```kotlin
-val mutable = mutableListOf("A")
-val readOnly: List<String> = mutable
-mutable += "B"
-println(readOnly) // [A, B]
-```
-
-The read-only reference cannot mutate the list, but it observes changes made through the mutable alias.
-
-<div className="practice-bad">
-
-**✕ Expose internal mutable state**
+## Predict the output
 
 ```kotlin
-class Cart { val items = mutableListOf<Item>() }
-```
-</div>
+fun main() {
+    val values = listOf(1, 2, 2, 3)
+    val changed = values
+        .toSet()
+        .map { it * 10 }
 
-<div className="practice-good">
-
-**✓ Keep mutation private**
-
-```kotlin
-class Cart {
-    private val mutableItems = mutableListOf<Item>()
-    val items: List<Item> get() = mutableItems.toList()
+    println(values)
+    println(changed)
 }
 ```
-</div>
 
-Returning a copy gives stronger protection but costs allocation. Choose based on ownership and performance requirements.
+<details><summary><strong>Reveal</strong></summary><p>The original remains <code>[1, 2, 2, 3]</code>. The Set removes the duplicate, and map returns <code>[10, 20, 30]</code> for the current insertion-preserving implementation. Do not treat incidental ordering from an arbitrary Set implementation as a universal business guarantee.</p></details>
 
-<Admonition type="tip" title="Interview-ready answer">
-Kotlin separates read-only and mutable collection interfaces. Read-only does not necessarily mean deeply immutable. Collection operators are expressive, but understand whether they create new collections, short-circuit, or expose mutable aliases.
+<PlaygroundLink code={`fun main() {
+    val values = listOf(1, 2, 2, 3)
+    val changed = values.toSet().map { it * 10 }
+    println(values)
+    println(changed)
+}`}>
+  Check your prediction
+</PlaygroundLink>
+
+<Admonition type="tip" title="Interview-ready foundation">
+Choose List, Set, or Map from the domain's cardinality and ordering rules. Then choose operators by behavior: throwing versus nullable, first match versus all matches, new result versus mutation, one value per key versus many, eager versus lazy, and silent duplicate replacement versus validation.
 </Admonition>
 

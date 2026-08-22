@@ -56,18 +56,36 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Collections and advanced APIs',
+          label: 'Kotlin Collections',
           collapsed: true,
           items: [
             {type: 'doc', id: 'kotlin/collections-overview', label: 'Chapter overview'},
             'kotlin/collection-hierarchy',
             'kotlin/collections',
+            'kotlin/collection-access-search-filter',
+            'kotlin/collection-sorting-aggregation',
+            'kotlin/collection-grouping-association',
+            'kotlin/collection-mutation-copying',
             'kotlin/collection-operations',
             'kotlin/sequences',
+            'kotlin/collections-android-interview',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Kotlin type system',
+          collapsed: true,
+          items: [
             'kotlin/generics-variance',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Advanced Kotlin',
+          collapsed: true,
+          items: [
             'kotlin/extensions-deep-dive',
             'kotlin/delegates-dsls',
-            'kotlin/collections-android-interview',
           ],
         },
         {

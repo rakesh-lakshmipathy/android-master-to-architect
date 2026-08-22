@@ -1,0 +1,159 @@
+---
+id: collection-sorting-aggregation
+title: Sorting and aggregating collections
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Sorting and aggregating collections
+
+Sorting decides order. Aggregation reduces many values into a smaller result such as a count, minimum, maximum, total, or domain summary.
+
+## Sorting values and objects
+
+```kotlin
+data class User(val name: String, val age: Int)
+
+fun main() {
+    val users = listOf(
+        User("Sam", 30),
+        User("Anu", 25),
+        User("Rakesh", 30),
+    )
+
+    println(users.sortedBy { it.name })
+    println(users.sortedByDescending { it.age })
+    println(users.sortedWith(compareBy<User> { it.age }.thenBy { it.name }))
+}
+```
+
+<PlaygroundLink code={`data class User(val name: String, val age: Int)
+
+fun main() {
+    val users = listOf(User("Sam", 30), User("Anu", 25), User("Rakesh", 30))
+    println(users.sortedBy { it.name })
+    println(users.sortedByDescending { it.age })
+    println(users.sortedWith(compareBy<User> { it.age }.thenBy { it.name }))
+}`}>
+  Run sorting examples
+</PlaygroundLink>
+
+`thenBy` breaks ties: age is compared first, then name when ages are equal. Define null placement, case sensitivity, and locale-aware collation when user-visible ordering requires them.
+
+## New result versus in-place mutation
+
+```kotlin
+fun main() {
+    val original = mutableListOf(3, 1, 2)
+    val sortedCopy = original.sorted()
+
+    println(original)   // [3, 1, 2]
+    println(sortedCopy) // [1, 2, 3]
+
+    original.sort()
+    println(original)   // [1, 2, 3]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val original = mutableListOf(3, 1, 2)
+    val sortedCopy = original.sorted()
+    println(original)
+    println(sortedCopy)
+    original.sort()
+    println(original)
+}`}>
+  Compare sorted and sort
+</PlaygroundLink>
+
+- `sorted`, `sortedBy`, and `sortedWith` return a new list.
+- `sort`, `sortBy`, and `sortWith` mutate a mutable list.
+
+For Compose state, producing a new list usually makes state transitions clearer. For a private large buffer in a performance-sensitive algorithm, in-place sorting may be appropriate.
+
+## Aggregate operations
+
+```kotlin
+data class Order(val quantity: Int, val price: Double)
+
+fun main() {
+    val orders = listOf(Order(2, 100.0), Order(1, 50.0))
+
+    println(orders.count { it.quantity > 1 })
+    println(orders.sumOf { it.quantity })
+    println(orders.sumOf { it.quantity * it.price })
+    println(orders.minOfOrNull { it.price })
+    println(orders.maxByOrNull { it.quantity })
+}
+```
+
+<PlaygroundLink code={`data class Order(val quantity: Int, val price: Double)
+
+fun main() {
+    val orders = listOf(Order(2, 100.0), Order(1, 50.0))
+    println(orders.count { it.quantity > 1 })
+    println(orders.sumOf { it.quantity })
+    println(orders.sumOf { it.quantity * it.price })
+    println(orders.minOfOrNull { it.price })
+    println(orders.maxByOrNull { it.quantity })
+}`}>
+  Run aggregation examples
+</PlaygroundLink>
+
+Avoid `Double` for exact currency in production; use an appropriate decimal/minor-unit money model. A syntactically correct `sumOf` can still implement the wrong financial model.
+
+## `fold` can build a domain summary
+
+```kotlin
+data class Summary(val accepted: Int, val rejected: Int)
+
+fun main() {
+    val results = listOf(true, false, true)
+    val summary = results.fold(Summary(0, 0)) { acc, accepted ->
+        if (accepted) acc.copy(accepted = acc.accepted + 1)
+        else acc.copy(rejected = acc.rejected + 1)
+    }
+    println(summary)
+}
+```
+
+<PlaygroundLink code={`data class Summary(val accepted: Int, val rejected: Int)
+
+fun main() {
+    val results = listOf(true, false, true)
+    val summary = results.fold(Summary(0, 0)) { acc, accepted ->
+        if (accepted) acc.copy(accepted = acc.accepted + 1)
+        else acc.copy(rejected = acc.rejected + 1)
+    }
+    println(summary)
+}`}>
+  Run the domain fold
+</PlaygroundLink>
+
+## Predict before revealing
+
+```kotlin
+val values = mutableListOf(3, 1, 2)
+val result = values.sortedDescending()
+println(values)
+println(result)
+```
+
+<details><summary><strong>Reveal</strong></summary><p>The original remains <code>[3, 1, 2]</code>; the returned list is <code>[3, 2, 1]</code>. The <code>sorted...</code> family does not mutate the receiver.</p></details>
+
+<PlaygroundLink code={`fun main() {
+    val values = mutableListOf(3, 1, 2)
+    val result = values.sortedDescending()
+    println(values)
+    println(result)
+}`}>
+  Check your prediction
+</PlaygroundLink>
+
+## Interview questions
+
+1. What is the difference between `sortedBy` and `sortBy`?
+2. How do you sort by age and then by name?
+3. Why should financial totals avoid binary floating-point?
+4. When is `fold` better than multiple separate collection passes?
+
