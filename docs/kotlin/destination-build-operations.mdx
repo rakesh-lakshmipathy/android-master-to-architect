@@ -1,0 +1,148 @@
+---
+id: destination-build-operations
+title: Destination operations and collection builders
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Destination operations and collection builders
+
+Normal transformations create and return a result collection. Operations ending in `To` append results into a destination you provide. Builder functions construct a collection inside a controlled mutable scope and return a read-only view.
+
+## `filterTo` and `mapTo`
+
+```kotlin
+fun main() {
+    val words = listOf("Kotlin", "Java", "Compose", "Kotlin")
+    val destination = linkedSetOf<String>("Existing")
+
+    words.filterTo(destination) { it.length > 4 }
+    words.mapTo(destination) { it.uppercase() }
+
+    println(destination)
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val words = listOf("Kotlin", "Java", "Compose", "Kotlin")
+    val destination = linkedSetOf<String>("Existing")
+    words.filterTo(destination) { it.length > 4 }
+    words.mapTo(destination) { it.uppercase() }
+    println(destination)
+}`}>
+  Run destination transformations
+</PlaygroundLink>
+
+Destination operations **append**; they do not clear existing contents. Choosing a Set destination also changes duplicate behavior. This is useful when deliberately accumulating into a known collection, but surprising if a reused destination was expected to start empty.
+
+## `associateTo` and `groupByTo`
+
+```kotlin
+data class User(val id: Int, val team: String, val name: String)
+
+fun main() {
+    val users = listOf(
+        User(1, "Android", "Rakesh"),
+        User(2, "iOS", "Anu"),
+        User(3, "Android", "Sam"),
+    )
+
+    val byId = users.associateTo(linkedMapOf()) { it.id to it.name }
+    val byTeam = users.groupByTo(linkedMapOf()) { it.team }
+
+    println(byId)
+    println(byTeam)
+}
+```
+
+<PlaygroundLink code={`data class User(val id: Int, val team: String, val name: String)
+
+fun main() {
+    val users = listOf(
+        User(1, "Android", "Rakesh"),
+        User(2, "iOS", "Anu"),
+        User(3, "Android", "Sam"),
+    )
+    val byId = users.associateTo(linkedMapOf()) { it.id to it.name }
+    val byTeam = users.groupByTo(linkedMapOf()) { it.team }
+    println(byId)
+    println(byTeam)
+}`}>
+  Run destination maps
+</PlaygroundLink>
+
+The destination implementation can encode ordering or sorting characteristics. It does not remove the need to define collision behavior.
+
+## `buildList`, `buildSet`, and `buildMap`
+
+```kotlin
+fun main() {
+    val isAdmin = true
+
+    val menu = buildList {
+        add("Home")
+        add("Profile")
+        if (isAdmin) add("Admin")
+    }
+
+    val permissions = buildSet {
+        add("read")
+        add("read")
+        if (isAdmin) add("write")
+    }
+
+    val labels = buildMap {
+        put("home", "Home")
+        put("profile", "Profile")
+    }
+
+    println(menu)
+    println(permissions)
+    println(labels)
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val isAdmin = true
+    val menu = buildList {
+        add("Home")
+        add("Profile")
+        if (isAdmin) add("Admin")
+    }
+    val permissions = buildSet {
+        add("read")
+        add("read")
+        if (isAdmin) add("write")
+    }
+    val labels = buildMap {
+        put("home", "Home")
+        put("profile", "Profile")
+    }
+    println(menu)
+    println(permissions)
+    println(labels)
+}`}>
+  Run collection builders
+</PlaygroundLink>
+
+The builder receiver is mutable only inside the block. The returned API type is read-only, but this is not a promise of deep immutability for mutable elements stored inside it.
+
+## When destination operations are appropriate
+
+- Accumulating several transformations into one controlled destination
+- Choosing a specific destination type, such as a Set for uniqueness
+- Reusing a private buffer only when ownership is exclusive and lifecycle is clear
+
+Avoid a shared mutable destination across coroutines without explicit synchronization. Avoid clever `...To` pipelines when normal transformations make ownership and intent clearer.
+
+<Admonition type="tip" title="Architect answer">
+Destination operations are an allocation and ownership tool, not automatically an optimization. Measure hot paths, keep the destination private, clear or initialize it deliberately, and document whether the operation appends, deduplicates, or overwrites.
+</Admonition>
+
+## Interview questions
+
+1. Does `filterTo` clear the destination first?
+2. How can destination type change result behavior?
+3. Are nested objects returned from `buildList` deeply immutable?
+4. Why can reusing a mutable destination across coroutines be unsafe?
+

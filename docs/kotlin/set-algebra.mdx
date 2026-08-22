@@ -1,0 +1,122 @@
+---
+id: set-algebra
+title: Set algebra and membership modeling
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Set algebra and membership modeling
+
+Sets model membership where duplicates have no meaning. Their algebra answers practical questions such as “What is shared?”, “What exists in either group?”, and “What must be added or removed?”
+
+## `union`, `intersect`, and `subtract`
+
+```kotlin
+fun main() {
+    val current = setOf("camera", "location")
+    val required = setOf("location", "notifications")
+
+    println(current union required)
+    // [camera, location, notifications]
+
+    println(current intersect required)
+    // [location]
+
+    println(required subtract current)
+    // [notifications]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val current = setOf("camera", "location")
+    val required = setOf("location", "notifications")
+    println(current union required)
+    println(current intersect required)
+    println(required subtract current)
+}`}>
+  Run Set algebra
+</PlaygroundLink>
+
+Direction matters for subtraction:
+
+```text
+required subtract current = requirements still missing
+current subtract required = currently held values no longer required
+```
+
+## Synchronization difference calculation
+
+```kotlin
+fun main() {
+    val localIds = setOf(1, 2, 3)
+    val remoteIds = setOf(2, 3, 4)
+
+    val upload = localIds subtract remoteIds
+    val download = remoteIds subtract localIds
+    val unchanged = localIds intersect remoteIds
+
+    println("upload=$upload")       // [1]
+    println("download=$download")   // [4]
+    println("unchanged=$unchanged") // [2, 3]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val localIds = setOf(1, 2, 3)
+    val remoteIds = setOf(2, 3, 4)
+    val upload = localIds subtract remoteIds
+    val download = remoteIds subtract localIds
+    val unchanged = localIds intersect remoteIds
+    println("upload=\$upload")
+    println("download=\$download")
+    println("unchanged=\$unchanged")
+}`}>
+  Run the synchronization difference
+</PlaygroundLink>
+
+The set calculation identifies membership differences; it does not resolve changed contents, deletions, timestamps, or conflicts for records sharing an ID.
+
+## Equality and hash stability
+
+```kotlin
+data class User(var id: Int, val name: String)
+
+fun main() {
+    val user = User(1, "Rakesh")
+    val users = hashSetOf(user)
+
+    println(users.contains(user)) // true
+    user.id = 2
+    println(users.contains(user)) // may be false: hash changed
+}
+```
+
+<PlaygroundLink code={`data class User(var id: Int, val name: String)
+
+fun main() {
+    val user = User(1, "Rakesh")
+    val users = hashSetOf(user)
+    println(users.contains(user))
+    user.id = 2
+    println(users.contains(user))
+}`}>
+  Observe mutable hash-key danger
+</PlaygroundLink>
+
+Do not mutate properties participating in `equals`/`hashCode` while an element is stored in a hash-based Set. The element can end up in a bucket inconsistent with its new hash.
+
+## Order is not the Set contract
+
+Kotlin's common `setOf` implementation often preserves insertion order, but the `Set` interface promises uniqueness, not universal stable ordering. Use a suitable ordered implementation or sort into a List when order is a product requirement.
+
+<Admonition type="warning" title="Architect trap">
+Using a Set to deduplicate server records chooses equality as a data-loss policy. Confirm that equality fields really identify the same domain entity and decide which duplicate payload wins before discarding information.
+</Admonition>
+
+## Interview questions
+
+1. What is the difference between `A subtract B` and `B subtract A`?
+2. Why can mutating a data-class property break HashSet lookup?
+3. Does the Set interface guarantee iteration order?
+4. How can Set algebra help calculate synchronization work?
+

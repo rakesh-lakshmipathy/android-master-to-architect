@@ -1,0 +1,136 @@
+---
+id: map-specific-operations
+title: Map-specific operations
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Map-specific operations
+
+A Map models unique keys associated with values. Most interview mistakes come from confusing an absent key with a nullable value, silently overwriting a key, or using a non-atomic read-then-write sequence.
+
+## Lookup choices communicate policy
+
+```kotlin
+fun main() {
+    val scores = mapOf("Rakesh" to 90)
+
+    println(scores["Rakesh"])                    // 90
+    println(scores["Missing"])                   // null
+    println(scores.getOrDefault("Missing", 0))   // 0
+    println(scores.getOrElse("Missing") { -1 })  // -1
+
+    val failure = runCatching { scores.getValue("Missing") }
+    println(failure.exceptionOrNull()!!::class.simpleName)
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val scores = mapOf("Rakesh" to 90)
+    println(scores["Rakesh"])
+    println(scores["Missing"])
+    println(scores.getOrDefault("Missing", 0))
+    println(scores.getOrElse("Missing") { -1 })
+    val failure = runCatching { scores.getValue("Missing") }
+    println(failure.exceptionOrNull()!!::class.simpleName)
+}`}>
+  Run map lookup choices
+</PlaygroundLink>
+
+- `map[key]` returns `V?`.
+- `getValue` throws for an absent key and is suitable when absence violates an invariant.
+- `getOrElse` computes a fallback for this read but does not store it.
+- `getOrDefault` returns the supplied default.
+
+With `Map<K, V?>`, `map[key] == null` cannot distinguish “absent key” from “present key with null value”; use `containsKey` when that distinction matters.
+
+## `getOrPut` stores a missing value
+
+```kotlin
+fun main() {
+    val cache = mutableMapOf<String, MutableList<String>>()
+
+    cache.getOrPut("Android") { mutableListOf() }.add("Rakesh")
+    cache.getOrPut("Android") { mutableListOf() }.add("Sam")
+
+    println(cache) // {Android=[Rakesh, Sam]}
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val cache = mutableMapOf<String, MutableList<String>>()
+    cache.getOrPut("Android") { mutableListOf() }.add("Rakesh")
+    cache.getOrPut("Android") { mutableListOf() }.add("Sam")
+    println(cache)
+}`}>
+  Run getOrPut
+</PlaygroundLink>
+
+`getOrPut` is convenient, but a normal mutable map does not make compound access thread-safe. Use an ownership/concurrency strategy appropriate to the platform and map implementation.
+
+## Transforming and filtering maps
+
+```kotlin
+fun main() {
+    val prices = mapOf("phone" to 500.0, "case" to 20.0, "cable" to 10.0)
+
+    println(prices.mapKeys { (key, _) -> key.uppercase() })
+    println(prices.mapValues { (_, value) -> value * 1.18 })
+    println(prices.filterKeys { it.startsWith("c") })
+    println(prices.filterValues { it >= 20.0 })
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val prices = mapOf("phone" to 500.0, "case" to 20.0, "cable" to 10.0)
+    println(prices.mapKeys { (key, _) -> key.uppercase() })
+    println(prices.mapValues { (_, value) -> value * 1.18 })
+    println(prices.filterKeys { it.startsWith("c") })
+    println(prices.filterValues { it >= 20.0 })
+}`}>
+  Run map transformations
+</PlaygroundLink>
+
+If `mapKeys` produces duplicate keys, later entries overwrite earlier results. Key transformation therefore needs the same collision policy as `associateBy`.
+
+## Addition, removal, and mutation
+
+```kotlin
+fun main() {
+    val original = mapOf("A" to 1, "B" to 2)
+    val replaced = original + ("A" to 100)
+    val removed = replaced - "B"
+
+    println(original) // {A=1, B=2}
+    println(replaced) // {A=100, B=2}
+    println(removed)  // {A=100}
+
+    val mutable = original.toMutableMap()
+    mutable["C"] = 3
+    mutable.remove("A")
+    println(mutable)  // {B=2, C=3}
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val original = mapOf("A" to 1, "B" to 2)
+    val replaced = original + ("A" to 100)
+    val removed = replaced - "B"
+    println(original)
+    println(replaced)
+    println(removed)
+    val mutable = original.toMutableMap()
+    mutable["C"] = 3
+    mutable.remove("A")
+    println(mutable)
+}`}>
+  Run map addition and mutation
+</PlaygroundLink>
+
+## Interview questions
+
+1. How do you distinguish an absent key from a present null value?
+2. How does `getOrElse` differ from `getOrPut`?
+3. What happens when `mapKeys` creates collisions?
+4. Does `map + pair` mutate the original map?
+

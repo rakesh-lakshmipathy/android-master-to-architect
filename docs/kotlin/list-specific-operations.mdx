@@ -1,0 +1,168 @@
+---
+id: list-specific-operations
+title: List-specific operations
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# List-specific operations
+
+A `List` adds positional meaning to a collection: every element has an index. That enables indexed access, ranges, insertion, replacement, binary search, and in-place reordering.
+
+## Indexes, ranges, `slice`, and `subList`
+
+```kotlin
+fun main() {
+    val values = listOf("A", "B", "C", "D", "E")
+
+    println(values.indices)              // 0..4
+    println(values.lastIndex)            // 4
+    println(values.slice(1..3))          // [B, C, D]
+    println(values.slice(listOf(4, 0)))  // [E, A]
+    println(values.subList(1, 4))        // [B, C, D]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val values = listOf("A", "B", "C", "D", "E")
+    println(values.indices)
+    println(values.lastIndex)
+    println(values.slice(1..3))
+    println(values.slice(listOf(4, 0)))
+    println(values.subList(1, 4))
+}`}>
+  Run indexed slicing
+</PlaygroundLink>
+
+`subList(from, to)` uses an inclusive start and exclusive end. It is commonly a view backed by the original list, not an independent snapshot. Structural changes outside that view can invalidate it; copy with `toList()` when independent ownership is required.
+
+## Indexed mutation
+
+```kotlin
+fun main() {
+    val values = mutableListOf("A", "D")
+    values.add(1, "B")
+    values.addAll(2, listOf("C1", "C2"))
+    values[2] = "C"
+    val removed = values.removeAt(3)
+
+    println(removed) // C2
+    println(values)  // [A, B, C, D]
+
+    values.fill("X")
+    println(values)  // [X, X, X, X]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val values = mutableListOf("A", "D")
+    values.add(1, "B")
+    values.addAll(2, listOf("C1", "C2"))
+    values[2] = "C"
+    val removed = values.removeAt(3)
+    println(removed)
+    println(values)
+    values.fill("X")
+    println(values)
+}`}>
+  Run indexed mutations
+</PlaygroundLink>
+
+Invalid indexes throw. Inserting/removing near the beginning of an `ArrayList` shifts later elements and is normally O(n).
+
+## Binary search requires compatible sorted order
+
+```kotlin
+fun main() {
+    val sorted = listOf(10, 20, 30, 40)
+    println(sorted.binarySearch(30)) // 2
+
+    val missing = sorted.binarySearch(25)
+    println(missing)                 // negative
+    println(-missing - 1)            // insertion index: 2
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val sorted = listOf(10, 20, 30, 40)
+    println(sorted.binarySearch(30))
+    val missing = sorted.binarySearch(25)
+    println(missing)
+    println(-missing - 1)
+}`}>
+  Run binary search
+</PlaygroundLink>
+
+Calling `binarySearch` on unsorted data gives an undefined/meaningless search result. If a comparator sorted the list, the same ordering contract must be used for searching.
+
+## Adjacent pairs with `zipWithNext`
+
+```kotlin
+fun main() {
+    val readings = listOf(10, 13, 12, 20)
+    println(readings.zipWithNext())
+    // [(10, 13), (13, 12), (12, 20)]
+
+    val changes = readings.zipWithNext { before, after -> after - before }
+    println(changes) // [3, -1, 8]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val readings = listOf(10, 13, 12, 20)
+    println(readings.zipWithNext())
+    val changes = readings.zipWithNext { before, after -> after - before }
+    println(changes)
+}`}>
+  Run zipWithNext
+</PlaygroundLink>
+
+Unlike `chunked(2)`, adjacent pairs overlap. A list of fewer than two elements produces an empty result.
+
+## New order versus in-place order
+
+| Returns a new list | Mutates a `MutableList` | Special behavior |
+|---|---|---|
+| `sorted`, `sortedBy` | `sort`, `sortBy` | Ordering |
+| `reversed` | `reverse` | Reverse order |
+| `shuffled` | `shuffle` | Random order |
+| — | — | `asReversed()` creates a backed reversed view |
+
+```kotlin
+fun main() {
+    val original = mutableListOf(1, 2, 3)
+    val view = original.asReversed()
+    view[0] = 30
+
+    println(view)     // [30, 2, 1]
+    println(original) // [1, 2, 30]
+
+    val snapshot = original.reversed()
+    original.add(4)
+    println(snapshot) // [30, 2, 1]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val original = mutableListOf(1, 2, 3)
+    val view = original.asReversed()
+    view[0] = 30
+    println(view)
+    println(original)
+    val snapshot = original.reversed()
+    original.add(4)
+    println(snapshot)
+}`}>
+  Compare reversed view and snapshot
+</PlaygroundLink>
+
+<Admonition type="warning" title="Ownership trap">
+`subList` and `asReversed` can share backing storage. Do not expose them as supposedly independent state snapshots across ViewModel/UI or coroutine ownership boundaries.
+</Admonition>
+
+## Interview questions
+
+1. Why must binary search receive consistently sorted data?
+2. How is a negative binary-search result converted to an insertion point?
+3. What is the difference between `reversed()` and `asReversed()`?
+4. Why can repeated insertion at index zero be expensive for `ArrayList`?

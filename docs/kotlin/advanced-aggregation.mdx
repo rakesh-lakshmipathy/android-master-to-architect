@@ -1,0 +1,123 @@
+---
+id: advanced-aggregation
+title: Advanced aggregation and running results
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Advanced aggregation and running results
+
+Aggregation turns multiple elements into a smaller result. Important distinctions are empty-input behavior, left-versus-right order, and whether intermediate accumulator values are retained.
+
+## Common numeric and selector aggregates
+
+```kotlin
+data class Build(val version: String, val durationSeconds: Int)
+
+fun main() {
+    val builds = listOf(Build("1.0", 60), Build("1.1", 45), Build("1.2", 90))
+
+    println(builds.sumOf { it.durationSeconds })
+    println(builds.map { it.durationSeconds }.average())
+    println(builds.minByOrNull { it.durationSeconds })
+    println(builds.maxOfOrNull { it.durationSeconds })
+}
+```
+
+<PlaygroundLink code={`data class Build(val version: String, val durationSeconds: Int)
+
+fun main() {
+    val builds = listOf(Build("1.0", 60), Build("1.1", 45), Build("1.2", 90))
+    println(builds.sumOf { it.durationSeconds })
+    println(builds.map { it.durationSeconds }.average())
+    println(builds.minByOrNull { it.durationSeconds })
+    println(builds.maxOfOrNull { it.durationSeconds })
+}`}>
+  Run aggregate selectors
+</PlaygroundLink>
+
+The `...OrNull` selector functions return null for empty input. Numeric `average()` returns `NaN` for an empty numeric collection, so validate whether empty input has a meaningful domain result.
+
+## Running accumulations
+
+`runningFold` includes the initial value and then every intermediate accumulator. `runningReduce` starts from the first element.
+
+```kotlin
+fun main() {
+    val transactions = listOf(100, -30, 50)
+
+    println(transactions.runningFold(0) { balance, amount -> balance + amount })
+    // [0, 100, 70, 120]
+
+    println(transactions.runningReduce { balance, amount -> balance + amount })
+    // [100, 70, 120]
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val transactions = listOf(100, -30, 50)
+    println(transactions.runningFold(0) { balance, amount -> balance + amount })
+    println(transactions.runningReduce { balance, amount -> balance + amount })
+}`}>
+  Run runningFold and runningReduce
+</PlaygroundLink>
+
+Running operations allocate results for every step. Use ordinary `fold` when only the final accumulator is needed.
+
+## Left and right folds are different for non-associative operations
+
+```kotlin
+fun main() {
+    val words = listOf("A", "B", "C")
+
+    val left = words.fold("start") { acc, item -> "($acc+$item)" }
+    val right = words.foldRight("end") { item, acc -> "($item+$acc)" }
+
+    println(left)  // (((start+A)+B)+C)
+    println(right) // (A+(B+(C+end)))
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val words = listOf("A", "B", "C")
+    val left = words.fold("start") { acc, item -> "(\$acc+\$item)" }
+    val right = words.foldRight("end") { item, acc -> "(\$item+\$acc)" }
+    println(left)
+    println(right)
+}`}>
+  Compare fold and foldRight
+</PlaygroundLink>
+
+Notice the lambda argument order changes for right folds: element first, accumulator second.
+
+## Per-group aggregation
+
+```kotlin
+data class Sale(val team: String, val amount: Int)
+
+fun main() {
+    val sales = listOf(Sale("Android", 10), Sale("iOS", 20), Sale("Android", 30))
+    val totals = sales.groupingBy { it.team }
+        .fold(0) { total, sale -> total + sale.amount }
+    println(totals) // {Android=40, iOS=20}
+}
+```
+
+<PlaygroundLink code={`data class Sale(val team: String, val amount: Int)
+
+fun main() {
+    val sales = listOf(Sale("Android", 10), Sale("iOS", 20), Sale("Android", 30))
+    val totals = sales.groupingBy { it.team }
+        .fold(0) { total, sale -> total + sale.amount }
+    println(totals)
+}`}>
+  Run per-group fold
+</PlaygroundLink>
+
+## Interview questions
+
+1. How do `runningFold` and `fold` differ in output size?
+2. Why does `foldRight` reverse lambda argument roles?
+3. What does `average()` return for empty numeric input?
+4. When is `groupingBy().fold()` better than `groupBy().mapValues()`?
+

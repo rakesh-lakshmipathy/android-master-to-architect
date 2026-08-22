@@ -81,6 +81,31 @@ fun main() {
 
 `find(predicate)` is an alias for `firstOrNull(predicate)`. Index-search operations return `-1` when nothing matches; element-search operations commonly return `null`.
 
+## Fallback and arbitrary retrieval
+
+```kotlin
+fun main() {
+    val values = listOf("A", "B", "C")
+
+    println(values.elementAtOrElse(10) { index -> "fallback-for-$index" })
+    println(values.random())
+    println(values.randomOrNull())
+    println(emptyList<String>().randomOrNull()) // null
+}
+```
+
+<PlaygroundLink code={`fun main() {
+    val values = listOf("A", "B", "C")
+    println(values.elementAtOrElse(10) { index -> "fallback-for-\$index" })
+    println(values.random())
+    println(values.randomOrNull())
+    println(emptyList<String>().randomOrNull())
+}`}>
+  Run fallback and random retrieval
+</PlaygroundLink>
+
+`random()` throws on empty input; `randomOrNull()` returns null. Both are nondeterministic for a non-empty input unless supplied a controlled `Random`. Inject a seeded `Random` in repeatable tests. Do not use ordinary pseudo-random collection selection for security-sensitive choices.
+
 ## Filter families
 
 | Operator | What remains |
@@ -149,4 +174,3 @@ When reading a selected item from UI state, `firstOrNull` may correctly represen
 2. What does `indexOfFirst` return when no element matches?
 3. Why does `filterIsInstance<Int>()` exclude a `Long`?
 4. When should `single()` be preferred over `first()`?
-

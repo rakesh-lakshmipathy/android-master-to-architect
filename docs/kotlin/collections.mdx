@@ -77,20 +77,24 @@ Use this as a discovery index, then open the linked lesson for behavior, edge ca
 
 | Family | Important operations | Detailed lesson |
 |---|---|---|
-| Access | `first`, `firstOrNull`, `last`, `lastOrNull`, `single`, `getOrNull`, `elementAtOrNull` | [Access and search](./collection-access-search-filter) |
+| Access | `first`, `firstOrNull`, `last`, `lastOrNull`, `single`, `singleOrNull`, `getOrNull`, `elementAtOrNull`, `elementAtOrElse`, `random`, `randomOrNull` | [Access and search](./collection-access-search-filter) |
 | Search | `find`, `indexOf`, `indexOfFirst`, `indexOfLast` | [Access and search](./collection-access-search-filter) |
 | Filter | `filter`, `filterNot`, `filterIndexed`, `filterNotNull`, `filterIsInstance` | [Filtering and types](./collection-access-search-filter) |
 | Transform | `map`, `mapIndexed`, `mapNotNull`, `flatMap`, `flatten` | [Advanced operations](./collection-operations) |
 | Check | `any`, `all`, `none`, `contains`, `containsAll` | [Advanced operations](./collection-operations) |
 | Slice | `take`, `drop`, `takeLast`, `dropLast`, `takeWhile`, `dropWhile`, `takeLastWhile`, `dropLastWhile` | [Advanced operations](./collection-operations) |
-| Sort | `sorted`, `sortedDescending`, `sortedBy`, `sortedWith`, `sortBy` | [Sorting](./collection-sorting-aggregation) |
-| Aggregate | `sum`, `sumOf`, `count`, `minOrNull`, `maxOrNull`, `fold`, `reduce` | [Aggregation](./collection-sorting-aggregation) |
+| List-specific | `slice`, `subList`, `binarySearch`, `zipWithNext`, indexed mutations, `fill`, `asReversed` | [List operations](./list-specific-operations) |
+| Map-specific | `getValue`, `getOrElse`, `getOrPut`, `mapKeys`, `mapValues`, `filterKeys`, `filterValues` | [Map operations](./map-specific-operations) |
+| Set algebra | `union`, `intersect`, `subtract` | [Set algebra](./set-algebra) |
+| Sort | `sorted`, `sortedDescending`, `sortedBy`, `sortedWith`, `sortBy`, `reversed`, `shuffled` | [Sorting](./collection-sorting-aggregation) |
+| Aggregate | `sum`, `sumOf`, `average`, `count`, `minByOrNull`, `maxByOrNull`, `fold`, `reduce`, `runningFold`, `foldRight` | [Basic](./collection-sorting-aggregation) / [advanced](./advanced-aggregation) |
 | Group | `groupBy`, `groupingBy`, `eachCount` | [Grouping](./collection-grouping-association) |
 | Map creation | `associate`, `associateBy`, `associateWith` | [Association](./collection-grouping-association) |
 | Unique | `distinct`, `distinctBy`, `toSet` | [Advanced operations](./collection-operations) |
 | Combine | `zip`, `unzip`, `plus`, `minus` | [Advanced operations](./collection-operations) |
 | Split | `partition`, `chunked`, `windowed` | [Advanced operations](./collection-operations) |
 | Mutation | `add`, `addAll`, `remove`, `removeAt`, `clear`, `retainAll` | [Mutation and copying](./collection-mutation-copying) |
+| Destinations/builders | `filterTo`, `mapTo`, `associateTo`, `groupByTo`, `buildList`, `buildSet`, `buildMap` | [Destination/build operations](./destination-build-operations) |
 
 ## Predict the output
 
