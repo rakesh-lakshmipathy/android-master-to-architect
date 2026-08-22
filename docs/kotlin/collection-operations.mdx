@@ -15,11 +15,34 @@ The important skill is not remembering names. It is predicting output, duplicate
 val names = users.map { user -> user.name }
 ```
 
+<PlaygroundLink code={`data class User(val name: String)
+
+fun main() {
+    val users = listOf(User("Rakesh"), User("Anu"))
+    val names = users.map { user -> user.name }
+    println(names)
+}`}>
+  Run the map example
+</PlaygroundLink>
+
 `map` produces exactly one output for each input.
 
 ```kotlin
 val orderItems = orders.flatMap { order -> order.items }
 ```
+
+<PlaygroundLink code={`data class Order(val id: Int, val items: List<String>)
+
+fun main() {
+    val orders = listOf(
+        Order(1, listOf("Phone", "Case")),
+        Order(2, listOf("Charger")),
+    )
+    val orderItems = orders.flatMap { order -> order.items }
+    println(orderItems)
+}`}>
+  Run the flatMap example
+</PlaygroundLink>
 
 `flatMap` maps each order to a list, then flattens one level. If nested lists already exist, `flatten()` only flattens:
 
@@ -28,17 +51,49 @@ val nested = listOf(listOf(1, 2), listOf(3))
 println(nested.flatten()) // [1, 2, 3]
 ```
 
+<PlaygroundLink code={`fun main() {
+    val nested = listOf(listOf(1, 2), listOf(3))
+    println(nested.flatten())
+}`}>
+  Run the flatten example
+</PlaygroundLink>
+
 ## Selection: `filter`, `partition`, and `mapNotNull`
 
 ```kotlin
 val (valid, invalid) = inputs.partition(::isValid)
 ```
 
+<PlaygroundLink code={`fun isValid(input: String): Boolean = input.startsWith("U-")
+
+fun main() {
+    val inputs = listOf("U-1", "invalid", "U-2", "")
+    val (valid, invalid) = inputs.partition(::isValid)
+    println("valid=\$valid")
+    println("invalid=\$invalid")
+}`}>
+  Run the partition example
+</PlaygroundLink>
+
 `partition` evaluates each element and returns two lists. Use `filter` when only one side matters.
 
 ```kotlin
 val ids = rawIds.mapNotNull(UserId::parse)
 ```
+
+<PlaygroundLink code={`data class UserId(val value: Int) {
+    companion object {
+        fun parse(raw: String): UserId? = raw.toIntOrNull()?.let(::UserId)
+    }
+}
+
+fun main() {
+    val rawIds = listOf("10", "bad", "20")
+    val ids = rawIds.mapNotNull(UserId::parse)
+    println(ids)
+}`}>
+  Run the mapNotNull example
+</PlaygroundLink>
 
 `mapNotNull` transforms and removes null results. This is useful only if discarding invalid entries is an intentional policy; otherwise return validation errors.
 
@@ -48,12 +103,30 @@ val ids = rawIds.mapNotNull(UserId::parse)
 val total = prices.fold(Money.zero("INR")) { sum, price -> sum + price }
 ```
 
+<PlaygroundLink code={`fun main() {
+    val prices = listOf(100, 250, 50)
+    val total = prices.fold(0) { sum, price -> sum + price }
+    println(total)
+}`}>
+  Run the fold example
+</PlaygroundLink>
+
 `fold` starts with an explicit initial accumulator and works for empty collections. `reduce` uses the first element as the initial accumulator and throws on empty input.
 
 ```kotlin
 emptyList<Int>().fold(0, Int::plus) // 0
 // emptyList<Int>().reduce(Int::plus) // throws
 ```
+
+<PlaygroundLink code={`fun main() {
+    val empty = emptyList<Int>()
+    println("fold result = " + empty.fold(0, Int::plus))
+
+    val reduceResult = runCatching { empty.reduce(Int::plus) }
+    println("reduce failure = " + reduceResult.exceptionOrNull())
+}`}>
+  Compare fold and reduce on empty input
+</PlaygroundLink>
 
 Use `fold` when a meaningful identity exists or the result type differs from element type.
 
@@ -65,6 +138,23 @@ data class User(val id: Int, val team: String, val name: String)
 val byId: Map<Int, User> = users.associateBy(User::id)
 val byTeam: Map<String, List<User>> = users.groupBy(User::team)
 ```
+
+<PlaygroundLink code={`data class User(val id: Int, val team: String, val name: String)
+
+fun main() {
+    val users = listOf(
+        User(1, "Android", "Rakesh"),
+        User(2, "iOS", "Anu"),
+        User(3, "Android", "Sam"),
+    )
+    val byId = users.associateBy(User::id)
+    val byTeam = users.groupBy(User::team)
+
+    println("User 2 = " + byId[2])
+    println("Android users = " + byTeam["Android"].orEmpty())
+}`}>
+  Run associateBy and groupBy
+</PlaygroundLink>
 
 - `associateBy` stores one value per key; later duplicates overwrite earlier ones.
 - `groupBy` keeps a list of all values for each key and allocates those lists.
@@ -79,6 +169,18 @@ val users = listOf(
 )
 println(users.associateBy(User::id)[1]?.name) // New
 ```
+
+<PlaygroundLink code={`data class User(val id: Int, val team: String, val name: String)
+
+fun main() {
+    val users = listOf(
+        User(1, "Android", "Old"),
+        User(1, "Android", "New"),
+    )
+    println(users.associateBy(User::id)[1]?.name)
+}`}>
+  Run the duplicate-key example
+</PlaygroundLink>
 
 If duplicate IDs indicate corrupt data, silently keeping the last is wrong. Validate duplicates before indexing.
 
@@ -96,6 +198,20 @@ If duplicate IDs indicate corrupt data, silently keeping the last is wrong. Vali
 val allApproved = requests.all(Request::isApproved)
 ```
 
+<PlaygroundLink code={`data class Request(val isApproved: Boolean)
+
+fun main() {
+    val empty = emptyList<Request>()
+    val mixed = listOf(Request(true), Request(false))
+
+    println("empty.any = " + empty.any { it.isApproved })
+    println("empty.all = " + empty.all { it.isApproved })
+    println("empty.none = " + empty.none { it.isApproved })
+    println("mixed.all = " + mixed.all(Request::isApproved))
+}`}>
+  Run any, all, and none
+</PlaygroundLink>
+
 If “at least one request must exist” is also required, check `requests.isNotEmpty() && requests.all(...)`.
 
 ## Pairing: `zip` and `unzip`
@@ -106,12 +222,29 @@ val values = listOf("Rakesh", "35", "Ignored")
 println(labels.zip(values)) // [(Name, Rakesh), (Age, 35)]
 ```
 
+<PlaygroundLink code={`fun main() {
+    val labels = listOf("Name", "Age")
+    val values = listOf("Rakesh", "35", "Ignored")
+    println(labels.zip(values))
+}`}>
+  Run the zip example
+</PlaygroundLink>
+
 `zip` stops at the shorter collection. It does not report missing values. Use key-based association when position is not a guaranteed contract.
 
 ```kotlin
 val pairs = listOf("U-1" to "Rakesh", "U-2" to "Anu")
 val (ids, names) = pairs.unzip()
 ```
+
+<PlaygroundLink code={`fun main() {
+    val pairs = listOf("U-1" to "Rakesh", "U-2" to "Anu")
+    val (ids, names) = pairs.unzip()
+    println(ids)
+    println(names)
+}`}>
+  Run the unzip example
+</PlaygroundLink>
 
 ## Boundaries: `takeWhile` and `dropWhile`
 
@@ -123,6 +256,15 @@ println(values.takeWhile { it % 2 == 0 }) // [2, 4]
 println(values.dropWhile { it % 2 == 0 }) // [1, 6]
 ```
 
+<PlaygroundLink code={`fun main() {
+    val values = listOf(2, 4, 1, 6)
+    println("takeWhile = " + values.takeWhile { it % 2 == 0 })
+    println("dropWhile = " + values.dropWhile { it % 2 == 0 })
+    println("filter = " + values.filter { it % 2 == 0 })
+}`}>
+  Compare takeWhile, dropWhile, and filter
+</PlaygroundLink>
+
 Use `filter` if you mean “all even values.”
 
 ## Uniqueness: `distinct` and `distinctBy`
@@ -131,6 +273,21 @@ Use `filter` if you mean “all even values.”
 val newestFirst = messages.sortedByDescending(Message::createdAt)
 val latestPerSender = newestFirst.distinctBy(Message::senderId)
 ```
+
+<PlaygroundLink code={`data class Message(val senderId: Int, val text: String, val createdAt: Long)
+
+fun main() {
+    val messages = listOf(
+        Message(1, "old", 100),
+        Message(2, "hello", 200),
+        Message(1, "new", 300),
+    )
+    val newestFirst = messages.sortedByDescending(Message::createdAt)
+    val latestPerSender = newestFirst.distinctBy(Message::senderId)
+    println(latestPerSender)
+}`}>
+  Run the distinctBy ordering example
+</PlaygroundLink>
 
 `distinctBy` keeps the first item encountered for each selected key. Therefore sorting/order before it is part of the result contract.
 
@@ -143,6 +300,15 @@ val pages = (1..10).toList().chunked(3)
 val movingPairs = listOf(10, 20, 30, 40).windowed(size = 2)
 // [[10,20], [20,30], [30,40]]
 ```
+
+<PlaygroundLink code={`fun main() {
+    val pages = (1..10).toList().chunked(3)
+    val movingPairs = listOf(10, 20, 30, 40).windowed(size = 2)
+    println("pages = " + pages)
+    println("moving pairs = " + movingPairs)
+}`}>
+  Run chunked and windowed
+</PlaygroundLink>
 
 - `chunked(n)` creates non-overlapping batches, useful for bounded API requests.
 - `windowed(n)` creates sliding windows, useful for moving comparisons; it can allocate heavily on large inputs.
@@ -175,6 +341,26 @@ val result = hugeList
     .toList()
 ```
 
+<PlaygroundLink code={`fun main() {
+    val numbers = (1..20).toList()
+    val result = numbers
+        .asSequence()
+        .filter { number ->
+            println("filter \$number")
+            number % 2 == 0
+        }
+        .map { number ->
+            println("map \$number")
+            number * 10
+        }
+        .take(3)
+        .toList()
+
+    println("result = " + result)
+}`}>
+  Observe lazy sequence execution
+</PlaygroundLink>
+
 Collections usually execute each stage eagerly and create intermediate results. A sequence processes elements lazily through the pipeline and can stop early. Sequences are not always faster: small inputs/simple pipelines may pay iterator/lambda overhead without saving meaningful allocation. Measure hot paths.
 
 ## `runCatching` is not a collection operator
@@ -184,6 +370,15 @@ It produces `Result<T>` from a block:
 ```kotlin
 val parsed: Result<Int> = runCatching { raw.toInt() }
 ```
+
+<PlaygroundLink code={`fun main() {
+    for (raw in listOf("42", "not-a-number")) {
+        val parsed: Result<Int> = runCatching { raw.toInt() }
+        println("\$raw -> " + parsed.getOrElse { -1 })
+    }
+}`}>
+  Run the runCatching example
+</PlaygroundLink>
 
 Be careful in suspend code: broad catching mechanisms can capture `CancellationException` depending on usage. Do not turn coroutine cancellation into an ordinary failure.
 
@@ -197,6 +392,17 @@ pendingIds.chunked(100).forEach { batch ->
 }
 ```
 
+<PlaygroundLink code={`fun uploadBatch(batch: List<Int>) {
+    println("Uploading \${batch.size} IDs: \$batch")
+}
+
+fun main() {
+    val pendingIds = (1..205).toList()
+    pendingIds.chunked(100).forEach(::uploadBatch)
+}`}>
+  Simulate API batches
+</PlaygroundLink>
+
 Decide whether batches run sequentially or with bounded concurrency, what happens after partial failure, and whether the API is idempotent. `chunked` solves grouping, not distributed reliability.
 
 ### Rendering grouped settings
@@ -204,6 +410,22 @@ Decide whether batches run sequentially or with bounded concurrency, what happen
 ```kotlin
 val sections = settings.groupBy(Setting::category)
 ```
+
+<PlaygroundLink code={`data class Setting(val category: String, val label: String)
+
+fun main() {
+    val settings = listOf(
+        Setting("Account", "Profile"),
+        Setting("Privacy", "Permissions"),
+        Setting("Account", "Password"),
+    )
+    val sections = settings.groupBy(Setting::category)
+    sections.forEach { (category, items) ->
+        println("\$category -> " + items.map(Setting::label))
+    }
+}`}>
+  Run the grouped-settings example
+</PlaygroundLink>
 
 If order matters, ensure input/map implementation and category ordering are explicit. Do not rely on incidental implementation order as a business contract.
 
