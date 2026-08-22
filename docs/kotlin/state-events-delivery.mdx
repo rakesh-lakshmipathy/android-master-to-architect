@@ -1,0 +1,99 @@
+---
+id: state-events-delivery
+title: StateFlow, SharedFlow, Channel, and UI events
+---
+import Admonition from '@theme/Admonition';
+
+# StateFlow, SharedFlow, Channel, and UI events
+
+Choose these tools by **meaning and delivery guarantee**, not by a rule such as “StateFlow for state, SharedFlow for events” without further analysis.
+
+## StateFlow is observable current state
+
+```kotlin
+private val _state = MutableStateFlow<CheckoutState>(CheckoutState.Empty)
+val state: StateFlow<CheckoutState> = _state.asStateFlow()
+```
+
+Properties:
+
+- always has a current `value`;
+- a new collector immediately receives the current value;
+- equal values are conflated using equality;
+- it is hot and does not complete normally;
+- atomic `update` is needed for read-modify-write concurrency.
+
+### Lost increment
+
+```kotlin
+_state.value = _state.value.copy(count = _state.value.count + 1)
+```
+
+Two concurrent callers can read the same count. Prefer:
+
+```kotlin
+_state.update { old -> old.copy(count = old.count + 1) }
+```
+
+Mutable collections inside a data class can also break state reasoning: mutating the same list instance may not produce a new unequal state. Prefer immutable snapshots.
+
+## SharedFlow broadcasts emissions
+
+`MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow)` defines what late/slow subscribers experience.
+
+- `replay = 0`: a collector arriving later does not receive old emissions.
+- `replay = 1`: a late collector receives the most recent emission, but this may repeat a one-time action after recreation.
+- buffer overflow choices can suspend or drop values.
+
+Every active collector receives the broadcast. It is not a competing-worker queue.
+
+## Channel distributes elements
+
+A channel has send/receive queue semantics. One element is consumed by one receiver in typical use. Capacity changes whether send suspends/buffers; closing is meaningful.
+
+Converting `Channel` with `receiveAsFlow()` does not make events durable. If the process dies, the in-memory event is gone. Cancellation between receive and handling can also complicate “exactly once” claims.
+
+## UI event decision table
+
+| Requirement | Better model |
+|---|---|
+| Screen must always show current order status | `StateFlow<OrderState>` |
+| Navigation is implied by current authenticated flow state | Derive navigation from state |
+| Snackbar may be missed while UI absent | Ephemeral SharedFlow/channel with accepted loss |
+| User must see/acknowledge critical result | Durable state in repository/database |
+| Work must survive process death | Durable storage + WorkManager/server reconciliation |
+
+### Payment example
+
+❌ Emit `NavigateToReceipt` once after payment and forget it. Rotation/process death can lose or repeat navigation.
+
+✅ Persist/observe `OrderStatus.Paid(orderId)`. Navigation is a UI reaction guarded by current destination; the payment truth remains recoverable.
+
+## `stateIn` and `shareIn`
+
+```kotlin
+val state = repository.observeUser(id)
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = UserState.Loading,
+    )
+```
+
+The scope controls how long sharing can live. `SharingStarted` controls when upstream is active. The stop timeout avoids restarting during brief configuration transitions, but too long wastes resources; too short repeatedly reconnects. Test initial value and subscription behavior—especially with virtual time.
+
+## Practical mistakes
+
+- ❌ `SharedFlow` with unlimited assumptions about slow collectors.
+- ✅ define replay/buffer/overflow and test collector absence.
+- ❌ StateFlow Boolean `showSnackbar = true` that replays forever.
+- ✅ ephemeral notification with accepted loss or durable acknowledged message state.
+- ❌ application-scoped `stateIn` for account-private data without logout partitioning.
+- ✅ match sharing scope/cache key to account and data lifetime.
+
+## Exercises
+
+1. Choose a mechanism for search state, toast, upload command, payment result and incoming chat message.
+2. Explain what happens to each during rotation, backgrounding and process death.
+3. Test `WhileSubscribed(5_000)` across a short and long collector gap.
+

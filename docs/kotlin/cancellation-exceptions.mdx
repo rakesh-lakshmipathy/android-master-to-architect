@@ -1,0 +1,139 @@
+---
+id: cancellation-exceptions
+title: Cancellation and exception propagation
+---
+import Admonition from '@theme/Admonition';
+
+# Cancellation and exception propagation
+
+Cancellation is a request to stop work that no longer has an owner or purpose. It is represented through the `Job` hierarchy and is cooperative.
+
+## Cancellation trace
+
+```kotlin
+val job = viewModelScope.launch {
+    repository.refresh()
+}
+
+job.cancel()
+```
+
+1. The job becomes cancelling.
+2. Suspended cancellable APIs resume by throwing `CancellationException`.
+3. `finally` blocks run.
+4. Child coroutines are cancelled.
+5. The job completes as cancelled after cleanup finishes.
+
+Cancellation does not forcibly stop arbitrary CPU instructions. Long CPU loops must cooperate:
+
+```kotlin
+suspend fun hashFiles(files: List<File>): List<Hash> =
+    withContext(Dispatchers.Default) {
+        files.map { file ->
+            ensureActive()
+            hash(file)
+        }
+    }
+```
+
+Use `yield()` when fairness is also useful. Checking once before a ten-second native/blocking call is not sufficient; the underlying operation needs cancellation or a bounded timeout.
+
+## The dangerous broad catch
+
+### ❌ Converts cancellation into an error
+
+```kotlin
+try {
+    repository.refresh()
+} catch (error: Exception) {
+    _uiState.value = UiState.Error(error)
+}
+```
+
+`CancellationException` is an `Exception`. This code may show an error after the screen is gone and continue subsequent logic.
+
+### ✅ Preserve cancellation
+
+```kotlin
+try {
+    repository.refresh()
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (error: IOException) {
+    _uiState.value = UiState.Error(error)
+}
+```
+
+Prefer catching the failures you can meaningfully handle.
+
+## Failure propagation table
+
+| Structure | Child fails | Sibling result |
+|---|---|---|
+| `coroutineScope` | Scope fails | Siblings cancelled |
+| regular parent `launch` | Parent fails | Siblings normally cancelled |
+| `supervisorScope` | Child failure isolated | Siblings continue |
+| `SupervisorJob` parent | Direct child failure isolated | Child's own descendants still structured |
+
+### Scenario: dashboard is all-or-nothing
+
+```kotlin
+suspend fun dashboard() = coroutineScope {
+    val account = async { api.account() }
+    val balance = async { api.balance() }
+    Dashboard(account.await(), balance.await())
+}
+```
+
+If balance fails, an incomplete dashboard is invalid, so cancelling account work is correct.
+
+### Scenario: independent widgets may degrade
+
+```kotlin
+suspend fun widgets(): Widgets = supervisorScope {
+    val weather = async { runCatching { api.weather() } }
+    val news = async { runCatching { api.news() } }
+    Widgets(weather.await(), news.await())
+}
+```
+
+Supervision is deliberate only because each widget has a meaningful independent error state. Without `runCatching`/handling, isolation can merely hide failures.
+
+## `launch` versus `async` exceptions
+
+- An uncaught `launch` failure propagates immediately through its parent hierarchy.
+- `async` stores its result/failure for `await`, but in a normal structured parent its failure still cancels the parent immediately.
+- A `CoroutineExceptionHandler` observes otherwise uncaught exceptions of suitable root coroutines; it cannot recover a child or replace local error modeling.
+
+## Cleanup
+
+```kotlin
+try {
+    session.run()
+} finally {
+    session.close() // non-suspending cleanup
+}
+```
+
+If cleanup must suspend:
+
+```kotlin
+finally {
+    withContext(NonCancellable) {
+        withTimeout(1_000) { repository.releaseLease() }
+    }
+}
+```
+
+Keep non-cancellable cleanup short and bounded. Making the whole operation `NonCancellable` defeats ownership.
+
+## Timeout ambiguity
+
+`withTimeout` cancels locally, but a remote server may already have processed the request. For payment/order writes, use an idempotency key and reconcile status. A client timeout is not proof of server failure.
+
+## Exercises
+
+1. Predict which jobs are cancelled when one of three `async` children fails.
+2. Convert a broad `catch(Exception)` without swallowing cancellation.
+3. Design cancellation for a screen search, file upload and payment confirmation; explain why their durability differs.
+

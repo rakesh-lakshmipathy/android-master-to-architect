@@ -1,0 +1,104 @@
+---
+id: flow-backpressure
+title: Flow buffering and backpressure
+---
+import Admonition from '@theme/Admonition';
+
+# Flow buffering and backpressure
+
+By default, a normal Flow producer and collector cooperate sequentially: `emit` does not proceed to the next value until downstream processing is ready.
+
+```kotlin
+flow {
+    repeat(3) { value ->
+        println("emit $value")
+        emit(value)
+    }
+}.collect { value ->
+    delay(1_000)
+    println("handled $value")
+}
+```
+
+This naturally applies backpressure: the slow collector slows the producer.
+
+## Buffering changes concurrency
+
+```kotlin
+source
+    .buffer(capacity = 16)
+    .collect(::persist)
+```
+
+Producer and collector can now run concurrently with up to the configured buffer semantics. This can increase throughput, but also memory, queued stale work and distance between failure/cancellation and the producer.
+
+## Choose loss semantics from meaning
+
+| Mechanism | Behavior | Suitable example |
+|---|---|---|
+| no buffer | Producer waits | Every database command matters |
+| `buffer(n)` | Queue up to capacity | Bounded processing pipeline |
+| `conflate()` | Keep newest while collector busy | Rapid UI progress value |
+| `collectLatest` | Cancel previous processing | Rendering latest search result |
+| drop oldest/newest | Explicit loss under pressure | High-rate disposable telemetry |
+
+### ❌ Conflate durable events
+
+```kotlin
+paymentCommands.conflate().collect(::submitPayment)
+```
+
+Dropping a payment command is incorrect.
+
+### ✅ Conflate replaceable progress
+
+```kotlin
+downloadProgress.conflate().collect(::renderProgress)
+```
+
+If UI receives 42% and then 45%, rendering every intermediate percentage is unnecessary. Final durable download status must still come from authoritative state.
+
+## `collectLatest` cancels the block
+
+```kotlin
+searchResults.collectLatest { result ->
+    renderExpensiveResult(result)
+}
+```
+
+When a newer result arrives, previous rendering is cancelled. This is correct only if the block is cancellable and partial work is safe to abandon.
+
+## Callback APIs and `callbackFlow`
+
+```kotlin
+fun locationUpdates(): Flow<Location> = callbackFlow {
+    val callback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            result.lastLocation?.let { trySend(it) }
+        }
+    }
+    client.requestLocationUpdates(request, callback, Looper.getMainLooper())
+    awaitClose { client.removeLocationUpdates(callback) }
+}
+```
+
+`awaitClose` is essential: collector cancellation must unregister the callback. Decide what to do if `trySend` fails and choose buffer/loss based on data meaning. For medical measurements, dropping may be unacceptable; for map animation, newest may be sufficient.
+
+## Retry without storms
+
+```kotlin
+source.retryWhen { cause, attempt ->
+    if (cause !is IOException || attempt >= 3) return@retryWhen false
+    delay((500L shl attempt.toInt()).coerceAtMost(4_000L))
+    true
+}
+```
+
+Production retry should add jitter, respect server guidance, connectivity/battery constraints and idempotency. A Flow retry restarts upstream, which may repeat side effects unless the source contract is safe.
+
+## Exercises
+
+1. Choose buffer semantics for sensor UI, chat messages, analytics and database writes.
+2. Explain why `buffer()` can change timing and memory without changing value order.
+3. Convert a listener API to `callbackFlow` and prove cleanup occurs on cancellation.
+

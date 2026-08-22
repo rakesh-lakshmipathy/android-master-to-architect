@@ -1,0 +1,117 @@
+---
+id: flow-pipeline
+title: Flow execution, operators, and context
+---
+import Admonition from '@theme/Admonition';
+
+# Flow execution, operators, and context
+
+A cold `Flow<T>` is a **recipe** for producing values. Each collector normally executes that recipe again.
+
+```kotlin
+val userFlow = flow {
+    println("Producer starts")
+    emit(api.user())
+}
+```
+
+Creating `userFlow` prints nothing. Two collectors normally trigger two API calls.
+
+## Trace a pipeline
+
+```kotlin
+repository.observeOrders()
+    .map { orders -> orders.filter(Order::isOpen) }
+    .distinctUntilChanged()
+    .catch { error -> emit(emptyList()) }
+    .collect { openOrders -> render(openOrders) }
+```
+
+For each upstream emission:
+
+1. `map` transforms the list.
+2. `distinctUntilChanged` compares it with the last emitted transformed value.
+3. `catch` can handle failures thrown **above** it.
+4. `collect` receives the result sequentially.
+
+If `render` throws, this `catch` cannot catch it because the collector is downstream.
+
+## Exception transparency
+
+### ❌ Hides database failure as an empty business result
+
+```kotlin
+dao.observeOrders()
+    .catch { emit(emptyList()) }
+```
+
+The UI cannot distinguish “there are no orders” from “the database failed.”
+
+### ✅ Model a failure state
+
+```kotlin
+dao.observeOrders()
+    .map<List<Order>, OrdersState> { OrdersState.Content(it) }
+    .catch { error -> emit(OrdersState.Failed(error.toUiError())) }
+```
+
+Do not catch `CancellationException` as a business error.
+
+## `flowOn` boundary
+
+```kotlin
+val reports = flow {
+    emit(reportDao.readBlocking())
+}
+    .map(reportMapper::map)
+    .flowOn(Dispatchers.IO)
+    .map(uiMapper::map)
+```
+
+`flowOn(IO)` changes the context of the upstream builder and first map. It does not move the downstream UI map/collector. Flow preserves context rather than allowing the producer to emit from arbitrary contexts.
+
+## Transformation choices
+
+| Need | Operator |
+|---|---|
+| Transform each value | `map` |
+| Ignore values not meeting condition | `filter` |
+| Combine latest state of sources | `combine` |
+| Pair corresponding emissions | `zip` |
+| Switch to newest inner flow | `flatMapLatest` |
+| Process inner flows sequentially | `flatMapConcat` |
+| Process inner flows concurrently | `flatMapMerge` |
+
+`combine` emits whenever either source changes after both have emitted. `zip` waits for pairs and completes when pairing can no longer continue.
+
+## Practical search pipeline
+
+```kotlin
+val results: Flow<SearchState> = query
+    .map(String::trim)
+    .debounce(300)
+    .distinctUntilChanged()
+    .flatMapLatest { value ->
+        if (value.length < 2) {
+            flowOf(SearchState.Idle)
+        } else {
+            repository.search(value)
+                .map<SearchResult, SearchState>(SearchState::Content)
+                .onStart { emit(SearchState.Loading) }
+                .catch { emit(SearchState.Failed) }
+        }
+    }
+```
+
+When a new query arrives, `flatMapLatest` cancels the previous search flow. The transport/repository must cooperate with cancellation, and stale callbacks must not commit an old result later.
+
+## Completion
+
+`onCompletion { cause -> ... }` observes normal completion (`cause == null`), failure or cancellation. It is analogous to `finally`, not `catch`. Infinite database/StateFlow streams normally do not complete during ordinary UI use.
+
+## Exercises
+
+1. Predict output differences between `combine` and `zip` for two timed flows.
+2. Move only a blocking DAO read upstream with `flowOn` and explain the boundary.
+3. Design a query pipeline where old network responses cannot replace newer results.
+

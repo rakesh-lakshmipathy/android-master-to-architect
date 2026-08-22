@@ -1,0 +1,131 @@
+---
+id: coroutine-execution-trace
+title: How a coroutine actually executes
+---
+import Admonition from '@theme/Admonition';
+
+# How a coroutine actually executes
+
+A coroutine is a task that can **suspend without keeping a thread blocked**. A thread executes instructions; a coroutine is the work being executed. They are related, but they are not the same thing.
+
+## Follow one request step by step
+
+```kotlin
+viewModelScope.launch {
+    _uiState.value = UiState.Loading
+    val user = repository.loadUser("U-42")
+    _uiState.value = UiState.Success(user)
+}
+```
+
+Assume `loadUser` ultimately calls a suspending HTTP API.
+
+1. `launch` creates a child `Job` in `viewModelScope`.
+2. The coroutine normally begins on `Dispatchers.Main` because that is the scope's context.
+3. It writes `Loading`.
+4. The HTTP call starts and suspends while waiting for network data.
+5. The main thread is released and can draw frames or handle touch.
+6. When the HTTP result is ready, the coroutine is scheduled to resume.
+7. It resumes in its context and writes `Success`.
+8. The coroutine completes and its `Job` becomes completed.
+
+Suspension is possible because the compiler transforms a suspending function into a state machine that remembers where to continue and its local values.
+
+## Suspension is not automatic background execution
+
+```kotlin
+viewModelScope.launch {
+    val result = calculateHugeReport() // CPU work still starts on Main
+}
+```
+
+Adding `suspend` to `calculateHugeReport` would not move it. For CPU-heavy work, choose an appropriate dispatcher at the boundary:
+
+```kotlin
+suspend fun calculateReport(input: Input): Report =
+    withContext(Dispatchers.Default) {
+        reportCalculator.calculate(input)
+    }
+```
+
+For a blocking legacy file/API call:
+
+```kotlin
+suspend fun readConfig(file: File): String =
+    withContext(Dispatchers.IO) {
+        file.readText()
+    }
+```
+
+`Dispatchers.IO` does not make code magically non-blocking. It moves blocking work to a pool designed to tolerate blocking. Too many uncontrolled blocking calls can still exhaust resources.
+
+## `launch`, `async`, and `withContext`
+
+| Builder/API | Returns | Use when |
+|---|---|---|
+| `launch` | `Job` | The result is completion/side effect |
+| `async` | `Deferred<T>` | Concurrent child produces a value |
+| `withContext` | `T` | Switch context and return one result sequentially |
+
+### ❌ Fake concurrency
+
+```kotlin
+val user = async { api.user() }.await()
+val orders = async { api.orders() }.await()
+```
+
+The first `await` finishes before the second coroutine is even created.
+
+### ✅ Independent calls started before awaiting
+
+```kotlin
+val dashboard = coroutineScope {
+    val user = async { api.user() }
+    val orders = async { api.orders() }
+    Dashboard(user.await(), orders.await())
+}
+```
+
+If the calls depend on each other, sequential code is correct. Concurrency is not automatically better: it increases simultaneous load, error coordination, memory and rate-limit pressure.
+
+## Coroutine context
+
+A context commonly contains:
+
+- `Job`: lifetime, cancellation and parent/child relationship;
+- dispatcher: where resumptions are scheduled;
+- coroutine name: diagnostics;
+- exception handler in the limited places where it applies.
+
+Child context inherits from its parent unless an element is replaced. `withContext(Dispatchers.IO)` changes the dispatcher for that block but keeps structured ownership.
+
+## Practical scenario: image processing after download
+
+```kotlin
+suspend fun prepareAvatar(id: UserId): Bitmap {
+    val bytes = api.downloadAvatar(id) // suspends during network I/O
+    return withContext(Dispatchers.Default) {
+        decoder.decodeAndCrop(bytes)   // CPU-intensive work
+    }
+}
+```
+
+The network library should already provide a truly suspending call. Wrapping every suspending Retrofit call in `Dispatchers.IO` is unnecessary. The CPU decoder belongs on `Default`.
+
+## Corner cases
+
+- A coroutine can resume on a different physical thread while still using the same dispatcher.
+- Thread-local state does not automatically behave like coroutine context.
+- `Dispatchers.Unconfined` has unusual resume behavior and is rarely appropriate for application work.
+- Main-safety is a function contract: a suspending repository function callable from Main must move its own blocking/CPU work appropriately.
+
+<Admonition type="tip" title="Interview answer">
+`suspend` means a function can pause and later resume; it does not mean background thread. A dispatcher schedules coroutine execution, while a `Job` owns lifetime and cancellation. I place dispatcher changes around the blocking or CPU-heavy boundary and keep child work inside a scope.
+</Admonition>
+
+## Exercises
+
+1. Trace the thread/coroutine behavior of network → JSON parse → Room insert → UI state.
+2. Explain why wrapping a suspending Retrofit call in `withContext(IO)` may be redundant.
+3. Find the fake concurrency in a function that calls `async().await()` twice.
+

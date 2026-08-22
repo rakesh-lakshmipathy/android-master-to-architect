@@ -13,11 +13,28 @@ A coroutine is cancellable work that may suspend without blocking its thread. St
 ## Chapter pages
 
 1. [Suspending functions and coroutine basics](./coroutine-basics)
-2. [Structured concurrency, cancellation, and errors](./structured-concurrency)
-3. [Dispatchers and coroutine context](./dispatchers-context)
-4. [Flow](./flow)
-5. [StateFlow, SharedFlow, and channels](./hot-flows-channels)
-6. [Lifecycle, testing, and interviews](./coroutines-android-interview)
+2. [How a coroutine executes: thread, suspension, dispatcher, and Job](./coroutine-execution-trace)
+3. [Structured concurrency, cancellation, and errors](./structured-concurrency)
+4. [Cancellation and exception propagation in detail](./cancellation-exceptions)
+5. [Dispatchers and coroutine context](./dispatchers-context)
+6. [Flow foundations](./flow)
+7. [Flow execution, operators, context, and search pipelines](./flow-pipeline)
+8. [Buffering, backpressure, callbackFlow, and retry](./flow-backpressure)
+9. [StateFlow, SharedFlow, and channels](./hot-flows-channels)
+10. [State and event delivery guarantees](./state-events-delivery)
+11. [Lifecycle, testing, production scenarios, and interviews](./coroutines-android-interview)
+
+## How to study this chapter
+
+Do not memorize operator names first. For every example, answer:
+
+1. Who owns this work and when is it cancelled?
+2. Which part suspends, blocks, or consumes CPU?
+3. Which dispatcher executes each part?
+4. How do failure and cancellation propagate?
+5. Is every value required, replaceable, or allowed to be lost?
+6. What happens when the collector disappears, the process dies, or the account changes?
+
+Those questions turn coroutine syntax into production concurrency design.
 
 Examples in this chapter use `kotlinx.coroutines`. Android examples also require AndroidX lifecycle/ViewModel libraries, so dependency-specific snippets are labeled rather than linked to a dependency-free Playground.
-
