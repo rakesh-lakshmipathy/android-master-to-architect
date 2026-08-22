@@ -82,7 +82,7 @@ Use this as a discovery index, then open the linked lesson for behavior, edge ca
 | Filter | `filter`, `filterNot`, `filterIndexed`, `filterNotNull`, `filterIsInstance` | [Filtering and types](./collection-access-search-filter) |
 | Transform | `map`, `mapIndexed`, `mapNotNull`, `flatMap`, `flatten` | [Advanced operations](./collection-operations) |
 | Check | `any`, `all`, `none`, `contains`, `containsAll` | [Advanced operations](./collection-operations) |
-| Slice | `take`, `takeLast`, `drop`, `dropLast`, `takeWhile`, `dropWhile` | [Advanced operations](./collection-operations) |
+| Slice | `take`, `drop`, `takeLast`, `dropLast`, `takeWhile`, `dropWhile`, `takeLastWhile`, `dropLastWhile` | [Advanced operations](./collection-operations) |
 | Sort | `sorted`, `sortedDescending`, `sortedBy`, `sortedWith`, `sortBy` | [Sorting](./collection-sorting-aggregation) |
 | Aggregate | `sum`, `sumOf`, `count`, `minOrNull`, `maxOrNull`, `fold`, `reduce` | [Aggregation](./collection-sorting-aggregation) |
 | Group | `groupBy`, `groupingBy`, `eachCount` | [Grouping](./collection-grouping-association) |
@@ -120,4 +120,3 @@ fun main() {
 <Admonition type="tip" title="Interview-ready foundation">
 Choose List, Set, or Map from the domain's cardinality and ordering rules. Then choose operators by behavior: throwing versus nullable, first match versus all matches, new result versus mutation, one value per key versus many, eager versus lazy, and silent duplicate replacement versus validation.
 </Admonition>
-

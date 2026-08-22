@@ -246,26 +246,73 @@ val (ids, names) = pairs.unzip()
   Run the unzip example
 </PlaygroundLink>
 
-## Boundaries: `takeWhile` and `dropWhile`
+## Slicing from the start and end
 
-These operate on the **leading consecutive portion**, not every matching item:
+There are two slicing families:
+
+| Family | Start side | End side | Stops because of |
+|---|---|---|---|
+| Fixed count | `take(n)`, `drop(n)` | `takeLast(n)`, `dropLast(n)` | Number of elements |
+| Predicate | `takeWhile`, `dropWhile` | `takeLastWhile`, `dropLastWhile` | First predicate failure from that side |
+
+### Fixed-count slicing
 
 ```kotlin
-val values = listOf(2, 4, 1, 6)
-println(values.takeWhile { it % 2 == 0 }) // [2, 4]
-println(values.dropWhile { it % 2 == 0 }) // [1, 6]
+val values = listOf(10, 20, 30, 40, 50)
+
+println(values.take(2))      // [10, 20]
+println(values.drop(2))      // [30, 40, 50]
+println(values.takeLast(2))  // [40, 50]
+println(values.dropLast(2))  // [10, 20, 30]
 ```
 
 <PlaygroundLink code={`fun main() {
-    val values = listOf(2, 4, 1, 6)
-    println("takeWhile = " + values.takeWhile { it % 2 == 0 })
-    println("dropWhile = " + values.dropWhile { it % 2 == 0 })
-    println("filter = " + values.filter { it % 2 == 0 })
+    val values = listOf(10, 20, 30, 40, 50)
+    println("take(2) = " + values.take(2))
+    println("drop(2) = " + values.drop(2))
+    println("takeLast(2) = " + values.takeLast(2))
+    println("dropLast(2) = " + values.dropLast(2))
 }`}>
-  Compare takeWhile, dropWhile, and filter
+  Run fixed-count slicing
 </PlaygroundLink>
 
-Use `filter` if you mean “all even values.”
+If `n` exceeds the collection size, `take`/`takeLast` return all elements and `drop`/`dropLast` return an empty list. A negative `n` throws `IllegalArgumentException`.
+
+### Predicate slicing: the complete four-operation comparison
+
+These operate on a **consecutive boundary**, not every matching element:
+
+```kotlin
+val values = listOf(2, 4, 1, 6, 8)
+println(values.takeWhile { it % 2 == 0 }) // [2, 4]
+println(values.dropWhile { it % 2 == 0 }) // [1, 6, 8]
+println(values.takeLastWhile { it % 2 == 0 }) // [6, 8]
+println(values.dropLastWhile { it % 2 == 0 }) // [2, 4, 1]
+```
+
+<PlaygroundLink code={`fun main() {
+    val values = listOf(2, 4, 1, 6, 8)
+    println("takeWhile = " + values.takeWhile { it % 2 == 0 })
+    println("dropWhile = " + values.dropWhile { it % 2 == 0 })
+    println("takeLastWhile = " + values.takeLastWhile { it % 2 == 0 })
+    println("dropLastWhile = " + values.dropLastWhile { it % 2 == 0 })
+    println("filter = " + values.filter { it % 2 == 0 })
+}`}>
+  Compare all four while operations
+</PlaygroundLink>
+
+Read the output from the boundary:
+
+- `takeWhile` starts at the beginning and keeps matching values until `1` fails.
+- `dropWhile` starts at the beginning and removes matching values until `1` fails; everything after that remains, even if it matches.
+- `takeLastWhile` starts testing at the end and keeps the matching suffix `6, 8`. The returned elements remain in their original order.
+- `dropLastWhile` removes that matching suffix and keeps the prefix `2, 4, 1`.
+
+Use `filter` if you mean “all matching values anywhere.” For this input, `filter` returns `[2, 4, 6, 8]`.
+
+<Admonition type="warning" title="Common mistake">
+The word `Last` changes which boundary is inspected; it does not reverse the returned list. `takeLastWhile` scans the suffix condition from the end but returns the retained suffix in original encounter order.
+</Admonition>
 
 ## Uniqueness: `distinct` and `distinctBy`
 
@@ -441,6 +488,8 @@ If order matters, ensure input/map implementation and category ordering are expl
 
 <details><summary><strong>How is takeWhile different from filter?</strong></summary><p>takeWhile stops at the first non-matching element; filter examines the whole input and retains every match.</p></details>
 
+<details><summary><strong>Does takeLastWhile reverse the result?</strong></summary><p>No. It tests the consecutive suffix from the end, but returns the retained elements in their original order.</p></details>
+
 ## Exercises
 
 1. Predict all outputs before running the Playground example.
@@ -448,3 +497,4 @@ If order matters, ensure input/map implementation and category ordering are expl
 3. Calculate a moving three-sample average using `windowed`.
 4. Compare eager and sequence pipelines with logging and `take(2)`.
 5. Design partial-failure handling for `chunked(100)` uploads.
+6. For `[2, 4, 1, 6, 8]`, predict all four `...While` slicing results before running the example.
