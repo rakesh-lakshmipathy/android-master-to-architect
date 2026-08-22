@@ -59,7 +59,9 @@ const sidebars: SidebarsConfig = {
           collapsed: true,
           items: [
             {type: 'doc', id: 'kotlin/collections-overview', label: 'Chapter overview'},
+            'kotlin/collection-hierarchy',
             'kotlin/collections',
+            'kotlin/collection-operations',
             'kotlin/sequences',
             'kotlin/generics-variance',
             'kotlin/extensions-deep-dive',

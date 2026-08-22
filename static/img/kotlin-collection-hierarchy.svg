@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 570" role="img" aria-labelledby="title desc">
+  <title id="title">Kotlin collection interface hierarchy</title>
+  <desc id="desc">Iterable leads to Collection, then List and Set. Their mutable interfaces extend both the read-only contract and the corresponding mutable parent. Map has a separate Map to MutableMap hierarchy.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6f8ff"/>
+      <stop offset="1" stop-color="#eefaf6"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#53657d"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#53657d;stroke-width:2}.mutable{fill:#eaf9f3;stroke:#078765}.map{fill:#f4edff;stroke:#7048d7}.line{fill:none;stroke:#53657d;stroke-width:2;marker-end:url(#arrow)}.name{font:600 19px system-ui,sans-serif;fill:#162235;text-anchor:middle}.hint{font:14px system-ui,sans-serif;fill:#53657d;text-anchor:middle}.label{font:600 15px system-ui,sans-serif;fill:#53657d;text-anchor:middle}
+    </style>
+  </defs>
+  <rect width="1040" height="570" rx="24" fill="url(#bg)"/>
+  <text class="label" x="310" y="35">READ-ONLY VIEW</text>
+  <text class="label" x="310" y="350">MUTABLE VIEW</text>
+  <text class="label" x="850" y="35">SEPARATE KEY–VALUE HIERARCHY</text>
+
+  <path class="line" d="M310 105 V145"/><path class="line" d="M310 220 V255 H165 V285"/><path class="line" d="M310 220 V255 H455 V285"/>
+  <path class="line" d="M165 345 V425"/><path class="line" d="M455 345 V425"/><path class="line" d="M310 220 V385 H310 V425"/>
+  <path class="line" d="M310 105 V375 H310"/><path class="line" d="M310 375 V385"/>
+  <path class="line" d="M850 105 V425"/>
+
+  <rect class="box" x="210" y="45" width="200" height="60" rx="14"/><text class="name" x="310" y="73">Iterable&lt;T&gt;</text><text class="hint" x="310" y="94">can be traversed</text>
+  <rect class="box" x="210" y="145" width="200" height="75" rx="14"/><text class="name" x="310" y="178">Collection&lt;T&gt;</text><text class="hint" x="310" y="202">size + membership</text>
+  <rect class="box" x="65" y="285" width="200" height="60" rx="14"/><text class="name" x="165" y="313">List&lt;T&gt;</text><text class="hint" x="165" y="334">ordered + indexed</text>
+  <rect class="box" x="355" y="285" width="200" height="60" rx="14"/><text class="name" x="455" y="313">Set&lt;T&gt;</text><text class="hint" x="455" y="334">unique elements</text>
+
+  <rect class="box mutable" x="210" y="385" width="200" height="60" rx="14"/><text class="name" x="310" y="413">MutableCollection&lt;T&gt;</text><text class="hint" x="310" y="434">add + remove</text>
+  <rect class="box mutable" x="65" y="485" width="200" height="60" rx="14"/><text class="name" x="165" y="513">MutableList&lt;T&gt;</text><text class="hint" x="165" y="534">indexed mutation</text>
+  <rect class="box mutable" x="355" y="485" width="200" height="60" rx="14"/><text class="name" x="455" y="513">MutableSet&lt;T&gt;</text><text class="hint" x="455" y="534">unique mutation</text>
+
+  <rect class="box map" x="750" y="45" width="200" height="60" rx="14"/><text class="name" x="850" y="73">Map&lt;K, V&gt;</text><text class="hint" x="850" y="94">unique keys</text>
+  <rect class="box map" x="735" y="485" width="230" height="60" rx="14"/><text class="name" x="850" y="513">MutableMap&lt;K, V&gt;</text><text class="hint" x="850" y="534">put + remove</text>
+
+  <text class="hint" x="620" y="282">Map is not a Collection</text>
+  <path d="M690 295 H1000" stroke="#7048d7" stroke-width="2" stroke-dasharray="7 7"/>
+</svg>

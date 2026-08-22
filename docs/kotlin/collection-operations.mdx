@@ -1,0 +1,228 @@
+---
+id: collection-operations
+title: Collection operations through practical scenarios
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Collection operations through practical scenarios
+
+The important skill is not remembering names. It is predicting output, duplicate behavior, failure on empty input, ordering, and allocation.
+
+## Transformation: `map`, `flatMap`, and `flatten`
+
+```kotlin
+val names = users.map { user -> user.name }
+```
+
+`map` produces exactly one output for each input.
+
+```kotlin
+val orderItems = orders.flatMap { order -> order.items }
+```
+
+`flatMap` maps each order to a list, then flattens one level. If nested lists already exist, `flatten()` only flattens:
+
+```kotlin
+val nested = listOf(listOf(1, 2), listOf(3))
+println(nested.flatten()) // [1, 2, 3]
+```
+
+## Selection: `filter`, `partition`, and `mapNotNull`
+
+```kotlin
+val (valid, invalid) = inputs.partition(::isValid)
+```
+
+`partition` evaluates each element and returns two lists. Use `filter` when only one side matters.
+
+```kotlin
+val ids = rawIds.mapNotNull(UserId::parse)
+```
+
+`mapNotNull` transforms and removes null results. This is useful only if discarding invalid entries is an intentional policy; otherwise return validation errors.
+
+## Accumulation: `reduce` versus `fold`
+
+```kotlin
+val total = prices.fold(Money.zero("INR")) { sum, price -> sum + price }
+```
+
+`fold` starts with an explicit initial accumulator and works for empty collections. `reduce` uses the first element as the initial accumulator and throws on empty input.
+
+```kotlin
+emptyList<Int>().fold(0, Int::plus) // 0
+// emptyList<Int>().reduce(Int::plus) // throws
+```
+
+Use `fold` when a meaningful identity exists or the result type differs from element type.
+
+## Indexing: `associateBy`, `associateWith`, and `groupBy`
+
+```kotlin
+data class User(val id: Int, val team: String, val name: String)
+
+val byId: Map<Int, User> = users.associateBy(User::id)
+val byTeam: Map<String, List<User>> = users.groupBy(User::team)
+```
+
+- `associateBy` stores one value per key; later duplicates overwrite earlier ones.
+- `groupBy` keeps a list of all values for each key and allocates those lists.
+- `associateWith` uses each original element as a key and computes its value.
+
+### Duplicate-key trap
+
+```kotlin
+val users = listOf(
+    User(1, "Android", "Old"),
+    User(1, "Android", "New"),
+)
+println(users.associateBy(User::id)[1]?.name) // New
+```
+
+If duplicate IDs indicate corrupt data, silently keeping the last is wrong. Validate duplicates before indexing.
+
+## Predicate operations short-circuit
+
+| Operator | Meaning on elements | Empty collection result |
+|---|---|---|
+| `any(predicate)` | At least one matches | `false` |
+| `all(predicate)` | Every element matches | `true` |
+| `none(predicate)` | No element matches | `true` |
+
+`all` on an empty collection is true by vacuous truth. That can surprise validation code:
+
+```kotlin
+val allApproved = requests.all(Request::isApproved)
+```
+
+If “at least one request must exist” is also required, check `requests.isNotEmpty() && requests.all(...)`.
+
+## Pairing: `zip` and `unzip`
+
+```kotlin
+val labels = listOf("Name", "Age")
+val values = listOf("Rakesh", "35", "Ignored")
+println(labels.zip(values)) // [(Name, Rakesh), (Age, 35)]
+```
+
+`zip` stops at the shorter collection. It does not report missing values. Use key-based association when position is not a guaranteed contract.
+
+```kotlin
+val pairs = listOf("U-1" to "Rakesh", "U-2" to "Anu")
+val (ids, names) = pairs.unzip()
+```
+
+## Boundaries: `takeWhile` and `dropWhile`
+
+These operate on the **leading consecutive portion**, not every matching item:
+
+```kotlin
+val values = listOf(2, 4, 1, 6)
+println(values.takeWhile { it % 2 == 0 }) // [2, 4]
+println(values.dropWhile { it % 2 == 0 }) // [1, 6]
+```
+
+Use `filter` if you mean “all even values.”
+
+## Uniqueness: `distinct` and `distinctBy`
+
+```kotlin
+val newestFirst = messages.sortedByDescending(Message::createdAt)
+val latestPerSender = newestFirst.distinctBy(Message::senderId)
+```
+
+`distinctBy` keeps the first item encountered for each selected key. Therefore sorting/order before it is part of the result contract.
+
+## Batching and sliding analysis
+
+```kotlin
+val pages = (1..10).toList().chunked(3)
+// [[1,2,3], [4,5,6], [7,8,9], [10]]
+
+val movingPairs = listOf(10, 20, 30, 40).windowed(size = 2)
+// [[10,20], [20,30], [30,40]]
+```
+
+- `chunked(n)` creates non-overlapping batches, useful for bounded API requests.
+- `windowed(n)` creates sliding windows, useful for moving comparisons; it can allocate heavily on large inputs.
+
+<PlaygroundLink code={`data class User(val id: Int, val team: String, val name: String)
+
+fun main() {
+    val users = listOf(
+        User(1, "Android", "Rakesh"),
+        User(2, "iOS", "Anu"),
+        User(3, "Android", "Sam"),
+    )
+
+    println("byId=\${users.associateBy { it.id }}")
+    println("byTeam=\${users.groupBy { it.team }}")
+    println("teams=\${users.map { it.team }.distinct()}")
+    println("batches=\${users.chunked(2)}")
+}`}>
+  Run collection operations
+</PlaygroundLink>
+
+## Collections versus sequences
+
+```kotlin
+val result = hugeList
+    .asSequence()
+    .filter(::isEligible)
+    .map(::toUi)
+    .take(10)
+    .toList()
+```
+
+Collections usually execute each stage eagerly and create intermediate results. A sequence processes elements lazily through the pipeline and can stop early. Sequences are not always faster: small inputs/simple pipelines may pay iterator/lambda overhead without saving meaningful allocation. Measure hot paths.
+
+## `runCatching` is not a collection operator
+
+It produces `Result<T>` from a block:
+
+```kotlin
+val parsed: Result<Int> = runCatching { raw.toInt() }
+```
+
+Be careful in suspend code: broad catching mechanisms can capture `CancellationException` depending on usage. Do not turn coroutine cancellation into an ordinary failure.
+
+## Android scenarios
+
+### API batch limit
+
+```kotlin
+pendingIds.chunked(100).forEach { batch ->
+    api.uploadBatch(batch)
+}
+```
+
+Decide whether batches run sequentially or with bounded concurrency, what happens after partial failure, and whether the API is idempotent. `chunked` solves grouping, not distributed reliability.
+
+### Rendering grouped settings
+
+```kotlin
+val sections = settings.groupBy(Setting::category)
+```
+
+If order matters, ensure input/map implementation and category ordering are explicit. Do not rely on incidental implementation order as a business contract.
+
+### Deduplicating network data
+
+`associateBy(id)` may hide server duplicates. Record/alert when duplicates violate the contract before selecting a winner.
+
+## Interview questions
+
+<details><summary><strong>Why does reduce fail on empty input while fold does not?</strong></summary><p>Reduce needs the first element as its initial accumulator. Fold receives an explicit initial value, so it can return that value for empty input.</p></details>
+
+<details><summary><strong>What happens when associateBy sees duplicate keys?</strong></summary><p>The later value replaces the earlier value for that key. Whether that is acceptable is a domain decision.</p></details>
+
+<details><summary><strong>How is takeWhile different from filter?</strong></summary><p>takeWhile stops at the first non-matching element; filter examines the whole input and retains every match.</p></details>
+
+## Exercises
+
+1. Predict all outputs before running the Playground example.
+2. Build a map that rejects duplicate IDs instead of silently overwriting.
+3. Calculate a moving three-sample average using `windowed`.
+4. Compare eager and sequence pipelines with logging and `take(2)`.
+5. Design partial-failure handling for `chunked(100)` uploads.

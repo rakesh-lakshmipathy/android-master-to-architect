@@ -1,0 +1,276 @@
+---
+id: collection-hierarchy
+title: Kotlin collection hierarchy and mutability
+---
+import Admonition from '@theme/Admonition';
+import PlaygroundLink from '@site/src/components/PlaygroundLink';
+
+# Kotlin collection hierarchy and mutability
+
+The diagram is teaching two separate ideas:
+
+1. **What a collection can do**: iterate, report size, preserve order, enforce uniqueness, or associate keys with values.
+2. **Whether this reference exposes mutation operations**: read-only interfaces versus mutable interfaces.
+
+## The corrected hierarchy
+
+![Corrected Kotlin collection interface hierarchy](/img/kotlin-collection-hierarchy.svg)
+
+The arrows mean “the lower interface extends the upper contract.” For example, a `MutableList<T>` is also a `List<T>` and a `MutableCollection<T>`.
+
+:::warning Important correction to the supplied diagram
+`Map<K, V>` is **not** a subtype of `Collection` or `Iterable` in Kotlin. A map is a key-value container with its own hierarchy. Its `keys`, `values`, and `entries` views are collections and can be iterated.
+:::
+
+## Level 1: `Iterable<T>`
+
+`Iterable<T>` promises only that callers can request an `Iterator<T>` and visit elements one at a time.
+
+```kotlin
+fun printEverything(items: Iterable<String>) {
+    for (item in items) {
+        println(item)
+    }
+}
+```
+
+This function does not need indexing, uniqueness, random access, or mutation. Accepting the smallest required contract makes it usable with lists, sets, ranges, and custom iterables.
+
+`Iterable` is not the same as `Sequence`:
+
+- both can be iterated;
+- collection transformations on an `Iterable` commonly create eager results;
+- a `Sequence` provides a lazy operation pipeline;
+- neither automatically means background or asynchronous work.
+
+## Level 2: `Collection<T>`
+
+`Collection<T>` extends `Iterable<T>` and adds collection-wide read operations such as:
+
+- `size` and `isEmpty()`;
+- membership with `contains` and `in`;
+- checking whether multiple values exist with `containsAll`.
+
+```kotlin
+fun hasRequiredRoles(
+    actual: Collection<String>,
+    required: Collection<String>,
+): Boolean = actual.containsAll(required)
+```
+
+It still does not promise element order, uniqueness, indexing, or mutation.
+
+## `List<T>`: ordered, indexed, duplicates allowed
+
+```kotlin
+val steps: List<String> = listOf("Cart", "Payment", "Payment")
+
+println(steps[0])       // Cart
+println(steps.size)     // 3
+println(steps.indexOf("Payment")) // 1
+```
+
+A list preserves iteration order and supports indexed access. Duplicates are allowed. “Supports indexing” does not promise every implementation has constant-time access, although common `ArrayList` access is normally O(1).
+
+Use a list when order/position and possible duplicates are meaningful: feed rows, checkout steps, search results.
+
+## `Set<T>`: uniqueness by equality
+
+```kotlin
+val permissions: Set<String> = setOf("camera", "location", "camera")
+println(permissions) // [camera, location]
+```
+
+A set keeps at most one element according to `equals`/`hashCode` for hash-based implementations. Do not mutate fields used by equality/hash code while an object is stored in a hash set; lookup/removal can become inconsistent.
+
+Use a set for selected IDs, capabilities, tags, or membership checks where duplicates have no meaning.
+
+## `Map<K, V>`: keys associated with values
+
+```kotlin
+val usersById: Map<String, String> = mapOf(
+    "U-1" to "Rakesh",
+    "U-2" to "Anu",
+)
+
+println(usersById["U-1"]) // Rakesh
+println(usersById["missing"]) // null
+```
+
+Keys are unique by equality. Values need not be unique. `map[key]` returns `V?` because the key may be absent—even if `V` itself is non-null.
+
+```kotlin
+for ((id, name) in usersById) {
+    println("$id -> $name")
+}
+```
+
+This iteration is enabled by map operations/extensions, but `Map` still is not a `Collection` subtype.
+
+## Read-only does not mean immutable
+
+Kotlin's `List`, `Set`, `Map`, and `Collection` interfaces expose no mutation operations through that reference. They do **not** guarantee that the underlying object can never change.
+
+```kotlin
+val mutable = mutableListOf("A")
+val readOnly: List<String> = mutable
+
+mutable += "B"
+println(readOnly) // [A, B]
+```
+
+The `readOnly` reference cannot call `add`, but it observes mutation performed through the `mutable` alias.
+
+<PlaygroundLink code={`fun main() {
+    val mutable = mutableListOf("A")
+    val readOnly: List<String> = mutable
+
+    println("before=$readOnly")
+    mutable += "B"
+    println("after=$readOnly")
+}`}>
+  Run read-only alias example
+</PlaygroundLink>
+
+### Stronger immutable snapshot
+
+```kotlin
+class Cart {
+    private val mutableItems = mutableListOf<String>()
+
+    val items: List<String>
+        get() = mutableItems.toList()
+}
+```
+
+Returning `toList()` gives callers a snapshot that will not change when the internal list changes, but every read allocates/copies. Another option is storing persistent immutable collections. Choose based on ownership, update frequency, performance, and API guarantees.
+
+## Mutable interfaces
+
+| Interface | Important mutation capabilities |
+|---|---|
+| `MutableIterable<T>` | Iterator may support removing the current element |
+| `MutableCollection<T>` | `add`, `remove`, `clear`, bulk mutation |
+| `MutableList<T>` | indexed replacement/insertion/removal |
+| `MutableSet<T>` | unique-element addition/removal |
+| `MutableMap<K,V>` | key assignment/removal and mutable entries |
+
+```kotlin
+val queue: MutableList<String> = mutableListOf("first")
+queue += "second"
+queue[0] = "updated"
+
+val scores: MutableMap<String, Int> = mutableMapOf()
+scores["Rakesh"] = 10
+```
+
+Expose mutable types only when the caller is intentionally an owner of mutation. Otherwise expose a read-only view/snapshot and provide semantic operations such as `cart.add(productId)`.
+
+## Interfaces versus implementations
+
+| Interface need | Common implementation | Useful characteristic |
+|---|---|---|
+| `MutableList` | `ArrayList` | fast indexed access/append; middle insertion shifts elements |
+| `MutableList` | `LinkedList` on JVM | node-based; rarely the best Android default |
+| `MutableSet` | `HashSet` | fast average membership; no semantic iteration-order promise |
+| `MutableSet` | `LinkedHashSet` | preserves insertion iteration order |
+| `MutableSet` | sorted set | comparator ordering; higher operation cost |
+| `MutableMap` | `HashMap` | fast average key lookup |
+| `MutableMap` | `LinkedHashMap` | preserves insertion/access order depending on construction |
+| `MutableMap` | sorted map | keys ordered by comparator |
+
+Declare variables/parameters using the behavior you require:
+
+```kotlin
+val selectedIds: Set<UserId> = linkedSetOf()
+```
+
+Use a concrete type in the public contract only when its implementation-specific behavior is part of the contract.
+
+## `List` versus `MutableList` versus `ArrayList`
+
+- `List<T>` is a read-only **interface**.
+- `MutableList<T>` is a mutable **interface** and also a `List<T>`.
+- `ArrayList<T>` is a concrete resizable-array implementation of `MutableList<T>`.
+
+```kotlin
+val a: List<Int> = arrayListOf(1, 2)
+val b: MutableList<Int> = arrayListOf(1, 2)
+val c: ArrayList<Int> = arrayListOf(1, 2)
+```
+
+`a` cannot call `add`; `b` and `c` can. All three runtime objects may be `ArrayList`. Compile-time reference type controls which operations the caller can use.
+
+## `List` versus `Array`
+
+`Array<T>` is fixed-size and has specialized primitive versions such as `IntArray` that avoid boxing. Lists provide the collection API and may resize when mutable.
+
+```kotlin
+val array = arrayOf("A", "B")
+array[0] = "Changed"       // elements mutable; size remains 2
+
+val ints: IntArray = intArrayOf(1, 2, 3)
+val list: List<Int> = listOf(1, 2, 3)
+```
+
+Arrays are common at Java/Android/native API boundaries or performance-sensitive primitive storage. Prefer collection interfaces for ordinary domain APIs.
+
+## Variance explains the hierarchy's safety
+
+Read-only `List<out T>` is covariant: a `List<Dog>` can be read as `List<Animal>` because callers cannot insert a `Cat`.
+
+Mutable collections are invariant:
+
+```kotlin
+open class Animal
+class Dog : Animal()
+class Cat : Animal()
+
+val dogs: MutableList<Dog> = mutableListOf()
+// val animals: MutableList<Animal> = dogs // compile error
+```
+
+If that assignment were allowed, `animals.add(Cat())` would put a cat into a list promised to contain only dogs.
+
+## Android production scenarios
+
+### Compose state
+
+❌ Mutate a list held inside state and reuse the same reference:
+
+```kotlin
+uiState.items.add(newItem)
+```
+
+✅ Produce a new immutable state snapshot:
+
+```kotlin
+_uiState.update { old ->
+    old.copy(items = old.items + newItem)
+}
+```
+
+This makes equality, state history and recomposition behavior understandable.
+
+### RecyclerView/DiffUtil
+
+Submit immutable snapshots and keep stable equality/identity. Mutating the list or its item equality fields while a diff runs can produce incorrect comparisons or concurrency bugs.
+
+### Shared coroutines
+
+`MutableList` is not thread-safe. Dispatcher choice does not protect shared mutation. Use single ownership, immutable snapshots, `Mutex`, actor/serialized command processing, or a concurrent collection according to the invariant.
+
+## Interview questions
+
+<details><summary><strong>Is Kotlin's List immutable?</strong></summary><p>No. It is a read-only interface. Another mutable alias may change the same underlying object. Immutability requires a stronger ownership/type guarantee or a snapshot.</p></details>
+
+<details><summary><strong>Why is Map not a Collection?</strong></summary><p>A map's primary abstraction is key-to-value association rather than a bag of single elements. It exposes collection views through keys, values, and entries.</p></details>
+
+<details><summary><strong>Why can List&lt;Dog&gt; be used as List&lt;Animal&gt;, but MutableList&lt;Dog&gt; cannot be MutableList&lt;Animal&gt;?</strong></summary><p>A read-only list only produces values, so covariance is safe. A mutable list also consumes values; treating it as MutableList&lt;Animal&gt; would permit inserting a Cat.</p></details>
+
+## Exercises
+
+1. Choose `List`, `Set`, or `Map` for feed order, selected IDs, and users indexed by ID.
+2. Demonstrate a read-only alias changing, then change the API to return a snapshot.
+3. Predict which assignments compile for `List<Dog>`, `List<Animal>`, `MutableList<Dog>`, and `MutableList<Animal>`.
+4. Compare `Array<Int>` and `IntArray` at a performance-sensitive Java boundary.
