@@ -18,6 +18,49 @@ The diagram is teaching two separate ideas:
 
 The diagram is deliberately split into three families. An arrow means **the next box is more specific and adds capabilities**. It is a learning direction, not UML arrow notation.
 
+<Admonition type="info" title="Important: every box in this chart is an interface">
+
+`Iterable`, `Collection`, `List`, `Set`, their mutable counterparts, `Map`, and `MutableMap` are all **interfaces**. They describe available behavior; they do not specify the concrete storage implementation.
+
+```text
+List / MutableList   = interfaces (contracts)
+ArrayList            = implementation class
+
+Set / MutableSet     = interfaces (contracts)
+HashSet              = implementation class
+
+Map / MutableMap     = interfaces (contracts)
+HashMap              = implementation class
+```
+
+Prefer declaring the contract your code requires:
+
+```kotlin
+val users: MutableList<String> = ArrayList()
+val selectedIds: MutableSet<Int> = HashSet()
+val usersById: MutableMap<Int, String> = HashMap()
+```
+
+The type on the **left** controls what callers may do. The object created on the **right** determines how that contract is implemented. Factory functions such as `listOf()` and `mutableListOf()` may choose internal implementation classes, so do not depend on their hidden runtime class.
+
+</Admonition>
+
+<PlaygroundLink code={`fun main() {
+    val users: MutableList<String> = ArrayList()
+    val selectedIds: MutableSet<Int> = HashSet()
+    val usersById: MutableMap<Int, String> = HashMap()
+
+    users.add("Rakesh")
+    selectedIds.add(42)
+    usersById[42] = "Rakesh"
+
+    println("declared MutableList, runtime = " + users::class.simpleName)
+    println("declared MutableSet, runtime = " + selectedIds::class.simpleName)
+    println("declared MutableMap, runtime = " + usersById::class.simpleName)
+}`}>
+  Run interface-versus-implementation example
+</PlaygroundLink>
+
 ## Exact inheritance relationships
 
 | Interface | Directly extends | What it adds |
