@@ -16,11 +16,26 @@ The diagram is teaching two separate ideas:
 
 ![Corrected Kotlin collection interface hierarchy](/img/kotlin-collection-hierarchy.svg)
 
-The arrows mean “the lower interface extends the upper contract.” For example, a `MutableList<T>` is also a `List<T>` and a `MutableCollection<T>`.
+The diagram is deliberately split into three families. An arrow means **the next box is more specific and adds capabilities**. It is a learning direction, not UML arrow notation.
 
-:::warning Important correction to the supplied diagram
+## Exact inheritance relationships
+
+| Interface | Directly extends | What it adds |
+|---|---|---|
+| `Collection<T>` | `Iterable<T>` | Size and membership operations |
+| `List<T>` | `Collection<T>` | Order and indexed access |
+| `Set<T>` | `Collection<T>` | Uniqueness contract |
+| `MutableIterable<T>` | `Iterable<T>` | Mutable iterator |
+| `MutableCollection<T>` | `Collection<T>`, `MutableIterable<T>` | Adding and removing elements |
+| `MutableList<T>` | `List<T>`, `MutableCollection<T>` | Indexed mutation |
+| `MutableSet<T>` | `Set<T>`, `MutableCollection<T>` | Mutable unique membership |
+| `MutableMap<K, V>` | `Map<K, V>` | Insertion, replacement, and removal by key |
+
+The cross-links are important: `MutableList<T>` is simultaneously a read-only `List<T>` contract and a mutable `MutableCollection<T>` contract. The chart keeps those cross-links in this table instead of drawing intersecting arrows.
+
+<Admonition type="warning" title="Important correction to the supplied diagram">
 `Map<K, V>` is **not** a subtype of `Collection` or `Iterable` in Kotlin. A map is a key-value container with its own hierarchy. Its `keys`, `values`, and `entries` views are collections and can be iterated.
-:::
+</Admonition>
 
 ## Level 1: `Iterable<T>`
 
