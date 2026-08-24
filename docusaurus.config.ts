@@ -37,7 +37,14 @@ const config: Config = {
       style: 'dark',
       links: [
         {title: 'Learn', items: [{label: 'Start here', to: '/docs/intro'}, {label: 'Master roadmap', to: '/docs/roadmap'}]},
-        {title: 'Completed topics', items: [{label: 'Why Kotlin?', to: '/docs/kotlin/why-kotlin'}, {label: 'Null safety', to: '/docs/kotlin/null-safety'}, {label: 'Value classes', to: '/docs/kotlin/value-classes'}]},
+        {
+          title: 'Explore the guide',
+          items: [
+            {label: 'Kotlin foundations', to: '/docs/kotlin/why-kotlin'},
+            {label: 'Android internals', to: '/docs/android/system-architecture'},
+            {label: 'Architecture', to: '/docs/architecture/clean-architecture'},
+          ],
+        },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Rakesh Lakshmipathy. Living learning edition.`,
     },
