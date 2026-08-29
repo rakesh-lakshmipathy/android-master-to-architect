@@ -6,6 +6,125 @@ import Admonition from '@theme/Admonition';
 
 # Dependencies, `api` versus `implementation`, and version catalogs
 
+## Plugin versus dependency
+
+A Gradle **plugin adds or changes build behavior**. A **dependency supplies an artifact used by application code or by build-time tooling**.
+
+```kotlin
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+dependencies {
+    implementation("com.squareup.okhttp3:okhttp:...")
+}
+```
+
+The Android application plugin contributes Android variants and tasks for compiling, processing resources and manifests, producing DEX, packaging, signing, testing, and related work. The OkHttp dependency supplies classes that application code can call; it does not need to teach Gradle a new build process.
+
+Plugins are not specifically "for generated code." Code-generation integration is only one kind of build behavior:
+
+| Plugin | Build behavior it adds |
+|---|---|
+| Android application | Android variants, packaging, signing, and APK/AAB production |
+| Kotlin Android | Kotlin compilation for Android |
+| KSP | Runs symbol processors and connects generated output to compilation |
+| Hilt | Integrates Hilt-generated Android base classes through build configuration and bytecode transformation |
+| Google Services | Processes `google-services.json` and generates Android resources |
+| Kotlin serialization | Adds serialization support to Kotlin compilation |
+
+### How a dependency enters the Android build
+
+Most third-party libraries require only a dependency declaration because Gradle and Android Gradle Plugin already understand standard Maven metadata, JARs, and Android Archives (AARs).
+
+```text
+group:name:version dependency coordinate
+                 |
+       Gradle resolves repositories
+                 |
+ downloads artifact + transitive dependencies
+                 |
+ adds artifacts to the selected configuration
+                 |
+ AGP compiles/merges/packages the relevant contents
+```
+
+A JAR mainly contains compiled JVM classes. An AAR can additionally contain Android resources, a manifest, assets, native libraries, and consumer R8 rules. AGP already knows how to merge and package these standard inputs, so a library-specific plugin is unnecessary unless the library needs custom build behavior.
+
+The configuration describes where the artifact participates:
+
+```kotlin
+dependencies {
+    implementation(libs.okhttp)       // compile and runtime use inside this module
+    compileOnly(libs.someAnnotations) // compile only
+    runtimeOnly(libs.someRuntime)     // runtime only
+    testImplementation(libs.junit)    // local tests
+}
+```
+
+## KSP: plugin versus processor dependency
+
+KSP means **Kotlin Symbol Processing**. Its Gradle plugin provides and schedules the symbol-processing tasks. A processor dependency contains library-specific logic that inspects symbols and decides which code to generate.
+
+```kotlin
+plugins {
+    alias(libs.plugins.ksp)
+}
+
+dependencies {
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+}
+```
+
+The responsibilities are deliberately separate:
+
+```text
+KSP Gradle plugin
+-> creates and schedules symbol-processing tasks
+-> discovers and runs configured processors
+-> connects generated output to Kotlin compilation
+
+Processor dependency, such as hilt-compiler or room-compiler
+-> recognizes its library's annotations and symbols
+-> contains the rules for what code to generate
+-> writes generated files through KSP
+```
+
+Therefore, the processor dependency normally generates the library-specific code; KSP operates the generation machinery and includes its output in the build. Generated output normally appears under variant-specific directories such as:
+
+```text
+app/build/generated/ksp/debug/
+app/build/generated/ksp/release/
+```
+
+Treat everything under `build/` as generated output. Do not edit it manually.
+
+### Why Hilt uses dependencies and plugins
+
+Hilt illustrates why these roles cannot be reduced to "plugin versus API":
+
+```text
+Hilt Gradle plugin -> Android build integration and bytecode transformation
+KSP Gradle plugin  -> symbol-processing task integration
+hilt-android       -> annotations and runtime APIs used by application code
+hilt-compiler      -> Hilt-specific processor and code-generation rules
+```
+
+The compiler generates Hilt components and Android base classes. The KSP plugin runs that compiler and connects its output to compilation. The Hilt Gradle plugin integrates the generated base classes so source code can extend normal Android classes:
+
+```kotlin
+@HiltAndroidApp
+class ArchitectApplication : Application()
+```
+
+Without the Hilt Gradle plugin's transformation, code would need to reference a generated Hilt base class directly. Dependencies alone can supply APIs and processors, but they do not automatically add every custom transformation or task configuration a library's Android integration requires.
+
+<Admonition type="tip" title="Mental model">
+Use a dependency when existing Gradle/AGP behavior already knows how to consume the artifact. Apply a plugin when the build needs additional behavior. For generated code, ask two separate questions: which plugin schedules and connects generation, and which processor dependency knows what to generate?
+</Admonition>
+
 ## Dependency configuration is an architectural boundary
 
 In a library module:
